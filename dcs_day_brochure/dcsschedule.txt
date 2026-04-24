@@ -1,0 +1,188 @@
+[]
+
+DCS Day ‘26
+
+28 January 2026
+
+R N Tagore Auditorium
+
+Programme Schedule:
+
++---------+----------+----------------------+--------------------------+
+|         | 8.30 -   | Registration         |                          |
+|         | 9.15     |                      |                          |
++=========+==========+======================+==========================+
+|         | 9.15 -   | Inaugural session    | DCS Chair and the        |
+|         | 9.30     |                      | Director                 |
++---------+----------+----------------------+--------------------------+
+| Session | 9.30 -   | Prof. Souvik Maiti   | Indigenous CRISPR-Cas9   |
+| 1       | 10.00    |                      | Tools: Advancing Gene    |
+|         |          | IGIB, Delhi          | Therapy Through          |
+| Chair:  |          |                      | Precision                |
+| Prof.   |          |                      |                          |
+| Sayan   |          |                      |                          |
+| Bhatta  |          |                      |                          |
+| charya, |          |                      |                          |
+| Prof.   |          |                      |                          |
+| Alakesh |          |                      |                          |
+| Bisai   |          |                      |                          |
++---------+----------+----------------------+--------------------------+
+|         | 10.00 -  | SL1: Sanajit Maiti   | TBA                      |
+|         | 10.15    | (BM1 lab)            |                          |
+|         |          |                      |                          |
+|         |          | IISER Kolkata        |                          |
++---------+----------+----------------------+--------------------------+
+|         | 10.15 -  | SL2: Kingshuk Patra  | Piezoelectric            |
+|         | 10.30    | (DH Lab)             | Bioisosteres: Structure  |
+|         |          |                      | and function             |
+|         |          | IISER Kolkata        |                          |
++---------+----------+----------------------+--------------------------+
+|         | 10.30 -  | FL1: Biplab Maji     | Catalytic Alchemy:       |
+|         | 10.50    |                      | Turning                  |
+|         |          | IISER Kolkata        |                          |
+|         |          |                      | Blockbuster Waste into   |
+|         |          |                      | Value-Added Chemicals    |
++---------+----------+----------------------+--------------------------+
+|         | 10.50 -  |                      |                          |
+|         | 11.10    |                      |                          |
+|         | am: Tea  |                      |                          |
+|         | Break    |                      |                          |
++---------+----------+----------------------+--------------------------+
+| Session | 11.10 -  | AL1: Dr. Satyadeep   | Single-Atom Catalysis    |
+| 2       | 11.30    | Waiba                | for Sustainable Hydrogen |
+|         |          |                      |                          |
+| Chair:  |          | Assistant Professor, | Production and Beyond    |
+|         |          | IIT Bombay           |                          |
+| Prof.   |          |                      |                          |
+| Sanjio  |          |                      |                          |
+| Zade,   |          |                      |                          |
+| Prof.   |          |                      |                          |
+| Suman   |          |                      |                          |
+| De      |          |                      |                          |
+| Sarkar  |          |                      |                          |
++---------+----------+----------------------+--------------------------+
+|         | 11.30 -  | SL3: Debjit Biswas   | Pressure-Driven          |
+|         | 11.45    | (DC lab)             | Exciton-to-Excimer       |
+|         |          |                      | Emission Toggling in     |
+|         |          | IISER Kolkata        | Perylene Bisimide–based  |
+|         |          |                      | H-Aggregates.            |
++---------+----------+----------------------+--------------------------+
+|         | 11.45 -  | SL4: Pratyush        | Quantum Dynamics of      |
+|         | 12.00    | Bhattacharjya (SS    | Molecular Systems in     |
+|         |          | lab)                 | Strong Magnetic Fields – |
+|         |          |                      | A Time-Dependent         |
+|         |          | IISER Kolkata        | Perspective              |
++---------+----------+----------------------+--------------------------+
+|         | 12.00 -  | Recorded Lab         |                          |
+|         | 12.20    | Presentations (8 x 2 |                          |
+|         |          | min)                 |                          |
++---------+----------+----------------------+--------------------------+
+|         | 12.20 -  | FL3: Dibyendu Das    | When Matter Comes Alive: |
+|         | 12.40    |                      | Life-Like Properties     |
+|         |          | IISER Kolkata        | Emerging from Simple     |
+|         |          |                      | Chemical Systems         |
++---------+----------+----------------------+--------------------------+
+|         | 12.40 -  |                      |                          |
+|         | 1.00 :   |                      |                          |
+|         | DCS      |                      |                          |
+|         | Group    |                      |                          |
+|         | Photo    |                      |                          |
+|         | Session  |                      |                          |
++---------+----------+----------------------+--------------------------+
+|         | 1.00 -   |                      |                          |
+|         | 2.30 :   |                      |                          |
+|         | Lunch    |                      |                          |
++---------+----------+----------------------+--------------------------+
+| Session | 2.30 -   | FL2: Susmita Roy     | A Journey through the    |
+| 3       | 2.50     |                      | Nucleic Acid Folding     |
+|         |          | IISER Kolkata        | Landscape: Unifying      |
+| Chair:  |          |                      | Polyelectrolyte Theory   |
+|         |          |                      | and Structure-Based      |
+| Prof.   |          |                      | Models                   |
+| Pradip  |          |                      |                          |
+| Ghorai, |          |                      |                          |
+| Prof.   |          |                      |                          |
+| Debasis |          |                      |                          |
+| Koley   |          |                      |                          |
++---------+----------+----------------------+--------------------------+
+|         | 2.50 -   | SL5: Soumalya        | Transition Metal(II)     |
+|         | 3.05     | Debnath (VM lab)     | Oxalate Complexes:       |
+|         |          |                      | Marathon Runners for     |
+|         |          | IISER Kolkata        | Sustained Alkaline Water |
+|         |          |                      | Electrolysis             |
++---------+----------+----------------------+--------------------------+
+|         | 3.05 -   | SL6: Khokan Manna    | Micro Bubble Lithography |
+|         | 3.20     | (SR1 lab)            | (MBL) Printed Electrode  |
+|         |          |                      | for the Water Energy     |
+|         |          | IISER Kolkata        | Nexus                    |
++---------+----------+----------------------+--------------------------+
+|         | 3.20 -   | Recorded Lab         |                          |
+|         | 3.40     | Presentations (8 x 2 |                          |
+|         |          | min)                 |                          |
++---------+----------+----------------------+--------------------------+
+|         | 3.40 -   | AL2: Dr. Arpita      | From Oscillations to     |
+|         | 4.00     | Paikar               | Nutrition: Journey from  |
+|         |          |                      | Chemical Networks to     |
+|         |          | Scientist, FTSI, TCG | Food Science             |
+|         |          | Crest, Kolkata       |                          |
++---------+----------+----------------------+--------------------------+
+| 4.00 -  |          |                      |                          |
+| 4.15    |          |                      |                          |
+| pm: Tea |          |                      |                          |
+| Break   |          |                      |                          |
++---------+----------+----------------------+--------------------------+
+| Session | 4.15 -   | SL7: Nitish Kumar    | Multiple aggregation     |
+| 4       | 4.30     | (SB lab)             | pathways of foldable     |
+|         |          |                      | dimeric cyanostilbenes   |
+| Chair:  |          | IISER Kolkata        | induced by different     |
+|         |          |                      | stimuli: Photoreaction   |
+| Dr.     |          |                      | Control                  |
+| De      |          |                      |                          |
+| babrata |          |                      |                          |
+| Muk     |          |                      |                          |
+| herjee, |          |                      |                          |
+| Prof.   |          |                      |                          |
+| Sumit   |          |                      |                          |
+| Khanra  |          |                      |                          |
++---------+----------+----------------------+--------------------------+
+|         | 4.30 -   | Recorded Lab         |                          |
+|         | 4.45     | Presentations (5 x 2 |                          |
+|         |          | min)                 |                          |
++---------+----------+----------------------+--------------------------+
+|         | 4.45 -   | SL8: Parthapratim    | Stable Radical Cation    |
+|         | 5.00     | Nandi (PP lab)       | Generation in a          |
+|         |          |                      | Symmetry-Breaking TADF   |
+|         |          | IISER Kolkata        | Emitter                  |
++---------+----------+----------------------+--------------------------+
+|         | 5.00 -   | SL9: Himangshu Kuiry | One Hydrogen, Many       |
+|         | 5.15     | (SSG lab)            | Pathways: Understanding  |
+|         |          |                      | HAA by high-valent       |
+|         |          | IISER Kolkata        | Fe(IV) Complexes         |
++---------+----------+----------------------+--------------------------+
+|         | 5.15 -   | SL10: Asmita Nandi   | Morpholinone-Based       |
+|         | 5.30     | (RS lab)             | Multi-Stimuli Responsive |
+|         |          |                      | Polymer Architecture for |
+|         |          | IISER Kolkata        | Sequential Receptor and  |
+|         |          |                      | Mitochondrial Targeting  |
+|         |          |                      | in Orthotopic Breast     |
+|         |          |                      | Cancer Therapy:          |
+|         |          |                      | Integrating Synergistic  |
+|         |          |                      | Chemo-Photodynamic       |
+|         |          |                      | Effect.                  |
++---------+----------+----------------------+--------------------------+
+|         | 5.30 -   |                      |                          |
+|         | 5.45 :   |                      |                          |
+|         | Co       |                      |                          |
+|         | ncluding |                      |                          |
+|         | remarks  |                      |                          |
++---------+----------+----------------------+--------------------------+
+|         | 6.00 -   |                      |                          |
+|         | 8.00 :   |                      |                          |
+|         | Cultural |                      |                          |
+|         | Program  |                      |                          |
++---------+----------+----------------------+--------------------------+
+|         | 8.00     |                      |                          |
+|         | onwards  |                      |                          |
+|         | :        |                      |                          |
+|         | Dinner   |                      |                          |
++---------+----------+----------------------+--------------------------+

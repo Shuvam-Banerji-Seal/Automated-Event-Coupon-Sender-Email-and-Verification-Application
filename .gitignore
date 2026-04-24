@@ -12,6 +12,7 @@ pip-selfcheck.json
 # Environment variables
 .env
 .env.*
+.env*
 !/.env.example
 
 # IDEs and editors
@@ -34,6 +35,9 @@ logs/
 # Uploads and backups
 uploads/
 backups/
+*.csv
+*.csv.*
+*.bak
 coupons.csv
 responses - Sheet1.csv
 sample_attendees.csv
@@ -49,6 +53,16 @@ ngrok.log
 
 # Credentials
 organizer_credentials.json
+*credentials*.json
+client_secret*.json
+
+# Local TLS and key material
+.ssl/
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
 
 # Unused Code and Scripts
 old_code/
@@ -57,3 +71,6 @@ email_service.py
 test_qr_recognition.py
 test_scanner_improvements.py
 setup.py
+.env
+alpha_testers.csv
+coupons.csv

@@ -15,6 +15,7 @@ from googleapiclient.errors import HttpError
 import base64
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.utils import formataddr
 import smtplib
 from dataclasses import dataclass
 
@@ -166,6 +167,31 @@ class GoogleAuthService:
             logger.error(f"Error refreshing credentials: {e}")
             return None
     
+    def revoke_token(self, token: str) -> bool:
+        """Revoke an OAuth token to force re-authentication"""
+        try:
+            import requests
+            
+            # Google's token revocation endpoint
+            revoke_url = 'https://oauth2.googleapis.com/revoke'
+            
+            response = requests.post(
+                revoke_url,
+                params={'token': token},
+                headers={'content-type': 'application/x-www-form-urlencoded'}
+            )
+            
+            if response.status_code == 200:
+                logger.info("OAuth token successfully revoked")
+                return True
+            else:
+                logger.warning(f"Token revocation returned status {response.status_code}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Error revoking token: {e}")
+            return False
+    
     def create_credentials_from_session(self, session_data: Dict[str, Any]) -> Optional[Credentials]:
         """Create credentials object from session data"""
         try:
@@ -185,27 +211,54 @@ class GoogleAuthService:
 class GmailEmailService:
     """Email service using Gmail API for authenticated users"""
     
-    def __init__(self, credentials: Credentials):
+    def __init__(self, credentials: Credentials, sender_name: str = None):
         self.credentials = credentials
+        self.sender_name = sender_name  # Display name for From header
         self.logger = logging.getLogger(__name__)
         
-    def _create_message(self, sender: str, to: str, subject: str, html_content: str) -> Dict[str, str]:
-        """Create a message for Gmail API"""
-        message = MIMEMultipart('alternative')
+    def _create_message(self, sender: str, to: str, subject: str, html_content: str, attachment_path: str = None) -> Dict[str, str]:
+        """Create a message for Gmail API with optional PDF attachment"""
+        message = MIMEMultipart('mixed')
         message['to'] = to
-        message['from'] = sender
+        
+        # Format From header with display name if available
+        # Format: "Display Name" <email@example.com>
+        if self.sender_name and self.sender_name.strip():
+            try:
+                message['from'] = formataddr((self.sender_name, sender))
+            except Exception as e:
+                self.logger.warning(f"Failed to format sender name, using plain email: {e}")
+                message['from'] = sender
+        else:
+            message['from'] = sender
+            
         message['subject'] = subject
         
-        # Add HTML content
+        # Create alternative part for HTML
+        msg_alternative = MIMEMultipart('alternative')
         html_part = MIMEText(html_content, 'html')
-        message.attach(html_part)
+        msg_alternative.attach(html_part)
+        message.attach(msg_alternative)
+        
+        # Add PDF attachment if provided
+        if attachment_path and os.path.exists(attachment_path):
+            try:
+                from email.mime.application import MIMEApplication
+                with open(attachment_path, 'rb') as f:
+                    pdf_attachment = MIMEApplication(f.read(), _subtype='pdf')
+                    pdf_attachment.add_header('Content-Disposition', 'attachment', 
+                                             filename=os.path.basename(attachment_path))
+                    message.attach(pdf_attachment)
+                    self.logger.info(f"Attached PDF: {attachment_path}")
+            except Exception as e:
+                self.logger.error(f"Failed to attach PDF {attachment_path}: {str(e)}")
         
         # Encode message
         raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
         return {'raw': raw_message}
     
-    def send_email(self, sender_email: str, recipient: str, subject: str, html_content: str) -> EmailResult:
-        """Send a single email using Gmail API"""
+    def send_email(self, sender_email: str, recipient: str, subject: str, html_content: str, attachment_path: str = None) -> EmailResult:
+        """Send a single email using Gmail API with optional PDF attachment"""
         try:
             # Refresh credentials if needed
             if self.credentials.expired:
@@ -214,8 +267,8 @@ class GmailEmailService:
             # Build Gmail service
             service = build('gmail', 'v1', credentials=self.credentials)
             
-            # Create message
-            message = self._create_message(sender_email, recipient, subject, html_content)
+            # Create message with optional attachment (sender_name is used from self.sender_name)
+            message = self._create_message(sender_email, recipient, subject, html_content, attachment_path)
             
             # Send message
             result = service.users().messages().send(userId='me', body=message).execute()
@@ -266,7 +319,7 @@ class GmailEmailService:
             
             # Render email content
             try:
-                html_content = template_renderer('event.html', recipient_data)
+                html_content = template_renderer('invitation.html', recipient_data)
                 subject = recipient_data.get('subject', 'Your Digital Coupon')
                 
                 # Send individual email

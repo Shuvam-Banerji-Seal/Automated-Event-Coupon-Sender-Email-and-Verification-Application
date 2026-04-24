@@ -141,7 +141,10 @@ class CouponManager:
     def generate_coupons_batch(self, recipients: List[Dict[str, str]], 
                               event_name: str = "Special Event") -> Dict[str, Any]:
         """
-        Generate coupons for multiple recipients
+        Generate coupons for multiple recipients with 3 QR codes each:
+        - Registration QR
+        - Lunch QR
+        - Dinner QR
         
         Args:
             recipients: List of recipient dictionaries with 'email' key
@@ -168,50 +171,85 @@ class CouponManager:
                 continue
             
             try:
-                # Generate coupon data
-                # Generate unique identifiers
+                # Generate coupon data with 3 separate QR codes
                 coupon_id = self.generate_coupon_id()
-                verification_code = self.generate_verification_code()
+                
+                # Generate 3 verification codes for each purpose
+                reg_verification_code = self.generate_verification_code()
+                lunch_verification_code = self.generate_verification_code()
+                dinner_verification_code = self.generate_verification_code()
                 
                 coupon_data = {
                     'coupon_id': coupon_id,
                     'email': email.lower(),
                     'event_name': event_name,
-                    'verification_code': verification_code,
+                    'verification_code': reg_verification_code,
+                    'lunch_verification_code': lunch_verification_code,
+                    'dinner_verification_code': dinner_verification_code,
                     'created_at': datetime.now(timezone.utc).isoformat(),
                     'valid': True
                 }
                 
-                # Encrypt and create simple QR code
+                # Encrypt coupon data
                 encrypted_data = self.encryption_service.encrypt_coupon_data(coupon_data, email)
                 
-                # Create SIMPLE QR code with just verification code and email
-                qr_data = {
-                    'v': verification_code,  # Short key for verification code
-                    'e': email.lower()       # Short key for email
+                # Create 3 QR codes with type tags
+                # Registration QR
+                reg_qr_data = {
+                    'v': reg_verification_code,
+                    'e': email.lower(),
+                    't': 'registration'  # Type tag
                 }
-                qr_code_base64 = self.create_qr_code(json.dumps(qr_data))
+                reg_qr_base64 = self.create_qr_code(json.dumps(reg_qr_data))
                 
-                # Create record
+                # Lunch QR
+                lunch_qr_data = {
+                    'v': lunch_verification_code,
+                    'e': email.lower(),
+                    't': 'lunch'  # Type tag
+                }
+                lunch_qr_base64 = self.create_qr_code(json.dumps(lunch_qr_data))
+                
+                # Dinner QR
+                dinner_qr_data = {
+                    'v': dinner_verification_code,
+                    'e': email.lower(),
+                    't': 'dinner'  # Type tag
+                }
+                dinner_qr_base64 = self.create_qr_code(json.dumps(dinner_qr_data))
+                
+                # Create record with all 3 QR codes
                 coupon_record = CouponRecord(
                     coupon_id=coupon_id,
                     email=email.lower(),
                     encrypted_data=encrypted_data,
-                    qr_code_data=qr_code_base64,
-                    verification_code=verification_code,
+                    qr_code_data=reg_qr_base64,
+                    verification_code=reg_verification_code,
+                    lunch_qr_data=lunch_qr_base64,
+                    lunch_verification_code=lunch_verification_code,
+                    dinner_qr_data=dinner_qr_base64,
+                    dinner_verification_code=dinner_verification_code,
                     status='generated'
                 )
                 
                 coupon_records.append(coupon_record)
                 
-                # Add to results
+                # Add to results with all 3 QR codes
                 results['coupons'].append({
                     'coupon_id': coupon_id,
                     'email': email,
                     'event_name': event_name,
-                    'qr_code_base64': qr_code_base64,
-                    'encrypted_data': encrypted_data,
-                    'verification_code': verification_code
+                    # Registration QR (primary)
+                    'qr_code_base64': reg_qr_base64,
+                    'verification_code': reg_verification_code,
+                    # Lunch QR
+                    'lunch_qr_base64': lunch_qr_base64,
+                    'lunch_verification_code': lunch_verification_code,
+                    # Dinner QR
+                    'dinner_qr_base64': dinner_qr_base64,
+                    'dinner_verification_code': dinner_verification_code,
+                    # Encrypted data
+                    'encrypted_data': encrypted_data
                 })
                 
                 results['generated'] += 1
@@ -305,35 +343,49 @@ class CouponManager:
                 'error_code': 'SYSTEM_ERROR'
             }
     
-    def validate_coupon_by_code(self, verification_code: str, email: str) -> Dict[str, Any]:
+    def validate_coupon_by_code(self, verification_code: str, email: str = None, qr_type: str = 'registration') -> Dict[str, Any]:
         """
         Validate a coupon using 6-digit verification code
         
         Args:
             verification_code: 6-digit verification code
-            email: Email address for security verification
+            email: Optional email address (if provided, additional security validation)
+            qr_type: Type of QR code - 'registration', 'lunch', or 'dinner'
             
         Returns:
             Dictionary with validation result
         """
         try:
-            # Find coupon by verification code and email
-            coupon_record = self.csv_manager.find_coupon_by_verification_code(verification_code, email)
+            # Find coupon by verification code based on type
+            coupon_record = self.csv_manager.find_coupon_by_verification_code(verification_code, email, qr_type)
             
             if not coupon_record:
                 return {
                     'valid': False,
-                    'error': 'Invalid verification code or email',
+                    'error': f'Invalid {qr_type} verification code',
                     'error_code': 'NOT_FOUND'
                 }
             
-            # Check if already used
-            if coupon_record.status == 'used':
+            # Check if this specific QR type has already been used
+            type_used_at_field = {
+                'registration': coupon_record.used_at,
+                'lunch': coupon_record.lunch_used_at,
+                'dinner': coupon_record.dinner_used_at
+            }
+            
+            used_at = type_used_at_field.get(qr_type)
+            if used_at:
+                type_labels = {
+                    'registration': '🎫 Registration pass',
+                    'lunch': '🍽️ Lunch pass',
+                    'dinner': '🍱 Dinner pass'
+                }
                 return {
                     'valid': False,
-                    'error': 'This coupon has already been used',
+                    'error': f'{type_labels.get(qr_type, qr_type)} has already been used',
                     'error_code': 'ALREADY_USED',
-                    'used_at': coupon_record.used_at
+                    'used_at': used_at,
+                    'qr_type': qr_type
                 }
             
             # Decrypt and validate the coupon data
@@ -350,7 +402,8 @@ class CouponManager:
                         'email': coupon_record.email,
                         'event_name': decrypted_data.get('event_name', 'Event'),
                         'created_at': decrypted_data.get('created_at'),
-                        'verification_code': verification_code
+                        'verification_code': verification_code,
+                        'qr_type': qr_type
                     }
                 else:
                     return {
@@ -375,29 +428,30 @@ class CouponManager:
                 'error_code': 'SYSTEM_ERROR'
             }
     
-    def mark_coupon_used(self, coupon_id: str) -> bool:
+    def mark_coupon_used(self, coupon_id: str, qr_type: str = 'registration') -> bool:
         """
-        Mark a coupon as used
+        Mark a specific QR type as used
         
         Args:
             coupon_id: ID of the coupon to mark as used
+            qr_type: Type of QR code - 'registration', 'lunch', or 'dinner'
             
         Returns:
             True if successfully marked as used, False otherwise
         """
         try:
             used_at = datetime.now(timezone.utc).isoformat()
-            success = self.csv_manager.update_coupon_status(coupon_id, 'used', used_at)
+            success = self.csv_manager.update_coupon_status(coupon_id, qr_type, used_at)
             
             if success:
-                self.logger.info(f"Marked coupon {coupon_id} as used")
+                self.logger.info(f"Marked coupon {coupon_id} {qr_type} as used")
             else:
-                self.logger.error(f"Failed to mark coupon {coupon_id} as used")
+                self.logger.error(f"Failed to mark coupon {coupon_id} {qr_type} as used")
             
             return success
             
         except Exception as e:
-            self.logger.error(f"Error marking coupon {coupon_id} as used: {str(e)}")
+            self.logger.error(f"Error marking coupon {coupon_id} {qr_type} as used: {str(e)}")
             return False
     
     def mark_coupon_sent(self, coupon_id: str) -> bool:
@@ -415,12 +469,11 @@ class CouponManager:
             # Update the coupon record with sent timestamp
             coupon_record = self.csv_manager.find_coupon(coupon_id)
             if coupon_record:
-                coupon_record.sent_at = sent_at
-                coupon_record.status = 'sent'
-                success = self.csv_manager.update_coupon_status(coupon_id, 'sent', None)
+                # Pass 'sent' as the type indicator and sent_at timestamp
+                success = self.csv_manager.update_coupon_status(coupon_id, 'sent', sent_at=sent_at)
                 
                 if success:
-                    self.logger.info(f"Marked coupon {coupon_id} as sent")
+                    self.logger.info(f"Marked coupon {coupon_id} as sent at {sent_at}")
                 return success
             else:
                 self.logger.error(f"Coupon {coupon_id} not found for marking as sent")

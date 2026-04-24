@@ -248,6 +248,31 @@
             line-height: 1.6;
         }
         
+        .logout-success {
+            background: rgba(16, 185, 129, 0.15);
+            border: 1px solid rgba(16, 185, 129, 0.4);
+            padding: 16px 20px;
+            margin-bottom: 24px;
+            border-radius: 12px;
+            color: var(--success);
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            animation: slideDown 0.5s ease-out;
+        }
+        
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .logout-success::before {
+            content: "✓";
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+        
         @media (max-width: 480px) {
             .login-container {
                 padding: 30px 20px;
@@ -264,6 +289,20 @@
         <div class="logo">🎫</div>
         <h1 class="login-title">Event Ticket System</h1>
         <p class="login-subtitle">Sign in with your Google account to create and distribute digital event tickets with QR verification</p>
+        
+        <!-- Show logout success message if logged_out parameter is present -->
+        <script>
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('logged_out') === 'true') {
+                const successDiv = document.createElement('div');
+                successDiv.className = 'logout-success';
+                successDiv.innerHTML = 'Successfully logged out. You can now sign in with a different account.';
+                document.querySelector('.login-subtitle').after(successDiv);
+                
+                // Remove the parameter from URL without reloading
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+        </script>
         
         <a href="/login?start=true" class="google-login-btn">
             <div class="google-icon">

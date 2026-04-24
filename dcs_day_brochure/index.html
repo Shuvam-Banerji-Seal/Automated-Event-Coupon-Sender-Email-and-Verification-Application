@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DCS Day '26 Brochure</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              serif: ['"Playfair Display"', 'serif'],
+              sans: ['"Lato"', 'sans-serif'],
+            },
+            colors: {
+              dcs: {
+                green: '#006837', // Approximated from logo context
+                blue: '#0054a6',  // Approximated from logo context
+                dark: '#1a1a1a',
+                light: '#f8f9fa',
+              }
+            },
+            screens: {
+              'print': {'raw': 'print'},
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      @media print {
+        @page {
+          size: A5 portrait;
+          margin: 0;
+        }
+        body {
+          margin: 0;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        .no-print {
+          display: none !important;
+        }
+        .page-break {
+          break-after: page;
+          page-break-after: always;
+        }
+      }
+      /* Screen preview styles to mimic A5 */
+      .a5-page {
+        width: 148mm;
+        height: 210mm;
+        margin: 0 auto;
+        background: white;
+        overflow: hidden;
+        position: relative;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      }
+      @media print {
+        .a5-page {
+          width: 100%;
+          height: 100%;
+          box-shadow: none;
+          margin: 0;
+        }
+      }
+
+      /* PDF Generation Overrides - Applied during html2pdf capture */
+      .pdf-generating .a5-page {
+        margin: 0 !important;
+        box-shadow: none !important;
+      }
+      .pdf-generating {
+        width: 148mm !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: white !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 0 !important;
+      }
+      /* Force vertical layout for inside pages during PDF gen */
+      .pdf-generating .md\:flex-row {
+        flex-direction: column !important;
+      }
+      /* Ensure page breaks are respected in html2pdf if strictly configured, 
+         though usually we just want a continuous column that the PDF slicer cuts */
+      .pdf-generating > div {
+        break-after: page;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body class="bg-gray-100 text-gray-900">
+    <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>

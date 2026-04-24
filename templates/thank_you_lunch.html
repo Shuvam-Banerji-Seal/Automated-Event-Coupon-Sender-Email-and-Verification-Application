@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lunch Verified - DCS Day 2026</title>
+</head>
+<body style="font-family: 'Segoe UI', Arial, sans-serif; background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%); margin: 0; padding: 40px 20px; color: #333;">
+    <div style="max-width: 600px; margin: 0 auto; background: white; border-radius: 24px; overflow: hidden; box-shadow: 0 25px 50px rgba(217, 119, 6, 0.3);">
+        
+        <!-- Header -->
+        <div style="background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%); color: white; padding: 50px 30px; text-align: center;">
+            <div style="font-size: 64px; margin-bottom: 15px;">🍽️</div>
+            <h1 style="margin: 0; font-size: 32px; font-weight: 700; letter-spacing: -0.5px;">Bon Appétit!</h1>
+            <p style="margin: 15px 0 0 0; font-size: 18px; opacity: 0.95;">Hope You Enjoyed Your Lunch</p>
+        </div>
+        
+        <!-- Main Content -->
+        <div style="padding: 45px 35px;">
+            
+            <!-- Welcome Message -->
+            <div style="text-align: center; margin-bottom: 35px;">
+                <p style="font-size: 20px; color: #d97706; font-weight: 600; margin: 0 0 15px 0;">
+                    Dear {{ attendee_name or 'Attendee' }},
+                </p>
+                <p style="font-size: 17px; color: #555; line-height: 1.7; margin: 0;">
+                    We hope you had a delightful lunch at <strong style="color: #d97706;">{{ event_name }}</strong>!<br>
+                    There's still so much more to experience today.
+                </p>
+            </div>
+            
+            <!-- Stay Tuned Box -->
+            <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-radius: 16px; padding: 30px; margin: 30px 0; border: 2px solid #fbbf24;">
+                <div style="text-align: center;">
+                    <span style="font-size: 48px; display: block; margin-bottom: 15px;">📢</span>
+                    <h3 style="color: #92400e; margin: 0 0 12px 0; font-size: 22px;">Stay Tuned for More!</h3>
+                    <p style="color: #a16207; margin: 0; font-size: 16px; line-height: 1.6;">
+                        The afternoon is packed with exciting activities.<br>
+                        Don't miss out on what's coming next!
+                    </p>
+                </div>
+            </div>
+            
+            <!-- Highlights Grid -->
+            <div style="margin: 35px 0;">
+                <h3 style="color: #1e293b; margin: 0 0 20px 0; font-size: 18px; text-align: center;">🌟 Afternoon Highlights</h3>
+                
+                <div style="display: grid; gap: 15px;">
+                    
+                    <!-- Posters & Presentations -->
+                    <div style="background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); border-radius: 14px; padding: 22px; border-left: 5px solid #3b82f6;">
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <span style="font-size: 36px;">📊</span>
+                            <div>
+                                <h4 style="color: #1e40af; margin: 0 0 6px 0; font-size: 17px;">Posters & Presentations</h4>
+                                <p style="color: #3730a3; margin: 0; font-size: 14px; line-height: 1.5;">
+                                    Explore innovative research and projects by our talented students and faculty!
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Cultural Events -->
+                    <div style="background: linear-gradient(135deg, #fce7f3 0%, #fbcfe8 100%); border-radius: 14px; padding: 22px; border-left: 5px solid #ec4899;">
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <span style="font-size: 36px;">🎭</span>
+                            <div>
+                                <h4 style="color: #be185d; margin: 0 0 6px 0; font-size: 17px;">Main Cultural Events</h4>
+                                <p style="color: #9d174d; margin: 0; font-size: 14px; line-height: 1.5;">
+                                    Music, dance, drama, and more! Don't miss the spectacular performances.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- More Activities -->
+                    <div style="background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%); border-radius: 14px; padding: 22px; border-left: 5px solid #6366f1;">
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <span style="font-size: 36px;">🎪</span>
+                            <div>
+                                <h4 style="color: #4338ca; margin: 0 0 6px 0; font-size: 17px;">Interactive Sessions</h4>
+                                <p style="color: #4f46e5; margin: 0; font-size: 14px; line-height: 1.5;">
+                                    Participate in workshops, games, and networking opportunities!
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                </div>
+            </div>
+            
+            <!-- Registration Details -->
+            <div style="background: #f8fafc; border-radius: 16px; padding: 25px; margin: 30px 0; border-left: 5px solid #d97706;">
+                <h3 style="color: #1e293b; margin: 0 0 20px 0; font-size: 18px;">📋 Lunch Verification Details</h3>
+                
+                <div style="display: flex; justify-content: space-between; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0;">
+                    <span style="font-weight: 600; color: #475569;">Email:</span>
+                    <span style="color: #64748b;">{{ email }}</span>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0;">
+                    <span style="font-weight: 600; color: #475569;">Event:</span>
+                    <span style="color: #64748b;">{{ event_name }}</span>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between;">
+                    <span style="font-weight: 600; color: #475569;">Verified At:</span>
+                    <span style="color: #64748b;">{{ current_date }}</span>
+                </div>
+            </div>
+            
+        </div>
+        
+        <!-- Footer -->
+        <div style="background: linear-gradient(135deg, #1e293b 0%, #334155 100%); padding: 35px; text-align: center; color: white;">
+            <p style="margin: 0 0 10px 0; font-size: 18px; font-weight: 600;">Department of Chemical Sciences</p>
+            <p style="margin: 0 0 20px 0; font-size: 14px; opacity: 0.8;">IISER Kolkata • DCS Day 2026</p>
+            <div style="border-top: 1px solid rgba(255,255,255,0.2); padding-top: 20px; margin-top: 10px;">
+                <p style="margin: 0; font-size: 13px; opacity: 0.7;">
+                    This confirmation was sent by {{ organizer_email }}
+                </p>
+            </div>
+        </div>
+        
+    </div>
+</body>
+</html>

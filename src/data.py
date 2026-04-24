@@ -16,14 +16,23 @@ import logging
 
 @dataclass
 class CouponRecord:
-    """Data structure for coupon records in CSV"""
-    coupon_id: str
+    """Data structure for coupon records in CSV - supports 3 QR codes for different purposes"""
+    coupon_id: str  # Main coupon ID (registration)
     email: str
     encrypted_data: str
-    qr_code_data: str
-    verification_code: str  # 6-digit verification code
+    qr_code_data: str  # Registration QR code (base64)
+    verification_code: str  # Registration verification code (6-digit)
+    # Lunch QR fields
+    lunch_qr_data: Optional[str] = None
+    lunch_verification_code: Optional[str] = None
+    lunch_used_at: Optional[str] = None
+    # Dinner QR fields
+    dinner_qr_data: Optional[str] = None
+    dinner_verification_code: Optional[str] = None
+    dinner_used_at: Optional[str] = None
+    # Common fields
     sent_at: Optional[str] = None
-    used_at: Optional[str] = None
+    used_at: Optional[str] = None  # Registration used_at
     status: str = 'generated'  # generated, sent, used, expired
     
     def to_dict(self) -> Dict[str, Any]:
@@ -33,6 +42,11 @@ class CouponRecord:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'CouponRecord':
         """Create from dictionary loaded from CSV"""
+        # Handle missing fields for backward compatibility
+        for field in ['lunch_qr_data', 'lunch_verification_code', 'lunch_used_at',
+                      'dinner_qr_data', 'dinner_verification_code', 'dinner_used_at']:
+            if field not in data:
+                data[field] = None
         return cls(**data)
 
 
@@ -51,13 +65,15 @@ class CSVManager:
         """Initialize coupons CSV file with headers if it doesn't exist"""
         if not os.path.exists(self.coupons_file):
             headers = ['coupon_id', 'email', 'encrypted_data', 'qr_code_data', 
-                      'verification_code', 'sent_at', 'used_at', 'status']
+                      'verification_code', 'lunch_qr_data', 'lunch_verification_code',
+                      'lunch_used_at', 'dinner_qr_data', 'dinner_verification_code',
+                      'dinner_used_at', 'sent_at', 'used_at', 'status']
             with open(self.coupons_file, 'w', newline='', encoding='utf-8') as f:
                 writer = csv.writer(f)
                 writer.writerow(headers)
             self.logger.info(f"Created coupons file: {self.coupons_file}")
         else:
-            # Check if verification_code column exists, add if missing
+            # Check if new columns exist, update if needed
             self._ensure_verification_code_column()
     
     def _ensure_verification_code_column(self):
@@ -78,18 +94,20 @@ class CSVManager:
                 
                 # Clean fieldnames - remove empty strings and extra spaces
                 clean_fieldnames = [f.strip() for f in fieldnames if f.strip()]
-                expected_fieldnames = ['coupon_id', 'email', 'encrypted_data', 'qr_code_data', 'verification_code', 'sent_at', 'used_at', 'status']
+                # Use the NEW 3-QR schema with lunch/dinner fields
+                expected_fieldnames = ['coupon_id', 'email', 'encrypted_data', 'qr_code_data', 
+                                       'verification_code', 'lunch_qr_data', 'lunch_verification_code',
+                                       'lunch_used_at', 'dinner_qr_data', 'dinner_verification_code',
+                                       'dinner_used_at', 'sent_at', 'used_at', 'status']
                 
-                # Check if structure needs fixing
-                needs_fixing = (
-                    set(clean_fieldnames) != set(expected_fieldnames) or
-                    len(clean_fieldnames) != len(expected_fieldnames) or
-                    clean_fieldnames != expected_fieldnames
-                )
+                # Check if structure needs fixing (only if missing fields)
+                needs_fixing = not all(field in clean_fieldnames for field in expected_fieldnames)
                 
                 if needs_fixing:
                     self.logger.info(f"Fixing CSV structure. Current: {clean_fieldnames}, Expected: {expected_fieldnames}")
                     self._fix_csv_structure(expected_fieldnames)
+                else:
+                    self.logger.info(f"CSV structure is valid with 3-QR support")
                     
         except Exception as e:
             self.logger.error(f"Error updating CSV structure: {str(e)}")
@@ -98,12 +116,15 @@ class CSVManager:
     
     def _create_empty_coupons_file(self):
         """Create a new empty coupons file with proper headers"""
+        # Use the NEW 3-QR schema with lunch/dinner fields
         headers = ['coupon_id', 'email', 'encrypted_data', 'qr_code_data', 
-                  'verification_code', 'sent_at', 'used_at', 'status']
+                  'verification_code', 'lunch_qr_data', 'lunch_verification_code',
+                  'lunch_used_at', 'dinner_qr_data', 'dinner_verification_code',
+                  'dinner_used_at', 'sent_at', 'used_at', 'status']
         with open(self.coupons_file, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
             writer.writerow(headers)
-        self.logger.info(f"Created new coupons file with proper headers: {self.coupons_file}")
+        self.logger.info(f"Created new coupons file with 3-QR headers: {self.coupons_file}")
     
     def _fix_csv_structure(self, expected_fieldnames):
         """Fix CSV structure to match expected format"""
@@ -120,6 +141,8 @@ class CSVManager:
                 self._create_empty_coupons_file()
                 return
             
+            num_columns = len(expected_fieldnames)
+            
             # Create temp file with correct structure
             with tempfile.NamedTemporaryFile(mode='w', delete=False, newline='', encoding='utf-8') as temp_f:
                 writer = csv.writer(temp_f)
@@ -128,8 +151,8 @@ class CSVManager:
                 # Process data rows (skip header)
                 data_rows = all_rows[1:] if len(all_rows) > 1 else []
                 for row in data_rows:
-                    # Ensure row has exactly 8 columns
-                    clean_row = (row + [''] * 8)[:8]
+                    # Ensure row has exactly the right number of columns (14 for 3-QR schema)
+                    clean_row = (row + [''] * num_columns)[:num_columns]
                     writer.writerow(clean_row)
                 
                 temp_filename = temp_f.name
@@ -185,7 +208,9 @@ class CSVManager:
             with self._file_lock(self.coupons_file, 'a') as f:
                 writer = csv.DictWriter(f, fieldnames=[
                     'coupon_id', 'email', 'encrypted_data', 'qr_code_data',
-                    'verification_code', 'sent_at', 'used_at', 'status'
+                    'verification_code', 'lunch_qr_data', 'lunch_verification_code',
+                    'lunch_used_at', 'dinner_qr_data', 'dinner_verification_code',
+                    'dinner_used_at', 'sent_at', 'used_at', 'status'
                 ])
                 writer.writerow(coupon.to_dict())
             
@@ -202,7 +227,9 @@ class CSVManager:
             with self._file_lock(self.coupons_file, 'a') as f:
                 writer = csv.DictWriter(f, fieldnames=[
                     'coupon_id', 'email', 'encrypted_data', 'qr_code_data',
-                    'verification_code', 'sent_at', 'used_at', 'status'
+                    'verification_code', 'lunch_qr_data', 'lunch_verification_code',
+                    'lunch_used_at', 'dinner_qr_data', 'dinner_verification_code',
+                    'dinner_used_at', 'sent_at', 'used_at', 'status'
                 ])
                 for coupon in coupons:
                     writer.writerow(coupon.to_dict())
@@ -229,15 +256,43 @@ class CSVManager:
             self.logger.error(f"Error finding coupon {coupon_id}: {str(e)}")
             return None
     
-    def find_coupon_by_verification_code(self, verification_code: str, email: str) -> Optional[CouponRecord]:
-        """Find a coupon by verification code and email for security"""
+    def find_coupon_by_email(self, email: str) -> Optional[CouponRecord]:
+        """Find a coupon by email address"""
         try:
             with self._file_lock(self.coupons_file, 'r') as f:
                 reader = csv.DictReader(f)
                 for row in reader:
-                    if (row.get('verification_code') == verification_code and 
-                        row.get('email', '').lower() == email.lower()):
+                    if row.get('email', '').lower() == email.lower():
                         return CouponRecord.from_dict(row)
+            
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"Error finding coupon by email {email}: {str(e)}")
+            return None
+    
+    def find_coupon_by_verification_code(self, verification_code: str, email: str = None, qr_type: str = 'registration') -> Optional[CouponRecord]:
+        """Find a coupon by verification code based on QR type, optionally with email for extra security"""
+        try:
+            # Determine which field to check based on QR type
+            type_field_map = {
+                'registration': 'verification_code',
+                'lunch': 'lunch_verification_code',
+                'dinner': 'dinner_verification_code'
+            }
+            code_field = type_field_map.get(qr_type, 'verification_code')
+            
+            with self._file_lock(self.coupons_file, 'r') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    if row.get(code_field) == verification_code:
+                        # If email is provided, validate it matches
+                        if email is not None:
+                            if row.get('email', '').lower() == email.lower():
+                                return CouponRecord.from_dict(row)
+                        else:
+                            # Return match even without email verification
+                            return CouponRecord.from_dict(row)
             
             return None
             
@@ -245,8 +300,15 @@ class CSVManager:
             self.logger.error(f"Error finding coupon by verification code: {str(e)}")
             return None
     
-    def update_coupon_status(self, coupon_id: str, status: str, used_at: Optional[str] = None) -> bool:
-        """Update coupon status and usage timestamp"""
+    def update_coupon_status(self, coupon_id: str, qr_type_or_status: str, used_at: Optional[str] = None, sent_at: Optional[str] = None) -> bool:
+        """Update coupon status for a specific QR type
+        
+        Args:
+            coupon_id: The coupon ID to update
+            qr_type_or_status: Either 'registration', 'lunch', 'dinner' (QR types) or 'sent'
+            used_at: Timestamp when the coupon was used
+            sent_at: Timestamp when the coupon was sent (for 'sent' status)
+        """
         try:
             # Read all coupons
             coupons = []
@@ -256,9 +318,22 @@ class CSVManager:
                 reader = csv.DictReader(f)
                 for row in reader:
                     if row.get('coupon_id') == coupon_id:
-                        row['status'] = status
-                        if used_at:
+                        # Handle QR type-specific used_at fields
+                        if qr_type_or_status == 'registration' and used_at:
                             row['used_at'] = used_at
+                        elif qr_type_or_status == 'lunch' and used_at:
+                            row['lunch_used_at'] = used_at
+                        elif qr_type_or_status == 'dinner' and used_at:
+                            row['dinner_used_at'] = used_at
+                        elif qr_type_or_status == 'sent' and sent_at:
+                            row['sent_at'] = sent_at
+                            row['status'] = 'sent'
+                        
+                        # Update overall status to 'used' only if all three QR types are used
+                        # For now, we keep status as 'sent' or update based on usage
+                        if row.get('used_at') and row.get('lunch_used_at') and row.get('dinner_used_at'):
+                            row['status'] = 'used'  # All passes used
+                        
                         updated = True
                     coupons.append(row)
             
@@ -273,7 +348,7 @@ class CSVManager:
                     writer.writeheader()
                     writer.writerows(coupons)
             
-            self.logger.info(f"Updated coupon {coupon_id} status to {status}")
+            self.logger.info(f"Updated coupon {coupon_id} for {qr_type_or_status}")
             return True
             
         except Exception as e:

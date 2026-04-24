@@ -752,7 +752,7 @@
                             <div class="user-email">{{ user.email }}</div>
                         </div>
                     </div>
-                    <a href="/logout" class="logout-btn">🚪 Logout</a>
+                    <a href="/logout" class="logout-btn" onclick="handleLogout(event)">🚪 Logout</a>
                 </div>
                 {% endif %}
             </div>
@@ -805,9 +805,17 @@
                     </div>
                 </div>
                 
-                <button class="btn btn-primary" id="uploadBtn" onclick="uploadCSV()" disabled>
-                    📤 Upload Attendee List
-                </button>
+                <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                    <button class="btn btn-primary" id="uploadBtn" onclick="uploadCSV()" disabled>
+                        📤 Upload Attendee List
+                    </button>
+                    <button class="btn btn-secondary" id="clearCsvBtn" onclick="clearCSV()" style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); border-color: #dc2626;">
+                        🗑️ Clear Current CSV
+                    </button>
+                </div>
+                <small style="display: block; margin-top: 8px; color: var(--text-muted);">
+                    ⚠️ Use "Clear Current CSV" before uploading a new file to avoid data accumulation
+                </small>
             </div>
             
             <!-- Attendee List Viewer -->
@@ -942,6 +950,49 @@
             });
         }
         
+        function clearCSV() {
+            // Confirm before clearing
+            if (!confirm('⚠️ Are you sure you want to clear the current CSV data?\n\nThis will:\n• Remove all uploaded attendee data\n• Reset all generated coupons\n• Create a backup of current data\n\nYou will need to upload a new CSV file after this.')) {
+                return;
+            }
+            
+            const clearBtn = document.getElementById('clearCsvBtn');
+            clearBtn.disabled = true;
+            clearBtn.textContent = '⏳ Clearing...';
+            
+            fetch('/clear-csv', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert('uploadAlert', 
+                        `✅ CSV data cleared successfully! ${data.backup_created ? 'Backup created: ' + data.backup_created : ''}\n\nYou can now upload a new CSV file.`, 
+                        'success'
+                    );
+                    // Reset the file input
+                    document.getElementById('csvFile').value = '';
+                    selectedFile = null;
+                    document.getElementById('uploadBtn').disabled = true;
+                    // Refresh stats to show empty state
+                    loadStats();
+                    loadAttendeeList();
+                } else {
+                    showAlert('uploadAlert', `❌ Clear failed: ${data.error}`, 'error');
+                }
+            })
+            .catch(error => {
+                showAlert('uploadAlert', `❌ Clear error: ${error.message}`, 'error');
+            })
+            .finally(() => {
+                clearBtn.disabled = false;
+                clearBtn.textContent = '🗑️ Clear Current CSV';
+            });
+        }
+        
         function sendEventTickets() {
             const eventName = document.getElementById('eventName').value.trim();
             if (!eventName) {
@@ -957,8 +1008,17 @@
             sendBtn.disabled = true;
             sendBtn.textContent = '⏳ Sending...';
             progressContainer.style.display = 'block';
-            progressFill.style.width = '0%';
-            progressText.textContent = 'Generating coupons and sending emails...';
+            progressFill.style.width = '10%';
+            progressText.textContent = 'Generating coupons and sending emails... This may take a minute.';
+            
+            // Animate progress bar while waiting
+            let progressValue = 10;
+            const progressInterval = setInterval(() => {
+                if (progressValue < 90) {
+                    progressValue += 5;
+                    progressFill.style.width = progressValue + '%';
+                }
+            }, 2000);
             
             fetch('/send-emails', {
                 method: 'POST',
@@ -969,31 +1029,21 @@
                     event_name: eventName
                 })
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
             .then(data => {
+                clearInterval(progressInterval);
+                
                 if (data.success) {
                     progressFill.style.width = '100%';
                     progressText.textContent = `✅ Campaign completed successfully!`;
                     
-                    // Build detailed message with failure information if any
-                    let alertMessage = `🎉 Campaign sent successfully from ${data.sender_email}!<br>
-                        📧 ${data.emails_sent} emails sent<br>
-                        🎫 ${data.coupons_generated} coupons generated<br>
-                        ❌ ${data.emails_failed} failed deliveries`;
-                    
-                    // Add detailed failure information if there are failed emails
-                    if (data.failed_emails && data.failed_emails.length > 0) {
-                        alertMessage += `<br><br><strong>⚠️ Failed Email Details:</strong><br>`;
-                        data.failed_emails.forEach(failure => {
-                            alertMessage += `• ${failure.email}: ${failure.error}<br>`;
-                        });
-                        
-                        if (data.failure_log_file) {
-                            alertMessage += `<br>📄 Detailed log saved to: <code>${data.failure_log_file}</code>`;
-                        }
-                    }
-                    
-                    showAlert('campaignAlert', alertMessage, data.emails_failed > 0 ? 'warning' : 'success');
+                    // Show success modal
+                    showSuccessModal(data);
                     
                     loadStats(); // Refresh stats
                 } else {
@@ -1003,17 +1053,121 @@
                 }
             })
             .catch(error => {
+                clearInterval(progressInterval);
                 progressFill.style.width = '0%';
                 progressText.textContent = 'Campaign failed';
+                console.error('Send emails error:', error);
                 showAlert('campaignAlert', `❌ Campaign error: ${error.message}`, 'error');
             })
             .finally(() => {
+                clearInterval(progressInterval);
                 sendBtn.disabled = false;
-                sendBtn.textContent = '📧 Generate Coupons & Send Emails';
+                sendBtn.textContent = '🎫 Preview & Send Event Tickets';
                 setTimeout(() => {
                     progressContainer.style.display = 'none';
                 }, 3000);
             });
+        }
+        
+        // Show success modal after sending emails
+        function showSuccessModal(data) {
+            // Remove existing modal if any
+            const existingModal = document.querySelector('.success-modal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+            
+            const modal = document.createElement('div');
+            modal.className = 'success-modal';
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.8);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 1000;
+                backdrop-filter: blur(10px);
+                animation: fadeIn 0.3s ease-out;
+            `;
+            
+            const hasFailures = data.emails_failed > 0;
+            const iconEmoji = hasFailures ? '⚠️' : '🎉';
+            const headerColor = hasFailures ? 'var(--warning)' : 'var(--success)';
+            
+            let failuresList = '';
+            if (data.failed_emails && data.failed_emails.length > 0) {
+                failuresList = `
+                    <div style="margin-top: 16px; padding: 16px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 12px;">
+                        <h4 style="color: var(--error); margin-bottom: 12px;">⚠️ Failed Deliveries:</h4>
+                        <div style="max-height: 150px; overflow-y: auto;">
+                            ${data.failed_emails.map(f => `<div style="padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 0.9rem;">
+                                <span style="color: var(--text-primary);">${f.email}</span>
+                                <span style="color: var(--error); margin-left: 8px;">${f.error}</span>
+                            </div>`).join('')}
+                        </div>
+                        ${data.failure_log_file ? `<p style="margin-top: 12px; font-size: 0.85rem; color: var(--text-muted);">📄 Log saved to: ${data.failure_log_file}</p>` : ''}
+                    </div>
+                `;
+            }
+            
+            modal.innerHTML = `
+                <div style="background: var(--bg-secondary); border-radius: 20px; padding: 40px; max-width: 500px; width: 90%; border: 1px solid var(--border); box-shadow: var(--shadow); animation: slideUp 0.3s ease-out; text-align: center;">
+                    <div style="font-size: 4rem; margin-bottom: 20px;">${iconEmoji}</div>
+                    <h2 style="color: ${headerColor}; margin-bottom: 16px; font-size: 1.8rem;">
+                        ${hasFailures ? 'Campaign Completed with Warnings' : 'Campaign Sent Successfully!'}
+                    </h2>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 24px 0;">
+                        <div style="background: var(--bg-tertiary); padding: 20px; border-radius: 12px; border: 1px solid var(--border);">
+                            <div style="font-size: 2rem; font-weight: 700; color: var(--accent-primary);">${data.coupons_generated}</div>
+                            <div style="color: var(--text-secondary); font-size: 0.85rem;">Tickets Generated</div>
+                        </div>
+                        <div style="background: var(--bg-tertiary); padding: 20px; border-radius: 12px; border: 1px solid var(--border);">
+                            <div style="font-size: 2rem; font-weight: 700; color: var(--success);">${data.emails_sent}</div>
+                            <div style="color: var(--text-secondary); font-size: 0.85rem;">Emails Sent</div>
+                        </div>
+                        <div style="background: var(--bg-tertiary); padding: 20px; border-radius: 12px; border: 1px solid var(--border);">
+                            <div style="font-size: 2rem; font-weight: 700; color: ${data.emails_failed > 0 ? 'var(--error)' : 'var(--text-muted)'};">${data.emails_failed}</div>
+                            <div style="color: var(--text-secondary); font-size: 0.85rem;">Failed</div>
+                        </div>
+                    </div>
+                    
+                    <p style="color: var(--text-secondary); margin-bottom: 8px;">Sent from: <strong style="color: var(--text-primary);">${data.sender_email}</strong></p>
+                    
+                    ${failuresList}
+                    
+                    <button onclick="this.closest('.success-modal').remove()" 
+                            style="margin-top: 24px; padding: 14px 40px; background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%); color: white; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s ease;"
+                            onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 25px rgba(99, 102, 241, 0.4)'"
+                            onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'">
+                        ✓ Got it!
+                    </button>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            
+            // Play success sound if available
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                oscillator.frequency.setValueAtTime(523.25, audioContext.currentTime); // C5
+                oscillator.frequency.setValueAtTime(659.25, audioContext.currentTime + 0.1); // E5
+                oscillator.frequency.setValueAtTime(783.99, audioContext.currentTime + 0.2); // G5
+                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.4);
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.4);
+            } catch (e) {
+                // Audio not supported
+            }
         }
         
         // Global variable to store attendee data
@@ -1413,6 +1567,27 @@
                 handleFileUpload({ target: { files: files } });
             }
         });
+        
+        // Handle logout - clear browser storage and redirect
+        function handleLogout(event) {
+            event.preventDefault();
+            
+            // Clear all browser storage
+            try {
+                localStorage.clear();
+                sessionStorage.clear();
+                
+                // Clear all cookies
+                document.cookie.split(';').forEach(function(c) {
+                    document.cookie = c.replace(/^ +/, '').replace(/=.*/, '=;expires=' + new Date().toUTCString() + ';path=/');
+                });
+            } catch (e) {
+                console.log('Storage clear warning:', e);
+            }
+            
+            // Redirect to logout endpoint
+            window.location.href = '/logout';
+        }
     </script>
 </body>
 </html>

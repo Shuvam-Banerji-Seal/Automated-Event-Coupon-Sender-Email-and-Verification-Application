@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invitation: DCS Day '26</title>
+    <!--[if mso]>
+    <noscript>
+    <xml>
+    <o:OfficeDocumentSettings>
+    <o:PixelsPerInch>96</o:PixelsPerInch>
+    </o:OfficeDocumentSettings>
+    </xml>
+    </noscript>
+    <![endif]-->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #e2e8f0;
+            font-family: 'Inter', Helvetica, Arial, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            color: #334155;
+        }
+
+        .wrapper {
+            width: 100%;
+            table-layout: fixed;
+            background-color: #e2e8f0;
+            padding: 20px 0 40px 0;
+        }
+
+        .main {
+            background-color: #ffffff;
+            margin: 0 auto;
+            width: 100%;
+            max-width: 650px;
+            border-spacing: 0;
+            font-family: 'Inter', sans-serif;
+            color: #334155;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+            border-radius: 16px;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
+            padding: 45px 30px;
+            text-align: center;
+            color: white;
+            position: relative;
+            border-bottom: 5px solid #f59e0b;
+        }
+
+        .logos-table {
+            margin: 0 auto 20px auto;
+            border-spacing: 15px;
+        }
+
+        .logo-wrapper {
+            background: white;
+            padding: 10px;
+            border-radius: 50%;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .logo-img {
+            width: 55px;
+            height: 55px;
+            object-fit: contain;
+            border-radius: 50%;
+        }
+
+        .dept-name {
+            font-size: 13px;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: #94a3b8;
+            margin-bottom: 8px;
+        }
+
+        .event-title {
+            font-family: 'Playfair Display', Georgia, serif;
+            font-size: 52px;
+            font-weight: 900;
+            margin: 0 0 15px 0;
+            color: #fbbf24;
+            text-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            letter-spacing: 2px;
+        }
+
+        .event-tagline {
+            font-size: 15px;
+            color: #e2e8f0;
+            margin-bottom: 15px;
+        }
+
+        .attendee-name {
+            font-family: 'Playfair Display', Georgia, serif;
+            font-size: 22px;
+            color: #fbbf24;
+            margin-bottom: 12px;
+        }
+
+        .event-pill {
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            padding: 10px 20px;
+            border-radius: 30px;
+            font-size: 14px;
+            color: #f1f5f9;
+            font-weight: 500;
+        }
+
+        .content {
+            padding: 40px 25px;
+        }
+
+        .greeting-box {
+            text-align: center;
+            margin-bottom: 35px;
+            padding: 0 10px;
+        }
+
+        .greeting {
+            font-family: 'Playfair Display', serif;
+            font-size: 24px;
+            color: #0f172a;
+            margin-bottom: 12px;
+            font-weight: 700;
+        }
+
+        .intro-text {
+            font-size: 15px;
+            line-height: 1.7;
+            color: #475569;
+        }
+
+        /* TICKET STYLES */
+        .ticket-section {
+            border-radius: 16px;
+            overflow: hidden;
+            margin: 25px 0;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+
+        .ticket-header {
+            padding: 18px 20px;
+            color: white;
+            font-family: 'Playfair Display', serif;
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .ticket-badge {
+            background: rgba(255,255,255,0.25);
+            font-size: 11px;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-family: 'Inter', sans-serif;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            float: right;
+        }
+
+        .ticket-body {
+            padding: 25px;
+            text-align: center;
+            background: white;
+        }
+
+        .qr-container {
+            display: inline-block;
+            padding: 12px;
+            border-radius: 12px;
+            border: 4px solid;
+        }
+
+        .qr-image {
+            width: 150px;
+            height: 150px;
+            display: block;
+        }
+
+        .verification-code {
+            font-family: 'Courier New', monospace;
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: 4px;
+            padding: 10px 20px;
+            border-radius: 8px;
+            display: inline-block;
+            border: 2px dashed;
+        }
+
+        .ticket-note {
+            font-size: 13px;
+            color: #64748b;
+            margin-top: 15px;
+            line-height: 1.5;
+        }
+
+        /* Registration Ticket - Green */
+        .ticket-registration { border: 3px solid #059669; }
+        .ticket-registration .ticket-header { background: linear-gradient(135deg, #059669 0%, #047857 100%); }
+        .ticket-registration .qr-container { border-color: #a7f3d0; background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%); }
+        .ticket-registration .verification-code { color: #047857; background: #ecfdf5; border-color: #a7f3d0; }
+
+        /* Lunch Ticket - Orange */
+        .ticket-lunch { border: 3px solid #d97706; }
+        .ticket-lunch .ticket-header { background: linear-gradient(135deg, #d97706 0%, #b45309 100%); }
+        .ticket-lunch .qr-container { border-color: #fde68a; background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%); }
+        .ticket-lunch .verification-code { color: #b45309; background: #fffbeb; border-color: #fde68a; }
+
+        /* Dinner Ticket - Purple */
+        .ticket-dinner { border: 3px solid #7c3aed; }
+        .ticket-dinner .ticket-header { background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); }
+        .ticket-dinner .qr-container { border-color: #ddd6fe; background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%); }
+        .ticket-dinner .verification-code { color: #6d28d9; background: #f5f3ff; border-color: #ddd6fe; }
+
+        /* SCHEDULE STYLES */
+        .schedule-section {
+            background: #f8fafc;
+            border-radius: 16px;
+            padding: 25px 20px;
+            margin: 25px 0;
+            border: 1px solid #e2e8f0;
+        }
+
+        .schedule-title {
+            text-align: center;
+            font-family: 'Playfair Display', serif;
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .schedule-title.morning { color: #059669; }
+        .schedule-title.afternoon { color: #d97706; }
+        .schedule-title.evening { color: #7c3aed; }
+
+        .session-header {
+            background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+            color: white;
+            padding: 12px 15px;
+            border-radius: 10px;
+            margin: 18px 0 12px 0;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .session-chair {
+            font-size: 12px;
+            color: #93c5fd;
+            margin-top: 4px;
+            font-weight: 400;
+        }
+
+        .schedule-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .schedule-table tr {
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .schedule-table tr:last-child {
+            border-bottom: none;
+        }
+
+        .schedule-table td {
+            padding: 10px 8px;
+            vertical-align: top;
+        }
+
+        .time-cell {
+            width: 75px;
+            font-weight: 600;
+            color: #d97706;
+            white-space: nowrap;
+        }
+
+        .talk-title {
+            font-weight: 600;
+            color: #1e293b;
+            line-height: 1.4;
+        }
+
+        .speaker-name {
+            font-size: 12px;
+            color: #64748b;
+            margin-top: 3px;
+        }
+
+        .break-row {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+        }
+
+        .break-row td {
+            color: #92400e;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        .photo-row {
+            background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+        }
+
+        .photo-row td {
+            color: #1e40af;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        /* Cultural Schedule */
+        .performance-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+
+        .performance-table th {
+            background: #f1f5f9;
+            padding: 10px 8px;
+            text-align: left;
+            font-weight: 600;
+            color: #475569;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .performance-table td {
+            padding: 8px;
+            border-bottom: 1px solid #e2e8f0;
+            vertical-align: top;
+        }
+
+        .performance-table tr:nth-child(even) {
+            background: #f8fafc;
+        }
+
+        .part-header {
+            background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%) !important;
+            font-weight: 700;
+            color: #6d28d9;
+        }
+
+        .warning-box {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            border-radius: 12px;
+            padding: 18px;
+            margin: 30px 0 20px 0;
+            border-left: 5px solid #d97706;
+        }
+
+        .warning-box p {
+            margin: 0;
+            font-size: 14px;
+            color: #92400e;
+            font-weight: 500;
+            line-height: 1.6;
+        }
+
+        .footer {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            padding: 30px 25px;
+            text-align: center;
+            color: #94a3b8;
+            font-size: 12px;
+        }
+
+        .footer-logo {
+            margin-bottom: 15px;
+            color: #fbbf24;
+            font-family: 'Playfair Display', serif;
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        @media only screen and (max-width: 600px) {
+            .event-title { font-size: 36px !important; }
+            .content { padding: 25px 15px !important; }
+            .schedule-table { font-size: 11px; }
+            .time-cell { width: 60px; }
+        }
+    </style>
+</head>
+<body>
+    <center class="wrapper">
+        <div class="main">
+            <!-- Header -->
+            <div class="header">
+                <table class="logos-table" cellpadding="0" cellspacing="0" border="0" align="center">
+                    <tr>
+                        <td align="center" valign="middle">
+                            <div class="logo-wrapper">
+                                <img src="https://www.iiserkol.ac.in/~deba_h76/index_files/10001.png" alt="IISER Kolkata" class="logo-img">
+                            </div>
+                        </td>
+                        <td align="center" valign="middle">
+                            <div class="logo-wrapper">
+                                <img src="https://raw.githubusercontent.com/Shuvam-Banerji-Seal/Email-HTML/refs/heads/main/assets/DCS-logo-green.jpg" alt="DCS Logo" class="logo-img">
+                            </div>
+                        </td>
+                    </tr>
+                </table>
+                <div class="dept-name">Department of Chemical Sciences</div>
+                <div class="event-title">DCS DAY '26</div>
+                <div class="event-tagline">Annual Celebration of Science & Culture</div>
+                {% if attendee_name %}<div class="attendee-name">Dear {{ attendee_name }},</div>{% endif %}
+                <div class="event-pill">📅 28th January 2026 &bull; 📍 R N Tagore Auditorium, IISER Kolkata</div>
+            </div>
+
+            <!-- Content -->
+            <div class="content">
+                <div class="greeting-box">
+                    <div class="greeting">You are Cordially Invited!</div>
+                    <div class="intro-text">
+                        Join us for <strong>DCS Day 2026</strong> – a day of scientific excellence, inspiring talks, and cultural celebrations. Below are your <strong>three digital passes</strong>. Please present the respective QR code at each checkpoint.
+                    </div>
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════════ -->
+                <!-- REGISTRATION QR - GREEN -->
+                <!-- ═══════════════════════════════════════════════════════════ -->
+                <div class="ticket-section ticket-registration">
+                    <div class="ticket-header">
+                        🎫 REGISTRATION PASS
+                        <span class="ticket-badge">8:30 AM</span>
+                    </div>
+                    <div class="ticket-body">
+                        <div class="qr-container">
+                            {% if qr_code_base64 %}
+                            <img src="data:image/png;base64,{{ qr_code_base64 }}" alt="Registration QR Code" class="qr-image">
+                            {% else %}
+                            <div style="width:150px; height:150px; display:flex; align-items:center; justify-content:center; color:#059669; font-weight:600;">Registration QR</div>
+                            {% endif %}
+                        </div>
+                        <div style="margin-top: 15px;">
+                            <div class="verification-code">{{ verification_code }}</div>
+                        </div>
+                        <p class="ticket-note">📍 Present at <strong>Registration Desk</strong> to collect your DCS Kit</p>
+                    </div>
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════════ -->
+                <!-- MORNING PROGRAMME SCHEDULE -->
+                <!-- ═══════════════════════════════════════════════════════════ -->
+                <div class="schedule-section">
+                    <div class="schedule-title morning">🌅 Morning Programme</div>
+                    
+                    <table class="schedule-table">
+                        <tr>
+                            <td class="time-cell">8:30 AM</td>
+                            <td><span class="talk-title">Registration & Kit Distribution</span></td>
+                        </tr>
+                        <tr>
+                            <td class="time-cell">9:15 AM</td>
+                            <td>
+                                <span class="talk-title">Inaugural Session</span>
+                                <div class="speaker-name">DCS Chair & The Director</div>
+                            </td>
+                        </tr>
+                    </table>
+
+                    <!-- Session 1 -->
+                    <div class="session-header">
+                        📚 Session 1
+                        <div class="session-chair">Chair: Prof. Sayan Bhattacharya & Prof. Alakesh Bisai</div>
+                    </div>
+                    <table class="schedule-table">
+                        <tr>
+                            <td class="time-cell">9:30 AM</td>
+                            <td>
+                                <span class="talk-title">Indigenous CRISPR-Cas9 Tools: Advancing Gene Therapy Through Precision</span>
+                                <div class="speaker-name">Prof. Souvik Maiti (IGIB, Delhi)</div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="time-cell">10:00 AM</td>
+                            <td>
+                                <span class="talk-title">SL1: TBA</span>
+                                <div class="speaker-name">Sanajit Maiti (BM1 Lab, IISER Kolkata)</div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="time-cell">10:15 AM</td>
+                            <td>
+                                <span class="talk-title">SL2: Piezoelectric Bioisosteres: Structure and Function</span>
+                                <div class="speaker-name">Kingshuk Patra (DH Lab, IISER Kolkata)</div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="time-cell">10:30 AM</td>
+                            <td>
+                                <span class="talk-title">FL1: Catalytic Alchemy: Turning Blockbuster Waste into Value-Added Chemicals</span>
+                                <div class="speaker-name">Biplab Maji (IISER Kolkata)</div>
+                            </td>
+                        </tr>
+                        <tr class="break-row">
+                            <td class="time-cell">10:50 AM</td>
+                            <td>☕ Tea Break</td>
+                        </tr>
+                    </table>
+
+                    <!-- Session 2 -->
+                    <div class="session-header">
+                        📚 Session 2
+                        <div class="session-chair">Chair: Prof. Sanjio Zade & Prof. Suman De Sarkar</div>
+                    </div>
+                    <table class="schedule-table">
+                        <tr>
+                            <td class="time-cell">11:10 AM</td>
+                            <td>
+                                <span class="talk-title">AL1: Single-Atom Catalysis for Sustainable Hydrogen Production and Beyond</span>
+                                <div class="speaker-name">Dr. Satyadeep Waiba (IIT Bombay)</div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="time-cell">11:30 AM</td>
+                            <td>
+                                <span class="talk-title">SL3: Pressure-Driven Exciton-to-Excimer Emission Toggling in Perylene Bisimide–based H-Aggregates</span>
+                                <div class="speaker-name">Debjit Biswas (DC Lab, IISER Kolkata)</div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="time-cell">11:45 AM</td>
+                            <td>
+                                <span class="talk-title">SL4: Quantum Dynamics of Molecular Systems in Strong Magnetic Fields</span>
+                                <div class="speaker-name">Pratyush Bhattacharjya (SS Lab, IISER Kolkata)</div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="time-cell">12:00 PM</td>
+                            <td>
+                                <span class="talk-title">Recorded Lab Presentations (4 × 2 min)</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="time-cell">12:10 PM</td>
+                            <td>
+                                <span class="talk-title">FL3: When Matter Comes Alive: Life-Like Properties Emerging from Simple Chemical Systems</span>
+                                <div class="speaker-name">Dibyendu Das (IISER Kolkata)</div>
+                            </td>
+                        </tr>
+                        <tr class="photo-row">
+                            <td class="time-cell">12:30 PM</td>
+                            <td>📸 DCS Group Photo Session</td>
+                        </tr>
+                    </table>
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════════ -->
+                <!-- LUNCH QR - ORANGE -->
+                <!-- ═══════════════════════════════════════════════════════════ -->
+                <div class="ticket-section ticket-lunch">
+                    <div class="ticket-header">
+                        🍽️ LUNCH PASS
+                        <span class="ticket-badge">1:00 PM</span>
+                    </div>
+                    <div class="ticket-body">
+                        <div class="qr-container">
+                            {% if lunch_qr_base64 %}
+                            <img src="data:image/png;base64,{{ lunch_qr_base64 }}" alt="Lunch QR Code" class="qr-image">
+                            {% else %}
+                            <div style="width:150px; height:150px; display:flex; align-items:center; justify-content:center; color:#d97706; font-weight:600;">Lunch QR</div>
+                            {% endif %}
+                        </div>
+                        <div style="margin-top: 15px;">
+                            <div class="verification-code">{{ lunch_verification_code }}</div>
+                        </div>
+                        <p class="ticket-note">🍛 <strong>1:00 PM - 2:30 PM</strong> • Lunch & Poster Session</p>
+                    </div>
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════════ -->
+                <!-- AFTERNOON PROGRAMME SCHEDULE -->
+                <!-- ═══════════════════════════════════════════════════════════ -->
+                <div class="schedule-section">
+                    <div class="schedule-title afternoon">🌇 Afternoon Programme</div>
+
+                    <!-- Session 3 -->
+                    <div class="session-header">
+                        📚 Session 3
+                        <div class="session-chair">Chair: Prof. Pradip Ghorai & Prof. Debasis Koley</div>
+                    </div>
+                    <table class="schedule-table">
+                        <tr>
+                            <td class="time-cell">2:30 PM</td>
+                            <td>
+                                <span class="talk-title">FL2: A Journey through the Nucleic Acid Folding Landscape: Unifying Polyelectrolyte Theory and Structure-Based Models</span>
+                                <div class="speaker-name">Susmita Roy (IISER Kolkata)</div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="time-cell">2:50 PM</td>
+                            <td>
+                                <span class="talk-title">SL5: Transition Metal(II) Oxalate Complexes: Marathon Runners for Sustained Alkaline Water Electrolysis</span>
+                                <div class="speaker-name">Soumalya Debnath (VM Lab, IISER Kolkata)</div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="time-cell">3:05 PM</td>
+                            <td>
+                                <span class="talk-title">Recorded Lab Presentations (4 × 2 min)</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="time-cell">3:15 PM</td>
+                            <td>
+                                <span class="talk-title">SL6: Micro Bubble Lithography (MBL) Printed Electrode for the Water Energy Nexus</span>
+                                <div class="speaker-name">Khokan Manna (SR1 Lab, IISER Kolkata)</div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="time-cell">3:30 PM</td>
+                            <td>
+                                <span class="talk-title">AL2: From Oscillations to Nutrition: Journey from Chemical Networks to Food Science</span>
+                                <div class="speaker-name">Dr. Arpita Paikar (FTSI, TCG Crest, Kolkata)</div>
+                            </td>
+                        </tr>
+                        <tr class="break-row">
+                            <td class="time-cell">3:50 PM</td>
+                            <td>☕ Tea Break</td>
+                        </tr>
+                    </table>
+
+                    <!-- Session 4 -->
+                    <div class="session-header">
+                        📚 Session 4
+                        <div class="session-chair">Chair: Dr. Debabrata Mukherjee & Prof. Sumit Khanra</div>
+                    </div>
+                    <table class="schedule-table">
+                        <tr>
+                            <td class="time-cell">4:05 PM</td>
+                            <td>
+                                <span class="talk-title">SL7: Multiple Aggregation Pathways of Foldable Dimeric Cyanostilbenes Induced by Different Stimuli: Photoreaction Control</span>
+                                <div class="speaker-name">Nitish Kumar (SB Lab, IISER Kolkata)</div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="time-cell">4:20 PM</td>
+                            <td>
+                                <span class="talk-title">Recorded Lab Presentations (4 × 2 min)</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="time-cell">4:30 PM</td>
+                            <td>
+                                <span class="talk-title">SL8: Stable Radical Cation Generation in a Symmetry-Breaking TADF Emitter</span>
+                                <div class="speaker-name">Parthapratim Nandi (PP Lab, IISER Kolkata)</div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="time-cell">4:45 PM</td>
+                            <td>
+                                <span class="talk-title">SL9: One Hydrogen, Many Pathways: Understanding HAA by High-Valent Fe(IV) Complexes</span>
+                                <div class="speaker-name">Himangshu Kuiry (SSG Lab, IISER Kolkata)</div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="time-cell">5:00 PM</td>
+                            <td>
+                                <span class="talk-title">SL10: Morpholinone-Based Multi-Stimuli Responsive Polymer Architecture for Sequential Receptor and Mitochondrial Targeting in Orthotopic Breast Cancer Therapy</span>
+                                <div class="speaker-name">Asmita Nandi (RS Lab, IISER Kolkata)</div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="time-cell">5:15 PM</td>
+                            <td>
+                                <span class="talk-title">🎖️ Concluding Remarks & Awards</span>
+                                <div class="speaker-name">Token of appreciation to speakers, posters, organizers & volunteers</div>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════════ -->
+                <!-- DINNER QR - PURPLE -->
+                <!-- ═══════════════════════════════════════════════════════════ -->
+                <div class="ticket-section ticket-dinner">
+                    <div class="ticket-header">
+                        🍱 DINNER & CULTURAL PASS
+                        <span class="ticket-badge">6:00 PM</span>
+                    </div>
+                    <div class="ticket-body">
+                        <div class="qr-container">
+                            {% if dinner_qr_base64 %}
+                            <img src="data:image/png;base64,{{ dinner_qr_base64 }}" alt="Dinner QR Code" class="qr-image">
+                            {% else %}
+                            <div style="width:150px; height:150px; display:flex; align-items:center; justify-content:center; color:#7c3aed; font-weight:600;">Dinner QR</div>
+                            {% endif %}
+                        </div>
+                        <div style="margin-top: 15px;">
+                            <div class="verification-code">{{ dinner_verification_code }}</div>
+                        </div>
+                        <p class="ticket-note">🎭 <strong>Cultural Evening 6:00 PM</strong> • 🍽️ <strong>Dinner 8:05 PM onwards</strong></p>
+                    </div>
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════════ -->
+                <!-- CULTURAL EVENING SCHEDULE -->
+                <!-- ═══════════════════════════════════════════════════════════ -->
+                <div class="schedule-section">
+                    <div class="schedule-title evening">🎭 Cultural Evening Schedule</div>
+                    
+                    <table class="performance-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 70px;">Time</th>
+                                <th>Performance</th>
+                                <th>Performers</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>6:00 PM</td>
+                                <td>Inauguration & Address</td>
+                                <td>DRs</td>
+                            </tr>
+                            <tr class="part-header">
+                                <td colspan="3">🎵 Part 1</td>
+                            </tr>
+                            <tr>
+                                <td>6:08 PM</td>
+                                <td>Song Performance 1</td>
+                                <td>Asish Kumar Patra</td>
+                            </tr>
+                            <tr>
+                                <td>6:12 PM</td>
+                                <td>Song Performance 2</td>
+                                <td>Mitrajit Saha & Kaoshikii Sinha</td>
+                            </tr>
+                            <tr>
+                                <td>6:16 PM</td>
+                                <td>Dance Performance 1</td>
+                                <td>Nandita Das</td>
+                            </tr>
+                            <tr>
+                                <td>6:18 PM</td>
+                                <td>Song Performance 3</td>
+                                <td>Rita Bhunia & Swagata Chattopadhyay</td>
+                            </tr>
+                            <tr>
+                                <td>6:21 PM</td>
+                                <td>Song Performance 4</td>
+                                <td>Aditya Roychowdhury</td>
+                            </tr>
+                            <tr>
+                                <td>6:24 PM</td>
+                                <td>Dance Performance 2</td>
+                                <td>Preeti & Team</td>
+                            </tr>
+                            <tr class="part-header">
+                                <td colspan="3">🎵 Part 2</td>
+                            </tr>
+                            <tr>
+                                <td>6:33 PM</td>
+                                <td>Down the Memory Lane (Song + Narration)</td>
+                                <td>Deepanjan & Team</td>
+                            </tr>
+                            <tr>
+                                <td>6:48 PM</td>
+                                <td>Dance Performance 3</td>
+                                <td>Tanushree Nath & Ritika Bag</td>
+                            </tr>
+                            <tr>
+                                <td>6:52 PM</td>
+                                <td>Song Performance 5</td>
+                                <td>Kaoshikii Sinha & Shamik Chanda</td>
+                            </tr>
+                            <tr>
+                                <td>6:57 PM</td>
+                                <td>Dance Performance 5</td>
+                                <td>Preeti & Team</td>
+                            </tr>
+                            <tr class="part-header">
+                                <td colspan="3">🎵 Part 3</td>
+                            </tr>
+                            <tr>
+                                <td>7:09 PM</td>
+                                <td>Song Performance 6</td>
+                                <td>Sayan Ghosh & Subhadip Chanak</td>
+                            </tr>
+                            <tr>
+                                <td>7:14 PM</td>
+                                <td>Song Performance 7</td>
+                                <td>Dibyajyoti Das & Khokan Manna</td>
+                            </tr>
+                            <tr>
+                                <td>7:22 PM</td>
+                                <td>Dance Performance 4</td>
+                                <td>Swagata & Team</td>
+                            </tr>
+                            <tr>
+                                <td>7:28 PM</td>
+                                <td>Group Mime</td>
+                                <td>Aakhankha & Team</td>
+                            </tr>
+                            <tr style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);">
+                                <td>7:45 PM</td>
+                                <td colspan="2" style="color: #92400e; font-weight: 700;">⭐ FACULTY PERFORMANCE ⭐</td>
+                            </tr>
+                            <tr style="background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);">
+                                <td>8:05 PM</td>
+                                <td colspan="2" style="color: #166534; font-weight: 700;">🍽️ DINNER ONWARDS</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Warning Box -->
+                <div class="warning-box">
+                    <p>
+                        ⚠️ <strong>Important:</strong> Each QR code is valid for <strong>one-time use only</strong>. Please do not share your codes with others. Present the respective QR at the designated counters for seamless entry.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="footer">
+                <div class="footer-logo">DCS Day 2026</div>
+                <p style="margin: 0 0 10px 0;">Department of Chemical Sciences, IISER Kolkata</p>
+                <p style="margin: 0; font-size: 11px; color: #64748b;">
+                    This is an automated message. Please do not reply directly to this email.
+                </p>
+            </div>
+        </div>
+    </center>
+</body>
+</html>

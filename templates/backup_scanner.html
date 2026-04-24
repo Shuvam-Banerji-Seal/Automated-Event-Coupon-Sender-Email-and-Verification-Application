@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>DCS Day '26 - Backup Scanner</title>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            color: #fff;
+            padding: 10px;
+        }
+        
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+        }
+        
+        header {
+            text-align: center;
+            padding: 15px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 15px;
+            margin-bottom: 15px;
+        }
+        
+        header h1 {
+            font-size: 1.3rem;
+            color: #ff6b6b;
+            margin-bottom: 5px;
+        }
+        
+        header p {
+            font-size: 0.85rem;
+            color: #ffd93d;
+        }
+        
+        .warning-box {
+            background: rgba(255, 107, 107, 0.2);
+            border: 2px solid #ff6b6b;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        
+        .warning-box h3 {
+            color: #ff6b6b;
+            margin-bottom: 5px;
+        }
+        
+        .warning-box p {
+            font-size: 0.9rem;
+            color: #ffc107;
+        }
+        
+        .scanner-container {
+            background: rgba(255,255,255,0.05);
+            border-radius: 15px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        
+        #reader {
+            width: 100%;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        .stats-box {
+            background: rgba(0, 255, 136, 0.1);
+            border: 2px solid #00ff88;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        
+        .stats-box h3 {
+            color: #00ff88;
+            font-size: 2rem;
+            margin-bottom: 5px;
+        }
+        
+        .recent-scans {
+            background: rgba(255,255,255,0.05);
+            border-radius: 15px;
+            padding: 15px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .recent-scans h4 {
+            color: #ffd93d;
+            margin-bottom: 10px;
+        }
+        
+        .scan-entry {
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 8px;
+            font-size: 0.85rem;
+        }
+        
+        .scan-entry .email {
+            color: #00ff88;
+            font-weight: bold;
+        }
+        
+        .scan-entry .time {
+            color: #888;
+            font-size: 0.75rem;
+        }
+        
+        .scan-entry .code {
+            color: #ffd93d;
+        }
+        
+        .result-popup {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.95);
+            padding: 30px;
+            border-radius: 20px;
+            text-align: center;
+            z-index: 1000;
+            display: none;
+            min-width: 300px;
+            border: 3px solid;
+        }
+        
+        .result-popup.success {
+            border-color: #00ff88;
+        }
+        
+        .result-popup.duplicate {
+            border-color: #ffc107;
+        }
+        
+        .result-popup.error {
+            border-color: #ff6b6b;
+        }
+        
+        .result-popup h2 {
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+        }
+        
+        .result-popup p {
+            margin-bottom: 15px;
+        }
+        
+        .result-popup button {
+            background: #00ff88;
+            color: #000;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 25px;
+            font-size: 1rem;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        
+        .download-btn {
+            display: block;
+            width: 100%;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 1rem;
+            cursor: pointer;
+            margin-top: 15px;
+        }
+        
+        .download-btn:hover {
+            background: #45a049;
+        }
+
+        .clear-btn {
+            display: block;
+            width: 100%;
+            background: #f44336;
+            color: white;
+            border: none;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 1rem;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔧 BACKUP SCANNER</h1>
+            <p>Emergency QR Data Recorder - DCS Day '26</p>
+        </header>
+        
+        <div class="warning-box">
+            <h3>⚠️ BACKUP MODE</h3>
+            <p>This scanner only RECORDS QR data locally.<br>
+            Use when main verification system fails.</p>
+        </div>
+        
+        <div class="stats-box">
+            <h3 id="scanCount">0</h3>
+            <p>QR Codes Recorded</p>
+        </div>
+        
+        <div class="scanner-container">
+            <div id="reader"></div>
+        </div>
+        
+        <div class="recent-scans">
+            <h4>📝 Recent Scans</h4>
+            <div id="scanList"></div>
+        </div>
+        
+        <button class="download-btn" onclick="downloadCSV()">
+            📥 Download Backup CSV
+        </button>
+        
+        <button class="clear-btn" onclick="clearScans()">
+            🗑️ Clear All Scans
+        </button>
+    </div>
+    
+    <div id="resultPopup" class="result-popup">
+        <h2 id="popupTitle"></h2>
+        <p id="popupMessage"></p>
+        <button onclick="closePopup()">Continue Scanning</button>
+    </div>
+    
+    <script>
+        // Store scanned data
+        let scannedData = JSON.parse(localStorage.getItem('backupScans') || '[]');
+        let scannedCodes = new Set(scannedData.map(d => d.qrData));
+        
+        // Update UI
+        updateStats();
+        updateScanList();
+        
+        // Initialize scanner
+        const html5QrCode = new Html5Qrcode("reader");
+        const config = {
+            fps: 10,
+            qrbox: { width: 250, height: 250 },
+            aspectRatio: 1.0
+        };
+        
+        html5QrCode.start(
+            { facingMode: "environment" },
+            config,
+            onScanSuccess,
+            onScanFailure
+        ).catch(err => {
+            console.error("Camera error:", err);
+            document.getElementById('reader').innerHTML = 
+                '<p style="color: #ff6b6b; text-align: center; padding: 20px;">Camera access denied or not available</p>';
+        });
+        
+        function onScanSuccess(decodedText, decodedResult) {
+            // Check if already scanned
+            if (scannedCodes.has(decodedText)) {
+                showPopup('duplicate', '⚠️ Already Scanned', 'This QR code was already recorded.');
+                return;
+            }
+            
+            // Parse QR data
+            let parsedData = parseQRData(decodedText);
+            
+            // Record the scan
+            const scanEntry = {
+                qrData: decodedText,
+                timestamp: new Date().toISOString(),
+                ...parsedData
+            };
+            
+            scannedData.push(scanEntry);
+            scannedCodes.add(decodedText);
+            
+            // Save to localStorage
+            localStorage.setItem('backupScans', JSON.stringify(scannedData));
+            
+            // Update UI
+            updateStats();
+            updateScanList();
+            
+            // Show success
+            showPopup('success', '✅ Recorded!', 
+                `Email: ${parsedData.email || 'Unknown'}<br>Code: ${parsedData.verificationCode || decodedText.substring(0, 20)}...`);
+            
+            // Also send to server for backup
+            sendToServer(scanEntry);
+        }
+        
+        function onScanFailure(error) {
+            // Ignore scan failures
+        }
+        
+        function parseQRData(qrData) {
+            try {
+                // Try to parse as JSON first
+                const data = JSON.parse(qrData);
+                return {
+                    email: data.email || data.e || '',
+                    verificationCode: data.verification_code || data.code || data.c || '',
+                    couponId: data.coupon_id || data.id || '',
+                    type: data.type || data.t || 'unknown'
+                };
+            } catch (e) {
+                // If not JSON, try to extract info from string
+                const emailMatch = qrData.match(/[\w.-]+@[\w.-]+\.\w+/);
+                const codeMatch = qrData.match(/\b\d{6}\b/);
+                return {
+                    email: emailMatch ? emailMatch[0] : '',
+                    verificationCode: codeMatch ? codeMatch[0] : '',
+                    couponId: '',
+                    type: 'raw'
+                };
+            }
+        }
+        
+        function updateStats() {
+            document.getElementById('scanCount').textContent = scannedData.length;
+        }
+        
+        function updateScanList() {
+            const list = document.getElementById('scanList');
+            const recentScans = scannedData.slice(-10).reverse();
+            
+            if (recentScans.length === 0) {
+                list.innerHTML = '<p style="color: #888; text-align: center;">No scans yet</p>';
+                return;
+            }
+            
+            list.innerHTML = recentScans.map(scan => `
+                <div class="scan-entry">
+                    <div class="email">${scan.email || 'Unknown Email'}</div>
+                    <div class="code">Code: ${scan.verificationCode || 'N/A'} | Type: ${scan.type || 'unknown'}</div>
+                    <div class="time">${new Date(scan.timestamp).toLocaleTimeString()}</div>
+                </div>
+            `).join('');
+        }
+        
+        function showPopup(type, title, message) {
+            const popup = document.getElementById('resultPopup');
+            popup.className = 'result-popup ' + type;
+            document.getElementById('popupTitle').textContent = title;
+            document.getElementById('popupMessage').innerHTML = message;
+            popup.style.display = 'block';
+            
+            // Auto-close after 2 seconds
+            setTimeout(closePopup, 2000);
+        }
+        
+        function closePopup() {
+            document.getElementById('resultPopup').style.display = 'none';
+        }
+        
+        function sendToServer(scanEntry) {
+            // Try to send to server for backup
+            fetch('/backup-scan', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(scanEntry)
+            }).catch(err => console.log('Server backup failed, local storage only'));
+        }
+        
+        function downloadCSV() {
+            if (scannedData.length === 0) {
+                alert('No scans to download!');
+                return;
+            }
+            
+            // Create CSV content
+            const headers = ['timestamp', 'email', 'verification_code', 'coupon_id', 'type', 'raw_qr_data'];
+            const rows = scannedData.map(scan => [
+                scan.timestamp,
+                scan.email || '',
+                scan.verificationCode || '',
+                scan.couponId || '',
+                scan.type || '',
+                scan.qrData.replace(/"/g, '""')
+            ]);
+            
+            let csvContent = headers.join(',') + '\n';
+            csvContent += rows.map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+            
+            // Download
+            const blob = new Blob([csvContent], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `backup_scans_${new Date().toISOString().split('T')[0]}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+        
+        function clearScans() {
+            if (confirm('Are you sure you want to clear all scans? This cannot be undone!')) {
+                scannedData = [];
+                scannedCodes.clear();
+                localStorage.removeItem('backupScans');
+                updateStats();
+                updateScanList();
+            }
+        }
+    </script>
+</body>
+</html>

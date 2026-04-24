@@ -75,6 +75,12 @@ def get_current_user():
 @app.route('/login')
 def login():
     """Show login page or initiate Google OAuth login"""
+    # Check if this is a logout redirect - always show login page
+    if request.args.get('logged_out') == 'true':
+        # Force clear session again to be safe
+        session.clear()
+        return render_template('login.html')
+    
     # If user is already logged in, redirect to dashboard
     if 'user' in session:
         return redirect(url_for('dashboard'))
@@ -141,6 +147,15 @@ def auth_callback():
             'scopes': token_data['scopes']
         }
         
+        # Save organizer credentials immediately so thank you emails work
+        # (Previously was only saved when sending emails)
+        csv_manager.save_organizer_credentials(
+            token_data['user_info'], 
+            session['oauth_tokens'], 
+            "Unlock DCS Day 2026!!"
+        )
+        logger.info(f"Saved organizer credentials for {token_data['user_info']['email']}")
+        
         # Clear state and redirect URI
         session.pop('oauth_state', None)
         session.pop('oauth_redirect_uri', None)
@@ -156,9 +171,31 @@ def auth_callback():
 def logout():
     """Logout user and clear session"""
     user_email = session.get('user', {}).get('email', 'Unknown')
+    
+    # Try to revoke Google OAuth token if available
+    try:
+        if google_auth_service and 'credentials' in session:
+            credentials_data = session.get('credentials')
+            if credentials_data and 'token' in credentials_data:
+                google_auth_service.revoke_token(credentials_data['token'])
+                logger.info(f"Revoked OAuth token for {user_email}")
+    except Exception as e:
+        logger.warning(f"Could not revoke OAuth token: {e}")
+    
+    # Clear all session data
     session.clear()
     logger.info(f"User {user_email} logged out")
-    return redirect(url_for('login'))
+    
+    # Redirect to login with logout success parameter
+    response = redirect(url_for('login', logged_out='true'))
+    
+    # Add headers to prevent caching and force fresh login
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    response.headers['Clear-Site-Data'] = '"cache", "cookies", "storage"'
+    
+    return response
 
 # Main routes
 @app.route('/')
@@ -180,6 +217,40 @@ def scanner():
     """QR scanner interface route - no authentication required"""
     return render_template('scanner.html')
 
+@app.route('/backup-scanner')
+def backup_scanner():
+    """Backup QR scanner - records QR data locally when main verification fails"""
+    return render_template('backup_scanner.html')
+
+@app.route('/backup-scan', methods=['POST'])
+def backup_scan():
+    """Receive backup scan data and save to CSV"""
+    try:
+        data = request.get_json()
+        backup_file = 'backup_scans.csv'
+        
+        # Check if file exists to determine if we need headers
+        file_exists = os.path.exists(backup_file)
+        
+        with open(backup_file, 'a', newline='', encoding='utf-8') as f:
+            import csv
+            writer = csv.writer(f)
+            if not file_exists:
+                writer.writerow(['timestamp', 'email', 'verification_code', 'coupon_id', 'type', 'raw_qr_data'])
+            writer.writerow([
+                data.get('timestamp', ''),
+                data.get('email', ''),
+                data.get('verificationCode', ''),
+                data.get('couponId', ''),
+                data.get('type', ''),
+                data.get('qrData', '')
+            ])
+        
+        return jsonify({'success': True})
+    except Exception as e:
+        logger.error(f"Backup scan error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 # API endpoints
 @app.route('/send-emails', methods=['POST'])
 @login_required
@@ -196,12 +267,14 @@ def send_emails():
         if not user or not oauth_tokens:
             return jsonify({'success': False, 'error': 'User not authenticated'}), 401
         
-        # Create Gmail service with user's credentials
+        # Create Gmail service with user's credentials and display name
         credentials = google_auth_service.create_credentials_from_session(oauth_tokens)
         if not credentials:
             return jsonify({'success': False, 'error': 'Failed to create credentials'}), 401
         
-        gmail_service = GmailEmailService(credentials)
+        # Get user's display name for email From header (shows name instead of roll number)
+        sender_name = user.get('name', '')  # From Google OAuth profile
+        gmail_service = GmailEmailService(credentials, sender_name=sender_name)
         
         data = request.get_json()
         event_name = data.get('event_name', 'Special Event')
@@ -218,16 +291,36 @@ def send_emails():
         if coupon_results['generated'] == 0:
             return jsonify({'success': False, 'error': 'Failed to generate any coupons'}), 500
         
-        # Prepare email data with coupon information
+        # Prepare email data with coupon information (3 QR codes)
         email_recipients = []
         for coupon in coupon_results['coupons']:
+            # Find attendee name from recipients data
+            attendee_name = None
+            for recipient in recipients:
+                if recipient.get('email', '').lower() == coupon['email'].lower():
+                    # Try different possible column names for name
+                    attendee_name = (recipient.get('name') or 
+                                     recipient.get('attendee_name') or 
+                                     recipient.get('attendee') or 
+                                     recipient.get('full_name'))
+                    break
+            
             email_recipients.append({
                 'email': coupon['email'],
                 'coupon_id': coupon['coupon_id'],
                 'event_name': coupon['event_name'],
+                'attendee_name': attendee_name,
+                # Registration QR (primary)
                 'qr_code_base64': coupon['qr_code_base64'],
-                'verification_code': coupon['verification_code'],  # Include 6-digit code
-                'subject': f'Your Digital Coupon for {event_name}'
+                'verification_code': coupon['verification_code'],
+                # Lunch QR
+                'lunch_qr_base64': coupon.get('lunch_qr_base64'),
+                'lunch_verification_code': coupon.get('lunch_verification_code'),
+                # Dinner QR
+                'dinner_qr_base64': coupon.get('dinner_qr_base64'),
+                'dinner_verification_code': coupon.get('dinner_verification_code'),
+                # Use event_name directly as the subject (user-specified)
+                'subject': event_name
             })
         
         # Send emails with progress tracking using Gmail API
@@ -310,20 +403,23 @@ def verify_coupon():
         encrypted_data = data.get('encrypted_data')
         verification_code = data.get('verification_code')
         email = data.get('email')
+        qr_type = data.get('qr_type', 'registration')  # registration, lunch, or dinner
         
-        if not email:
-            return jsonify({
-                'success': False, 
-                'error': 'Email is required',
-                'error_code': 'MISSING_EMAIL'
-            }), 400
+        # Debug logging
+        logger.info(f"Verification request: code={verification_code}, email={email}, type={qr_type}")
         
         # Check if this is a verification code (6 digits) or encrypted data
         if verification_code and len(verification_code) == 6 and verification_code.isdigit():
-            # Validate using verification code
-            validation_result = coupon_manager.validate_coupon_by_code(verification_code, email)
+            # Validate using verification code with QR type
+            validation_result = coupon_manager.validate_coupon_by_code(verification_code, email, qr_type)
         elif encrypted_data:
-            # Validate using encrypted data (old method)
+            # Validate using encrypted data (old method) - email required
+            if not email:
+                return jsonify({
+                    'success': False, 
+                    'error': 'Email is required for encrypted coupon verification',
+                    'error_code': 'MISSING_EMAIL'
+                }), 400
             validation_result = coupon_manager.validate_coupon(encrypted_data, email)
         else:
             return jsonify({
@@ -333,6 +429,7 @@ def verify_coupon():
             }), 400
         
         if not validation_result.get('valid'):
+            logger.warning(f"Validation failed: {validation_result.get('error')}")
             return jsonify({
                 'success': False,
                 'error': validation_result.get('error', 'Invalid coupon'),
@@ -340,9 +437,18 @@ def verify_coupon():
                 'used_at': validation_result.get('used_at')
             })
         
-        # Mark coupon as used
+        # Mark coupon as used based on QR type
         coupon_id = validation_result['coupon_id']
-        if coupon_manager.mark_coupon_used(coupon_id):
+        attendee_email = validation_result.get('email', email)  # Use found email or provided email
+        verified_qr_type = validation_result.get('qr_type', qr_type)  # Type from validation
+        
+        logger.info(f"Marking coupon {coupon_id} {verified_qr_type} as used")
+        
+        # Get attendee name from coupon record
+        coupon_record = csv_manager.find_coupon_by_email(attendee_email)
+        attendee_name = coupon_record.attendee_name if coupon_record and hasattr(coupon_record, 'attendee_name') else None
+        
+        if coupon_manager.mark_coupon_used(coupon_id, verified_qr_type):
             # Send thank you email asynchronously using organizer's Gmail API credentials
             def send_thank_you_async():
                 try:
@@ -353,32 +459,57 @@ def verify_coupon():
                         # Create Gmail service with organizer's credentials
                         credentials = google_auth_service.create_credentials_from_session(organizer_data['oauth_tokens'])
                         if credentials:
-                            gmail_service = GmailEmailService(credentials)
+                            # Get organizer's display name for thank you email
+                            organizer_name = organizer_data['user_info'].get('name', '')
+                            gmail_service = GmailEmailService(credentials, sender_name=organizer_name)
                             
                             # Prepare thank you email data
                             attendance_data = {
-                                'email': email,
-                                'attendee_name': validation_result.get('attendee_name', ''),
+                                'email': attendee_email,
+                                'attendee_name': attendee_name,
                                 'event_name': validation_result.get('event_name', 'Event'),
                                 'attendance_date': time.strftime('%Y-%m-%d %H:%M:%S'),
                                 'coupon_id': coupon_id,
                                 'organizer_name': organizer_data['user_info'].get('name', 'Event Team'),
                                 'organizer_email': organizer_data['user_info'].get('email', 'Event Team'),
-                                'current_date': time.strftime('%Y-%m-%d %H:%M:%S')
+                                'current_date': time.strftime('%Y-%m-%d %H:%M:%S'),
+                                'qr_type': verified_qr_type
                             }
                             
-                            # Render thank you email template in app context
-                            with app.app_context():
-                                html_content = render_template('thank_you.html', **attendance_data)
+                            # Choose template and subject based on QR type
+                            template_map = {
+                                'registration': 'thank_you_registration.html',
+                                'lunch': 'thank_you_lunch.html',
+                                'dinner': 'thank_you_dinner.html'
+                            }
+                            subject_map = {
+                                'registration': f"🎫 Registration Confirmed - {attendance_data['event_name']}",
+                                'lunch': f"🍽️ Lunch Verified - {attendance_data['event_name']}",
+                                'dinner': f"🍱 Dinner Verified - {attendance_data['event_name']}"
+                            }
                             
-                            subject = f"Thank you for attending {attendance_data['event_name']}!"
+                            template_name = template_map.get(verified_qr_type, 'thank_you.html')
+                            subject = subject_map.get(verified_qr_type, f"Thank you for attending {attendance_data['event_name']}!")
+                            
+                            # Render appropriate thank you email template
+                            with app.app_context():
+                                html_content = render_template(template_name, **attendance_data)
+                            
                             sender_email = organizer_data['user_info']['email']
                             
+                            # For registration, attach the PDF schedule
+                            attachment_path = None
+                            if verified_qr_type == 'registration':
+                                pdf_path = os.path.join(app.root_path, 'static', 'attachments', 'DCS-Day-2026_Schedule.pdf')
+                                if os.path.exists(pdf_path):
+                                    attachment_path = pdf_path
+                                    logger.info(f"Attaching PDF schedule: {pdf_path}")
+                            
                             # Send via Gmail API using organizer's credentials
-                            email_result = gmail_service.send_email(sender_email, email, subject, html_content)
+                            email_result = gmail_service.send_email(sender_email, email, subject, html_content, attachment_path)
                             
                             if email_result.success:
-                                logger.info(f"Thank you email sent successfully to {email} via Gmail API from organizer {sender_email}")
+                                logger.info(f"Thank you email ({verified_qr_type}) sent successfully to {email} via Gmail API from organizer {sender_email}")
                             else:
                                 logger.warning(f"Failed to send thank you email to {email}: {email_result.error_message}")
                         else:
@@ -397,13 +528,19 @@ def verify_coupon():
             email_thread.start()
             
             # Return immediately without waiting for email
+            type_labels = {
+                'registration': '🎫 Registration',
+                'lunch': '🍽️ Lunch',
+                'dinner': '🍱 Dinner'
+            }
             return jsonify({
                 'success': True,
-                'message': 'Coupon verified and marked as used',
+                'message': f'{type_labels.get(verified_qr_type, verified_qr_type)} verified successfully!',
                 'coupon_id': coupon_id,
                 'email': validation_result['email'],
                 'event_name': validation_result['event_name'],
                 'created_at': validation_result['created_at'],
+                'qr_type': verified_qr_type,
                 'thank_you_email': 'sending'  # Indicate email is being sent in background
             })
         else:
@@ -532,6 +669,38 @@ def get_upload_status():
         
     except Exception as e:
         logger.error(f"Error getting upload status: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/clear-csv', methods=['POST'])
+@login_required
+def clear_csv():
+    """Clear the current CSV data and reset coupons for a fresh upload"""
+    if not csv_manager:
+        return jsonify({'success': False, 'error': 'CSV manager not initialized'}), 500
+    
+    try:
+        # Create backup before clearing
+        backup_file = None
+        if os.path.exists(csv_manager.recipients_file):
+            backup_file = csv_manager.backup_current_data()
+        
+        # Remove the recipients file
+        if os.path.exists(csv_manager.recipients_file):
+            os.remove(csv_manager.recipients_file)
+            logger.info(f"Removed recipients file: {csv_manager.recipients_file}")
+        
+        # Reset the coupons file (create fresh with headers only)
+        csv_manager.reset_coupons_for_fresh_upload()
+        logger.info("Reset coupons file for fresh upload")
+        
+        return jsonify({
+            'success': True,
+            'message': 'CSV data cleared successfully. You can now upload a new file.',
+            'backup_created': backup_file
+        })
+        
+    except Exception as e:
+        logger.error(f"Error clearing CSV: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/stats')
@@ -748,8 +917,32 @@ if __name__ == '__main__':
     debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
     port = int(os.environ.get('PORT', 5000))
     
-    app.run(
-        host='0.0.0.0',
-        port=port,
-        debug=debug_mode
-    )
+    # Exclude old_code, logs, and other non-essential directories from watchdog
+    # to prevent server reload during long operations
+    import sys
+    if debug_mode:
+        # Use extra_files and exclude patterns for watchdog
+        extra_dirs = ['templates', 'static', 'src']
+        extra_files = []
+        for extra_dir in extra_dirs:
+            if os.path.isdir(extra_dir):
+                for dirname, dirs, files in os.walk(extra_dir):
+                    for filename in files:
+                        filename = os.path.join(dirname, filename)
+                        if os.path.isfile(filename):
+                            extra_files.append(filename)
+        
+        app.run(
+            host='0.0.0.0',
+            port=port,
+            debug=True,
+            extra_files=extra_files,
+            use_reloader=True,
+            reloader_type='stat'  # Use stat reloader instead of watchdog to avoid issues
+        )
+    else:
+        app.run(
+            host='0.0.0.0',
+            port=port,
+            debug=False
+        )

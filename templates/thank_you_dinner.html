@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dinner Verified - DCS Day 2026</title>
+</head>
+<body style="font-family: 'Segoe UI', Arial, sans-serif; background: linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%); margin: 0; padding: 40px 20px; color: #333;">
+    <div style="max-width: 600px; margin: 0 auto; background: white; border-radius: 24px; overflow: hidden; box-shadow: 0 25px 50px rgba(124, 58, 237, 0.3);">
+        
+        <!-- Header -->
+        <div style="background: linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%); color: white; padding: 50px 30px; text-align: center;">
+            <div style="font-size: 64px; margin-bottom: 15px;">🍱</div>
+            <h1 style="margin: 0; font-size: 32px; font-weight: 700; letter-spacing: -0.5px;">Enjoy Your Dinner!</h1>
+            <p style="margin: 15px 0 0 0; font-size: 18px; opacity: 0.95;">The Night Has Just Begun</p>
+        </div>
+        
+        <!-- Main Content -->
+        <div style="padding: 45px 35px;">
+            
+            <!-- Welcome Message -->
+            <div style="text-align: center; margin-bottom: 35px;">
+                <p style="font-size: 20px; color: #7c3aed; font-weight: 600; margin: 0 0 15px 0;">
+                    Dear {{ attendee_name or 'Attendee' }},
+                </p>
+                <p style="font-size: 17px; color: #555; line-height: 1.7; margin: 0;">
+                    Thank you for being part of <strong style="color: #7c3aed;">{{ event_name }}</strong>!<br>
+                    We hope you have a wonderful meal and an amazing evening ahead.
+                </p>
+            </div>
+            
+            <!-- DJ Night Banner -->
+            <div style="background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%); border-radius: 20px; padding: 35px; margin: 30px 0; text-align: center; position: relative; overflow: hidden;">
+                <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: url('data:image/svg+xml,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 100\"><circle cx=\"20\" cy=\"20\" r=\"2\" fill=\"white\" fill-opacity=\"0.1\"/><circle cx=\"80\" cy=\"40\" r=\"3\" fill=\"white\" fill-opacity=\"0.1\"/><circle cx=\"40\" cy=\"70\" r=\"2\" fill=\"white\" fill-opacity=\"0.1\"/><circle cx=\"90\" cy=\"80\" r=\"4\" fill=\"white\" fill-opacity=\"0.05\"/></svg>');"></div>
+                <div style="position: relative; z-index: 1;">
+                    <span style="font-size: 56px; display: block; margin-bottom: 15px;">🎧</span>
+                    <h2 style="color: #fbbf24; margin: 0 0 12px 0; font-size: 28px; font-weight: 800; text-transform: uppercase; letter-spacing: 2px;">DJ NIGHT</h2>
+                    <p style="color: #e0e7ff; margin: 0 0 8px 0; font-size: 16px;">Get Ready to Turn Up the Vibe!</p>
+                    <div style="background: rgba(255,255,255,0.15); border-radius: 12px; padding: 15px 20px; margin-top: 20px; display: inline-block;">
+                        <p style="color: white; margin: 0; font-size: 22px; font-weight: 700;">🕢 8:30 PM – 10:00 PM</p>
+                        <p style="color: #c4b5fd; margin: 8px 0 0 0; font-size: 14px;">28th January (Tomorrow)</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Event Info Box -->
+            <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-radius: 16px; padding: 30px; margin: 30px 0; border: 2px solid #fbbf24;">
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <h3 style="color: #92400e; margin: 0; font-size: 20px;">🔥 Winter Nights & DCS Day 2026 🔥</h3>
+                </div>
+                <p style="color: #a16207; margin: 0; font-size: 15px; line-height: 1.8; text-align: center;">
+                    The perfect reason to turn up the vibe!<br>
+                    Get ready to warm up the night with <strong>music, food, and nonstop energy</strong> 🎶✨
+                </p>
+            </div>
+            
+            <!-- Event Details Cards -->
+            <div style="margin: 35px 0;">
+                
+                <!-- Venue -->
+                <div style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border-radius: 14px; padding: 22px; margin-bottom: 15px; border-left: 5px solid #22c55e;">
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <span style="font-size: 32px;">📍</span>
+                        <div>
+                            <h4 style="color: #166534; margin: 0 0 4px 0; font-size: 16px;">Venue</h4>
+                            <p style="color: #15803d; margin: 0; font-size: 15px; font-weight: 600;">
+                                LHC Parking Area<br>
+                                <span style="font-weight: normal; font-size: 13px;">(In front of R. N. Tagore Auditorium)</span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Food Stalls -->
+                <div style="background: linear-gradient(135deg, #fef2f2 0%, #fecaca 100%); border-radius: 14px; padding: 22px; margin-bottom: 15px; border-left: 5px solid #ef4444;">
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <span style="font-size: 32px;">🍽️</span>
+                        <div>
+                            <h4 style="color: #991b1b; margin: 0 0 4px 0; font-size: 16px;">Food & Refreshments</h4>
+                            <p style="color: #b91c1c; margin: 0; font-size: 14px; line-height: 1.6;">
+                                <strong>The Momo Club</strong> – Snacks & dinner available<br>
+                                Soft drinks available at the venue<br>
+                                <span style="color: #dc2626;">🕐 Food stalls open from 5:00 PM onwards</span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Free Entry -->
+                <div style="background: linear-gradient(135deg, #ecfdf5 0%, #a7f3d0 100%); border-radius: 14px; padding: 22px; border-left: 5px solid #10b981; text-align: center;">
+                    <span style="font-size: 40px; display: block; margin-bottom: 10px;">🎟️</span>
+                    <h4 style="color: #065f46; margin: 0 0 5px 0; font-size: 18px;">Entry Fee</h4>
+                    <p style="color: #047857; margin: 0; font-size: 28px; font-weight: 800;">FREE! (₹0/-)</p>
+                </div>
+                
+            </div>
+            
+            <!-- Call to Action -->
+            <div style="text-align: center; margin: 35px 0; padding: 30px; background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%); border-radius: 16px; border: 2px solid #a78bfa;">
+                <p style="color: #5b21b6; margin: 0 0 15px 0; font-size: 18px; font-weight: 600; line-height: 1.7;">
+                    🎉 Bring your friends, bring your energy!<br>
+                    Let's celebrate DCS Day together with music, food, and the unbeatable DCS vibe.
+                </p>
+                <p style="color: #7c3aed; margin: 0; font-size: 22px; font-weight: 800;">
+                    🔥 Don't miss the night — see you on the dance floor! 🔥
+                </p>
+            </div>
+            
+            <!-- Feedback Form -->
+            <div style="background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); border-radius: 16px; padding: 28px; margin: 30px 0; text-align: center; border: 2px solid #60a5fa;">
+                <span style="font-size: 40px; display: block; margin-bottom: 12px;">📝</span>
+                <h3 style="color: #1e40af; margin: 0 0 10px 0; font-size: 20px;">Share Your Feedback!</h3>
+                <p style="color: #3730a3; margin: 0 0 20px 0; font-size: 15px; line-height: 1.6;">
+                    We'd love to hear about your experience at DCS Day 2026!
+                </p>
+                <a href="https://forms.gle/FFqY1XGeEYsr5rGS6" style="display: inline-block; background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%); color: white; text-decoration: none; padding: 14px 35px; border-radius: 30px; font-weight: 600; font-size: 16px; box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);">
+                    📋 Fill Feedback Form
+                </a>
+            </div>
+            
+            <!-- Verification Details -->
+            <div style="background: #f8fafc; border-radius: 16px; padding: 25px; margin: 30px 0; border-left: 5px solid #7c3aed;">
+                <h3 style="color: #1e293b; margin: 0 0 20px 0; font-size: 18px;">📋 Dinner Verification Details</h3>
+                
+                <div style="display: flex; justify-content: space-between; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0;">
+                    <span style="font-weight: 600; color: #475569;">Email:</span>
+                    <span style="color: #64748b;">{{ email }}</span>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0;">
+                    <span style="font-weight: 600; color: #475569;">Event:</span>
+                    <span style="color: #64748b;">{{ event_name }}</span>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between;">
+                    <span style="font-weight: 600; color: #475569;">Verified At:</span>
+                    <span style="color: #64748b;">{{ current_date }}</span>
+                </div>
+            </div>
+            
+        </div>
+        
+        <!-- Footer -->
+        <div style="background: linear-gradient(135deg, #1e293b 0%, #334155 100%); padding: 35px; text-align: center; color: white;">
+            <p style="margin: 0 0 10px 0; font-size: 18px; font-weight: 600;">Department of Chemical Sciences</p>
+            <p style="margin: 0 0 20px 0; font-size: 14px; opacity: 0.8;">IISER Kolkata • DCS Day 2026</p>
+            <div style="border-top: 1px solid rgba(255,255,255,0.2); padding-top: 20px; margin-top: 10px;">
+                <p style="margin: 0; font-size: 13px; opacity: 0.7;">
+                    This confirmation was sent by {{ organizer_email }}
+                </p>
+            </div>
+        </div>
+        
+    </div>
+</body>
+</html>

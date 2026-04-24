@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registration Confirmed - DCS Day 2026</title>
+</head>
+<body style="font-family: 'Segoe UI', Arial, sans-serif; background: linear-gradient(135deg, #059669 0%, #10b981 100%); margin: 0; padding: 40px 20px; color: #333;">
+    <div style="max-width: 600px; margin: 0 auto; background: white; border-radius: 24px; overflow: hidden; box-shadow: 0 25px 50px rgba(5, 150, 105, 0.3);">
+        
+        <!-- Header -->
+        <div style="background: linear-gradient(135deg, #059669 0%, #10b981 100%); color: white; padding: 50px 30px; text-align: center;">
+            <div style="font-size: 64px; margin-bottom: 15px;">🎫</div>
+            <h1 style="margin: 0; font-size: 32px; font-weight: 700; letter-spacing: -0.5px;">Registration Successful!</h1>
+            <p style="margin: 15px 0 0 0; font-size: 18px; opacity: 0.95;">Welcome to DCS Day 2026</p>
+        </div>
+        
+        <!-- Main Content -->
+        <div style="padding: 45px 35px;">
+            
+            <!-- Welcome Message -->
+            <div style="text-align: center; margin-bottom: 35px;">
+                <p style="font-size: 20px; color: #059669; font-weight: 600; margin: 0 0 15px 0;">
+                    Dear {{ attendee_name or 'Attendee' }},
+                </p>
+                <p style="font-size: 17px; color: #555; line-height: 1.7; margin: 0;">
+                    Thank you for registering for <strong style="color: #059669;">{{ event_name }}</strong>!<br>
+                    We're thrilled to have you join us for this exciting event.
+                </p>
+            </div>
+            
+            <!-- DCS Kit Box -->
+            <div style="background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%); border-radius: 16px; padding: 30px; margin: 30px 0; border: 2px solid #a7f3d0;">
+                <div style="text-align: center;">
+                    <span style="font-size: 48px; display: block; margin-bottom: 15px;">🎁</span>
+                    <h3 style="color: #059669; margin: 0 0 12px 0; font-size: 22px;">Your DCS Kit Awaits!</h3>
+                    <p style="color: #065f46; margin: 0; font-size: 16px; line-height: 1.6;">
+                        We hope you've collected your exclusive <strong>DCS Day Kit</strong> at the registration desk!<br>
+                        It includes goodies specially curated for you.
+                    </p>
+                </div>
+            </div>
+            
+            <!-- Event Details -->
+            <div style="background: #f8fafc; border-radius: 16px; padding: 25px; margin: 30px 0; border-left: 5px solid #059669;">
+                <h3 style="color: #1e293b; margin: 0 0 20px 0; font-size: 18px;">📋 Your Registration Details</h3>
+                
+                <div style="display: flex; justify-content: space-between; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0;">
+                    <span style="font-weight: 600; color: #475569;">Email:</span>
+                    <span style="color: #64748b;">{{ email }}</span>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0;">
+                    <span style="font-weight: 600; color: #475569;">Event:</span>
+                    <span style="color: #64748b;">{{ event_name }}</span>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between;">
+                    <span style="font-weight: 600; color: #475569;">Registered At:</span>
+                    <span style="color: #64748b;">{{ current_date }}</span>
+                </div>
+            </div>
+            
+            <!-- Enjoy Message -->
+            <div style="text-align: center; margin: 35px 0; padding: 30px; background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-radius: 16px; border: 2px solid #fbbf24;">
+                <span style="font-size: 42px; display: block; margin-bottom: 15px;">🎉</span>
+                <h3 style="color: #92400e; margin: 0 0 10px 0; font-size: 20px;">Enjoy the Event!</h3>
+                <p style="color: #a16207; margin: 0; font-size: 15px; line-height: 1.6;">
+                    Explore the talks, workshops, posters, and cultural performances.<br>
+                    Don't forget to check out the schedule attached to this email!
+                </p>
+            </div>
+            
+            <!-- Schedule Note -->
+            <div style="text-align: center; padding: 20px; background: #f0f9ff; border-radius: 12px; border: 1px solid #bae6fd;">
+                <p style="margin: 0; color: #0369a1; font-size: 15px;">
+                    📎 <strong>Attached:</strong> DCS Day 2026 Event Schedule (PDF)
+                </p>
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <div style="background: linear-gradient(135deg, #1e293b 0%, #334155 100%); padding: 35px; text-align: center; color: white;">
+            <p style="margin: 0 0 10px 0; font-size: 18px; font-weight: 600;">Department of Chemical Sciences</p>
+            <p style="margin: 0 0 20px 0; font-size: 14px; opacity: 0.8;">IISER Kolkata • DCS Day 2026</p>
+            <div style="border-top: 1px solid rgba(255,255,255,0.2); padding-top: 20px; margin-top: 10px;">
+                <p style="margin: 0; font-size: 13px; opacity: 0.7;">
+                    This confirmation was sent by {{ organizer_email }}
+                </p>
+            </div>
+        </div>
+        
+    </div>
+</body>
+</html>
