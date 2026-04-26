@@ -25,9 +25,18 @@ import secrets
 from src.coupons import CouponManager
 from src.data import CSVManager
 from src.auth import GoogleAuthService, GmailEmailService
+from src.smtp_mailer import SMTPMailer  # 21MS_FAREWELL BRANCH
 
 # Load environment variables
 load_dotenv()
+
+# 21MS_FAREWELL BRANCH: Load event config from environment
+EVENT_NAME = os.getenv('EVENT_NAME', '21MS Farewell Party')
+EVENT_DATE = os.getenv('EVENT_DATE', 'To Be Announced')
+EVENT_TIME = os.getenv('EVENT_TIME', 'To Be Announced')
+EVENT_VENUE = os.getenv('EVENT_VENUE', 'IISER Kolkata Campus')
+ORGANIZER_BATCH = '22MS Batch'
+ORGANIZER_INSTITUTION = 'IISER Kolkata'
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -297,6 +306,125 @@ def send_emails():
         
     except Exception as e:
         logger.error(f"Error in send_emails: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# 21MS_FAREWELL BRANCH: New route for SMTP-based email sending
+@app.route('/send-farewell-emails', methods=['POST'])
+def send_farewell_emails():
+    """21MS_FAREWELL BRANCH: Send coupon emails via SMTP. Does not require OAuth login.
+
+    Request body (JSON):
+    {"event_name": "21MS Farewell Party"}
+    """
+    if not all([coupon_manager, csv_manager]):
+        return jsonify({'success': False, 'error': 'Services not initialized'}), 500
+
+    try:
+        data = request.get_json() or {}
+        event_name = data.get('event_name', EVENT_NAME)
+
+        recipients = csv_manager.read_recipients()
+        if not recipients:
+            return jsonify({'success': False, 'error': 'No recipients found'}), 400
+
+        pending_recipients = [r for r in recipients if r.get('status') == 'generated']
+        if not pending_recipients:
+            return jsonify({'success': False, 'error': 'No pending recipients to send'}), 400
+
+        logger.info(f"Generating coupons for {len(pending_recipients)} pending recipients")
+
+        smtp_mailer = SMTPMailer()
+
+        coupon_results = coupon_manager.generate_coupons_batch(pending_recipients, event_name)
+
+        if coupon_results['generated'] == 0:
+            return jsonify({'success': False, 'error': 'Failed to generate any coupons'}), 500
+
+        email_recipients = []
+        for coupon in coupon_results['coupons']:
+            email_recipients.append({
+                'name': coupon.get('name', coupon.get('email', 'Guest').split('@')[0]),
+                'email': coupon['email'],
+                'coupon_id': coupon['coupon_id'],
+                'event_name': coupon['event_name'],
+                'qr_code_base64': coupon['qr_code_base64'],
+                'verification_code': coupon['verification_code'],
+                'attendee_name': coupon.get('name', coupon.get('email', 'Guest').split('@')[0]),
+                'attendee_email': coupon['email'],
+                'event_date': EVENT_DATE,
+                'event_time': EVENT_TIME,
+                'event_venue': EVENT_VENUE,
+                'organizer_batch': ORGANIZER_BATCH,
+                'organizer_institution': ORGANIZER_INSTITUTION,
+            })
+
+        def render_invitation(recipient):
+            return render_template(
+                'farewell/invitation.html',
+                attendee_name=recipient['attendee_name'],
+                attendee_email=recipient['attendee_email'],
+                event_name=recipient['event_name'],
+                event_date=recipient['event_date'],
+                event_time=recipient['event_time'],
+                event_venue=recipient['event_venue'],
+                qr_code_base64=recipient['qr_code_base64'],
+                verification_code=recipient['verification_code'],
+                coupon_id=recipient['coupon_id'],
+                organizer_batch=recipient['organizer_batch'],
+                organizer_institution=recipient['organizer_institution'],
+            )
+
+        subject = f"You're Invited! {event_name}"
+
+        sent = 0
+        failed = 0
+        failed_list = []
+
+        for i, recipient in enumerate(email_recipients, 1):
+            logger.info(f"Sending email {i}/{len(email_recipients)} to {recipient['email']}")
+
+            try:
+                html_body = render_invitation(recipient)
+                result = smtp_mailer.send_email(
+                    to_email=recipient['email'],
+                    to_name=recipient['attendee_name'],
+                    subject=subject,
+                    html_body=html_body,
+                )
+
+                if result['success']:
+                    for coupon in coupon_results['coupons']:
+                        if coupon['email'] == recipient['email']:
+                            coupon_manager.mark_coupon_sent(coupon['coupon_id'])
+                            break
+                    sent += 1
+                else:
+                    failed += 1
+                    failed_list.append({'email': recipient['email'], 'error': result.get('error')})
+
+            except Exception as e:
+                logger.error(f"Failed to send to {recipient['email']}: {str(e)}")
+                failed += 1
+                failed_list.append({'email': recipient['email'], 'error': str(e)})
+
+            if i < len(email_recipients):
+                time.sleep(1.0)
+
+        failure_log_file = None
+        if failed_list:
+            failure_log_file = csv_manager.save_failed_emails(failed_list, event_name)
+
+        return jsonify({
+            'success': True,
+            'emails_sent': sent,
+            'emails_failed': failed,
+            'total_recipients': len(pending_recipients),
+            'failed_list': failed_list,
+            'failure_log_file': failure_log_file,
+        })
+
+    except Exception as e:
+        logger.error(f"Error in send_farewell_emails: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/verify-coupon', methods=['POST'])
