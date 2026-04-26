@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to the 21MS Farewell Party!</title>
+    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;600;700&family=Satisfy&family=Kalam:wght@300;400;700&display=swap" rel="stylesheet">
+    <!-- Email preview styles — stripped by email clients -->
+    <style>
+        body { font-family: 'Kalam', cursive; background: #1a1a2e; margin: 0; padding: 20px; }
+        .email-container { max-width: 600px; margin: 0 auto; }
+    </style>
+</head>
+<body style="font-family: 'Kalam', cursive; background: #1a1a2e; margin: 0; padding: 20px;">
+    <div class="email-container" style="max-width: 600px; margin: 0 auto;">
+
+        <!-- HEADER SECTION -->
+        <div style="background: #1a1a2e; padding: 40px 30px; text-align: center; border-radius: 12px 12px 0 0;">
+            <div style="font-family: 'Satisfy', cursive; font-size: 46px; color: #d4af37; margin: 0; line-height: 1.2;">
+                Welcome, {{ attendee_name }}! 🎉
+            </div>
+            <div style="font-family: 'Caveat', cursive; font-size: 24px; color: #fef9f0; margin: 15px 0 10px; opacity: 0.9;">
+                Your entry has been verified
+            </div>
+            <div style="color: #d4af37; font-size: 12px; letter-spacing: 6px; margin: 10px 0;">
+                ✦ ✦ ✦ ✦ ✦
+            </div>
+            <div style="width: 100px; height: 2px; background: linear-gradient(90deg, transparent, #d4af37, transparent); margin: 0 auto;"></div>
+        </div>
+
+        <!-- CONFIRMATION MESSAGE -->
+        <div style="background: #fef9f0; padding: 35px 30px;">
+            <div style="font-family: 'Kalam', cursive; font-size: 18px; color: #2d2d44; line-height: 1.7; margin: 0 0 25px;">
+                Hey {{ attendee_name }},
+            </div>
+            <div style="font-family: 'Kalam', cursive; font-size: 17px; color: #2d2d44; line-height: 1.7; margin: 0 0 25px;">
+                We've confirmed your entry — you're on the list! 🎫
+            </div>
+            <div style="font-family: 'Kalam', cursive; font-size: 17px; color: #2d2d44; line-height: 1.7; margin: 0 0 25px;">
+                Here's a summary of your registration for your records:
+            </div>
+
+            <div style="background: rgba(26, 26, 46, 0.05); border-left: 4px solid #d4af37; padding: 20px; margin: 20px 0; border-radius: 0 8px 8px 0;">
+                <div style="font-family: 'Caveat', cursive; font-size: 16px; color: #888; margin: 0 0 5px;">Verification Code</div>
+                <div style="font-family: 'Caveat', cursive; font-size: 28px; font-weight: 700; color: #d4af37; letter-spacing: 4px; margin: 0 0 15px;">
+                    {{ verification_code }}
+                </div>
+                <div style="font-family: 'Caveat', cursive; font-size: 16px; color: #888; margin: 0 0 5px;">Coupon ID</div>
+                <div style="font-family: 'Kalam', cursive; font-size: 14px; color: #666; margin: 0 0 15px; word-break: break-all;">
+                    {{ coupon_id }}
+                </div>
+                <div style="font-family: 'Caveat', cursive; font-size: 16px; color: #888; margin: 0 0 5px;">Registered Email</div>
+                <div style="font-family: 'Kalam', cursive; font-size: 14px; color: #666; margin: 0;">
+                    {{ attendee_email }}
+                </div>
+            </div>
+
+            <div style="font-family: 'Kalam', cursive; font-size: 17px; color: #2d2d44; line-height: 1.7; margin: 0 0 20px;">
+                See you on the dance floor ✨
+            </div>
+
+            <div style="font-family: 'Satisfy', cursive; font-size: 26px; color: #d4af37; text-align: right; margin: 25px 0 0;">
+                — 22MS Batch, IISER Kolkata 🌿
+            </div>
+        </div>
+
+        <!-- FOOTER SECTION -->
+        <div style="background: #1a1a2e; padding: 30px; text-align: center; border-radius: 0 0 12px 12px;">
+            <div style="font-family: 'Caveat', cursive; font-size: 17px; color: #d4af37; margin: 0 0 5px;">
+                IISER Kolkata — Indian Institute of Science Education and Research Kolkata
+            </div>
+            <div style="font-family: 'Kalam', cursive; font-size: 14px; color: #fef9f0; opacity: 0.8; margin: 0 0 10px;">
+                Farewell Party Organized by 22MS Batch
+            </div>
+            <div style="color: #d4af37; font-size: 11px; letter-spacing: 4px; margin: 10px 0;">
+                ✦ ✦ ✦
+            </div>
+            <div style="font-family: 'Kalam', cursive; font-size: 11px; color: #888; margin: 0;">
+                If you did not expect this email, please ignore it.
+            </div>
+        </div>
+
+    </div>
+</body>
+</html>
