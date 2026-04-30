@@ -174,35 +174,148 @@ This specialized branch is designed for the **21MS Farewell Party** at IISER Kol
 
 ### 21ms_farewell Setup
 
-1. **Install branch-specific requirements:**
-   ```bash
-   uv pip install --python /home/shuvam/.global-pymaster -r requirements_21ms.txt
-   ```
+#### Step 1: Install dependencies
 
-2. **Configure `.env` file:**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your Gmail SMTP credentials and event details
-   ```
+This branch uses `uv` with a global Python environment. Install all dependencies:
 
-3. **Required `.env` variables:**
-   - `SMTP_USERNAME`: Your Gmail address
-   - `SMTP_PASSWORD`: 16-character Gmail App Password
-   - `SMTP_SENDER_NAME`: Display name (e.g., "22MS Batch, IISER Kolkata")
-   - `COUPON_SECRET_KEY`: Generate with `python -c "import secrets; print(secrets.token_hex(32))"`
-   - `TEST_EMAIL_1`, `TEST_EMAIL_2`, `TEST_EMAIL_3`: Test recipient addresses
+```bash
+uv pip install --python /home/shuvam/.global-pymaster -r requirements_21ms.txt
+```
 
-4. **Send test invitations:**
-   ```bash
-   /home/shuvam/.global-pymaster/bin/python scripts/send_test_emails.py
-   ```
+#### Step 2: Set up Gmail SMTP (App Password)
 
-5. **Start the application:**
-   ```bash
-   /home/shuvam/.global-pymaster/bin/python app.py
-   ```
+**IMPORTANT:** You cannot use your regular Gmail password. You must create an **App Password**.
 
-6. **Access the dashboard:** Open `http://localhost:5000/sender`
+1. **Enable 2-Step Verification on your Google Account:**
+   - Go to https://myaccount.google.com/security
+   - Under "Signing in to Google", click **2-Step Verification**
+   - Follow the prompts to enable it (requires a phone number)
+
+2. **Generate an App Password:**
+   - Go to https://myaccount.google.com/security
+   - Under "Signing in to Google", click **App passwords**
+   - You may need to sign in again
+   - At the bottom, click **Select app** > choose **Mail**
+   - Click **Select device** > choose **Other (Custom name)**
+   - Type: `21MS Farewell Mailer`
+   - Click **Generate**
+   - Google will show a 16-character password like `abcd efgh ijkl mnop`
+   - **Copy this password immediately** — you cannot view it again
+
+3. **Troubleshooting SMTP:**
+   - If you get "Username and Password not accepted", you are using your regular password instead of the App Password
+   - If 2-Step Verification is disabled, App Passwords option will not appear
+   - If you recently changed your Google password, old App Passwords may stop working — generate a new one
+
+#### Step 3: Configure the `.env` file
+
+```bash
+cp .env.example .env
+# Now edit .env with your details
+```
+
+**Fill in these required values in `.env`:**
+
+```env
+# Flask Configuration
+SECRET_KEY=your-super-secret-key-minimum-32-characters-long
+FLASK_DEBUG=True
+PORT=5000
+
+# Coupon Encryption Key — generate with:
+# /home/shuvam/.global-pymaster/bin/python -c "import secrets; print(secrets.token_hex(32))"
+COUPON_SECRET_KEY=PASTE_YOUR_GENERATED_KEY_HERE
+
+# SMTP Configuration — use your Gmail and the 16-char App Password
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USE_TLS=True
+SMTP_USERNAME=your-email@gmail.com
+SMTP_PASSWORD=xxxx xxxx xxxx xxxx    # <-- 16-char App Password (spaces optional)
+SMTP_SENDER_NAME=22MS Batch, IISER Kolkata
+SMTP_SENDER_EMAIL=your-email@gmail.com
+
+# Event Details
+EVENT_NAME=21MS Farewell Party
+EVENT_DATE=To Be Announced
+EVENT_VENUE=IISER Kolkata Campus
+EVENT_TIME=To Be Announced
+
+# Test Email Addresses (for testing before bulk send)
+TEST_EMAIL_1=first-test-email@example.com
+TEST_EMAIL_2=second-test-email@example.com
+TEST_EMAIL_3=third-test-email@example.com
+
+# Google OAuth (optional — only if you want organizer login)
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GOOGLE_REDIRECT_URI=http://localhost:5000/auth/callback
+```
+
+**NEVER commit the `.env` file.** It is already in `.gitignore`.
+
+#### Step 4: Test SMTP before sending
+
+Run the test script to verify your SMTP credentials work and that emails actually deliver:
+
+```bash
+/home/shuvam/.global-pymaster/bin/python scripts/send_test_emails.py
+```
+
+Expected output if successful:
+```
+=================================================================
+21MS Farewell Party - SMTP Test & Invitation Sender
+=================================================================
+[+] Test attachment found: test_schedule.pdf
+
+[1] Testing SMTP connection...
+[+] SMTP connection successful: Connected to smtp.gmail.com:587
+
+[1] Preparing invitation for first-test-email@example.com...
+    [+] Coupon generated: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+    [+] Verification code: 123456
+    [+] SENT SUCCESSFULLY to first-test-email@example.com
+    [+] Attachment included: test_schedule.pdf
+...
+```
+
+**Check the inboxes of your test emails.** If emails land in spam:
+- Add the sender email to contacts
+- The subject line "You're Invited! 21MS Farewell Party" should not trigger spam filters
+
+#### Step 5: Start the server
+
+```bash
+/home/shuvam/.global-pymaster/bin/python app.py
+```
+
+The server will start on `http://localhost:5000`
+
+#### Step 6: Use the web dashboard
+
+1. **Open the Event Manager:** `http://localhost:5000/sender`
+2. **Upload your attendee CSV:** Click "Upload Attendee List" and select a CSV file with at minimum an `email` column. Optional: add a `name` column.
+3. **Send invitations:** Enter the event name, optionally attach a PDF schedule, then click "Send Farewell Invitations"
+4. **Track progress:** The dashboard shows a detailed table with all coupons, verification codes, sent timestamps, and used timestamps
+
+**CSV format example:**
+```csv
+email,name
+21ms001@iiserkol.ac.in,Rahul Sharma
+21ms002@iiserkol.ac.in,Priya Das
+```
+
+#### Step 7: Event day — QR scanning
+
+1. Open `http://localhost:5000/scanner` on a mobile device or laptop with camera
+2. Scan attendee QR codes at the entrance
+3. The system validates the coupon, marks it as "used", and automatically sends a thank-you email
+4. If camera doesn't work, use the manual "6-Digit Code Verification" section at the bottom of the scanner page
+
+#### Step 8: Stop the server
+
+Press `Ctrl+C` in the terminal running the Flask app.
 
 ### API Endpoints (21ms_farewell)
 

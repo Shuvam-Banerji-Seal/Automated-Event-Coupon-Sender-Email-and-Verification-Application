@@ -325,13 +325,30 @@ def send_farewell_emails():
 
         recipients = csv_manager.read_recipients()
         if not recipients:
-            return jsonify({'success': False, 'error': 'No recipients found'}), 400
+            return jsonify({'success': False, 'error': 'No recipients found. Please upload a CSV file first.'}), 400
 
-        pending_recipients = [r for r in recipients if r.get('status') == 'generated']
+        # Filter out recipients who already have SENT coupons
+        import csv as csv_module
+        sent_emails = set()
+        try:
+            with open(csv_manager.coupons_file, 'r', newline='', encoding='utf-8') as f:
+                reader = csv_module.DictReader(f)
+                for row in reader:
+                    if row.get('status') == 'sent' and row.get('email'):
+                        sent_emails.add(row.get('email', '').lower())
+        except FileNotFoundError:
+            pass
+
+        pending_recipients = []
+        for r in recipients:
+            email = r.get('email', '').lower()
+            if email and email not in sent_emails:
+                pending_recipients.append(r)
+
         if not pending_recipients:
-            return jsonify({'success': False, 'error': 'No pending recipients to send'}), 400
+            return jsonify({'success': False, 'error': 'All recipients have already received their invitations.'}), 400
 
-        logger.info(f"Generating coupons for {len(pending_recipients)} pending recipients")
+        logger.info(f"Sending invitations to {len(pending_recipients)} unsent recipients")
 
         smtp_mailer = SMTPMailer()
 
