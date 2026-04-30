@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Event Coupon Manager - Digital Tickets</title>
+    <title>21MS Farewell - Event Manager</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -21,13 +21,7 @@
             --border: #374151;
             --shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
         }
-        
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             background: var(--bg-primary);
@@ -36,28 +30,6 @@
             padding: 20px;
             overflow-x: hidden;
         }
-        
-        /* Animated background */
-        body::before {
-            content: '';
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: 
-                radial-gradient(circle at 20% 80%, rgba(120, 119, 198, 0.3) 0%, transparent 50%),
-                radial-gradient(circle at 80% 20%, rgba(255, 119, 198, 0.3) 0%, transparent 50%),
-                radial-gradient(circle at 40% 40%, rgba(120, 219, 255, 0.2) 0%, transparent 50%);
-            z-index: -1;
-            animation: backgroundShift 20s ease-in-out infinite;
-        }
-        
-        @keyframes backgroundShift {
-            0%, 100% { transform: scale(1) rotate(0deg); }
-            50% { transform: scale(1.1) rotate(1deg); }
-        }
-        
         .container {
             max-width: 1400px;
             margin: 0 auto;
@@ -66,139 +38,38 @@
             box-shadow: var(--shadow);
             overflow: hidden;
             border: 1px solid var(--border);
-            backdrop-filter: blur(20px);
-            animation: slideUp 0.8s ease-out;
         }
-        
-        @keyframes slideUp {
-            from { opacity: 0; transform: translateY(30px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
         .header {
-            background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+            background: linear-gradient(135deg, #1a1a2e 0%, #2d2d44 100%);
             color: var(--text-primary);
             padding: 40px;
             position: relative;
             overflow: hidden;
+            border-bottom: 2px solid #d4af37;
         }
-        
-        .header::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="50" cy="50" r="1" fill="white" opacity="0.1"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
-            opacity: 0.3;
-        }
-        
         .header h1 {
             font-size: 2.5rem;
             font-weight: 700;
             margin-bottom: 12px;
-            background: linear-gradient(135deg, #ffffff 0%, #e0e7ff 100%);
+            background: linear-gradient(135deg, #d4af37 0%, #fef9f0 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
-            position: relative;
-            z-index: 1;
         }
-        
         .header p {
             font-size: 1.1rem;
             opacity: 0.9;
             font-weight: 400;
-            position: relative;
-            z-index: 1;
+            color: var(--text-secondary);
         }
-        
-        .user-info {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            margin-top: 10px;
-        }
-        
-        .user-details {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .user-avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            border: 2px solid rgba(255,255,255,0.3);
-        }
-        
-        .user-text {
-            text-align: left;
-        }
-        
-        .user-name {
-            font-weight: 600;
-            font-size: 14px;
-        }
-        
-        .user-email {
-            font-size: 12px;
-            opacity: 0.8;
-        }
-        
-        .logout-btn {
-            background: rgba(255,255,255,0.2);
-            color: white;
-            padding: 8px 16px;
-            border-radius: 6px;
-            text-decoration: none;
-            font-size: 14px;
-            font-weight: 500;
-            transition: all 0.3s;
-            border: 1px solid rgba(255,255,255,0.3);
-        }
-        
-        .logout-btn:hover {
-            background: rgba(255,255,255,0.3);
-            transform: translateY(-1px);
-        }
-        
-        .main-content {
-            padding: 40px;
-        }
-        
+        .main-content { padding: 40px; }
         .section {
             margin-bottom: 32px;
             padding: 32px;
             border: 1px solid var(--border);
             border-radius: 16px;
             background: var(--bg-tertiary);
-            backdrop-filter: blur(10px);
-            transition: all 0.3s ease;
-            animation: fadeInUp 0.6s ease-out forwards;
-            opacity: 0;
-            transform: translateY(20px);
         }
-        
-        .section:nth-child(1) { animation-delay: 0.1s; }
-        .section:nth-child(2) { animation-delay: 0.2s; }
-        .section:nth-child(3) { animation-delay: 0.3s; }
-        .section:nth-child(4) { animation-delay: 0.4s; }
-        
-        @keyframes fadeInUp {
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        
-        .section:hover {
-            border-color: var(--accent-primary);
-            box-shadow: 0 8px 32px rgba(99, 102, 241, 0.1);
-        }
-        
         .section h2 {
             color: var(--text-primary);
             margin-bottom: 24px;
@@ -208,11 +79,7 @@
             align-items: center;
             gap: 12px;
         }
-        
-        .form-group {
-            margin-bottom: 24px;
-        }
-        
+        .form-group { margin-bottom: 24px; }
         .form-group label {
             display: block;
             margin-bottom: 12px;
@@ -220,7 +87,6 @@
             color: var(--text-primary);
             font-size: 0.95rem;
         }
-        
         .form-group input, .form-group select {
             width: 100%;
             padding: 16px;
@@ -229,66 +95,8 @@
             font-size: 16px;
             background: var(--bg-primary);
             color: var(--text-primary);
-            transition: all 0.3s ease;
             font-family: inherit;
         }
-        
-        .form-group input:focus, .form-group select:focus {
-            outline: none;
-            border-color: var(--accent-primary);
-            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
-            transform: translateY(-1px);
-        }
-        
-        .form-group input::placeholder {
-            color: var(--text-muted);
-        }
-        
-        .file-upload {
-            position: relative;
-            display: inline-block;
-            cursor: pointer;
-            width: 100%;
-        }
-        
-        .file-upload input[type=file] {
-            position: absolute;
-            opacity: 0;
-            width: 100%;
-            height: 100%;
-            cursor: pointer;
-        }
-        
-        .file-upload-label {
-            display: block;
-            padding: 24px;
-            border: 2px dashed var(--border);
-            border-radius: 12px;
-            text-align: center;
-            background: var(--bg-primary);
-            transition: all 0.3s ease;
-            color: var(--text-secondary);
-            cursor: pointer;
-        }
-        
-        .file-upload:hover .file-upload-label {
-            background: var(--bg-secondary);
-            border-color: var(--accent-primary);
-            color: var(--text-primary);
-            transform: translateY(-2px);
-        }
-        
-        .file-upload-label div {
-            font-size: 1.1rem;
-            font-weight: 500;
-            margin-bottom: 8px;
-        }
-        
-        .file-upload-label small {
-            color: var(--text-muted);
-            font-size: 0.85rem;
-        }
-        
         .btn {
             padding: 16px 32px;
             border: none;
@@ -303,63 +111,26 @@
             justify-content: center;
             gap: 8px;
             font-family: inherit;
-            position: relative;
-            overflow: hidden;
         }
-        
-        .btn::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-            transition: left 0.5s;
-        }
-        
-        .btn:hover::before {
-            left: 100%;
-        }
-        
         .btn-primary {
-            background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
-            color: var(--text-primary);
+            background: linear-gradient(135deg, #d4af37 0%, #b8941f 100%);
+            color: #1a1a2e;
             border: 1px solid transparent;
         }
-        
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(99, 102, 241, 0.4);
-            border-color: rgba(255,255,255,0.2);
-        }
-        
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(212, 175, 55, 0.3); }
         .btn-secondary {
             background: var(--bg-tertiary);
             color: var(--text-secondary);
             border: 1px solid var(--border);
         }
-        
-        .btn-secondary:hover {
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            border-color: var(--accent-primary);
-            transform: translateY(-1px);
-        }
-        
-        .btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none !important;
-        }
-        
+        .btn-secondary:hover { background: var(--bg-primary); color: var(--text-primary); border-color: #d4af37; }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none !important; }
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 24px;
             margin-bottom: 32px;
         }
-        
         .stat-card {
             background: var(--bg-primary);
             padding: 28px;
@@ -367,369 +138,130 @@
             text-align: center;
             border: 1px solid var(--border);
             transition: all 0.3s ease;
-            position: relative;
-            overflow: hidden;
         }
-        
-        .stat-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 3px;
-            background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
-        }
-        
-        .stat-card:hover {
-            transform: translateY(-4px);
-            border-color: var(--accent-primary);
-            box-shadow: 0 12px 40px rgba(99, 102, 241, 0.15);
-        }
-        
+        .stat-card:hover { transform: translateY(-4px); border-color: #d4af37; }
         .stat-number {
             font-size: 2.5rem;
             font-weight: 700;
-            background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+            background: linear-gradient(135deg, #d4af37 0%, #fef9f0 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
             margin-bottom: 8px;
         }
-        
-        .stat-label {
-            color: var(--text-secondary);
-            font-size: 0.9rem;
-            font-weight: 500;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        
-        .progress-container {
-            display: none;
-            margin-top: 24px;
-            padding: 20px;
-            background: var(--bg-primary);
-            border-radius: 12px;
-            border: 1px solid var(--border);
-        }
-        
-        .progress-bar {
-            width: 100%;
-            height: 8px;
-            background: var(--bg-tertiary);
-            border-radius: 8px;
-            overflow: hidden;
-            position: relative;
-        }
-        
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
-            width: 0%;
-            transition: width 0.5s ease;
-            border-radius: 8px;
-            position: relative;
-        }
-        
-        .progress-fill::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
-            animation: shimmer 2s infinite;
-        }
-        
-        @keyframes shimmer {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(100%); }
-        }
-        
-        .progress-text {
-            text-align: center;
-            margin-top: 16px;
-            font-weight: 500;
-            color: var(--text-secondary);
-            font-size: 0.9rem;
-        }
-        
+        .stat-label { color: var(--text-secondary); font-size: 0.9rem; font-weight: 500; }
         .alert {
             padding: 20px;
             border-radius: 12px;
             margin-bottom: 24px;
             border: 1px solid;
             font-weight: 500;
-            animation: slideIn 0.3s ease-out;
         }
-        
-        @keyframes slideIn {
-            from { opacity: 0; transform: translateX(-20px); }
-            to { opacity: 1; transform: translateX(0); }
-        }
-        
-        .alert-success {
-            background: rgba(16, 185, 129, 0.1);
-            color: var(--success);
-            border-color: rgba(16, 185, 129, 0.3);
-        }
-        
-        .alert-error {
-            background: rgba(239, 68, 68, 0.1);
-            color: var(--error);
-            border-color: rgba(239, 68, 68, 0.3);
-        }
-        
-        .alert-info {
-            background: rgba(99, 102, 241, 0.1);
-            color: var(--accent-primary);
-            border-color: rgba(99, 102, 241, 0.3);
-        }
-        
-        .hidden {
-            display: none;
-        }
-        
+        .alert-success { background: rgba(16, 185, 129, 0.1); color: var(--success); border-color: rgba(16, 185, 129, 0.3); }
+        .alert-error { background: rgba(239, 68, 68, 0.1); color: var(--error); border-color: rgba(239, 68, 68, 0.3); }
+        .alert-info { background: rgba(99, 102, 241, 0.1); color: var(--accent-primary); border-color: rgba(99, 102, 241, 0.3); }
+        .hidden { display: none; }
         .nav-links {
-            text-align: center;
-            margin-bottom: 30px;
+            display: flex;
+            justify-content: center;
+            gap: 32px;
+            margin-bottom: 40px;
+            flex-wrap: wrap;
         }
-        
         .nav-links a {
-            margin: 0 15px;
-            color: #667eea;
+            padding: 12px 24px;
+            border-radius: 8px;
             text-decoration: none;
             font-weight: 600;
+            transition: all 0.3s ease;
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            background: var(--bg-tertiary);
         }
-        
-        .nav-links a:hover {
-            text-decoration: underline;
+        .nav-links a:hover, .nav-links a.active {
+            color: #d4af37;
+            border-color: #d4af37;
+            background: rgba(212, 175, 55, 0.1);
         }
-        
-        /* Modal and Dialog Styles */
-        .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
+        .file-upload {
+            position: relative;
+            display: inline-block;
+            cursor: pointer;
+            width: 100%;
+        }
+        .file-upload input[type=file] {
+            position: absolute;
+            opacity: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.8);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-            backdrop-filter: blur(10px);
-            animation: fadeIn 0.3s ease-out;
+            cursor: pointer;
         }
-        
-        .modal-dialog {
-            background: var(--bg-secondary);
-            border-radius: 16px;
-            padding: 32px;
-            max-width: 600px;
-            width: 90%;
-            max-height: 80vh;
-            overflow-y: auto;
-            border: 1px solid var(--border);
-            box-shadow: var(--shadow);
-            animation: slideUp 0.3s ease-out;
-        }
-        
-        .modal-header {
-            color: var(--text-primary);
-            margin-bottom: 16px;
-            font-size: 1.5rem;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            font-weight: 600;
-        }
-        
-        .modal-summary {
-            background: var(--bg-tertiary);
-            padding: 20px;
+        .file-upload-label {
+            display: block;
+            padding: 24px;
+            border: 2px dashed var(--border);
             border-radius: 12px;
-            margin-bottom: 24px;
-            border: 1px solid var(--border);
-        }
-        
-        .modal-summary h4 {
-            color: var(--text-primary);
-            margin-bottom: 12px;
-            font-size: 1.1rem;
-        }
-        
-        .summary-stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-            gap: 16px;
-            font-size: 0.9rem;
-        }
-        
-        .summary-stat {
             text-align: center;
-        }
-        
-        .summary-stat-number {
-            font-size: 1.5rem;
-            font-weight: 700;
-            margin-bottom: 4px;
-        }
-        
-        .summary-stat-label {
-            color: var(--text-secondary);
-            font-size: 0.85rem;
-        }
-        
-        .recipients-list {
-            max-height: 200px;
-            overflow-y: auto;
-            border: 1px solid var(--border);
-            border-radius: 8px;
             background: var(--bg-primary);
+            transition: all 0.3s ease;
+            color: var(--text-secondary);
+            cursor: pointer;
         }
-        
-        .recipient-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px;
-            border-bottom: 1px solid var(--border);
+        .file-upload:hover .file-upload-label {
+            background: var(--bg-secondary);
+            border-color: #d4af37;
+            color: var(--text-primary);
+        }
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
             font-size: 0.9rem;
         }
-        
-        .recipient-item:last-child {
-            border-bottom: none;
+        .data-table th {
+            padding: 12px 16px;
+            text-align: left;
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+            font-weight: 600;
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
         }
-        
-        .recipient-email {
+        .data-table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
             color: var(--text-primary);
-            font-weight: 500;
         }
-        
+        .data-table tr:hover td { background: rgba(212, 175, 55, 0.05); }
         .status-badge {
-            padding: 2px 8px;
-            border-radius: 4px;
+            padding: 4px 10px;
+            border-radius: 6px;
             font-size: 0.8rem;
             font-weight: 600;
             text-transform: uppercase;
+            display: inline-block;
         }
-        
-        .status-badge.new {
-            background: var(--success);
-            color: var(--bg-primary);
+        .status-pending { background: rgba(245, 158, 11, 0.2); color: var(--warning); }
+        .status-generated { background: rgba(99, 102, 241, 0.2); color: var(--accent-primary); }
+        .status-sent { background: rgba(16, 185, 129, 0.2); color: var(--success); }
+        .status-used { background: rgba(16, 185, 129, 0.3); color: #34d399; }
+        .coupon-code {
+            font-family: 'Courier New', monospace;
+            background: rgba(212, 175, 55, 0.1);
+            padding: 4px 8px;
+            border-radius: 4px;
+            color: #d4af37;
+            font-size: 0.85rem;
+            letter-spacing: 2px;
         }
-        
-        .status-badge.existing {
-            background: var(--warning);
-            color: var(--bg-primary);
+        .timestamp {
+            color: var(--text-muted);
+            font-size: 0.85rem;
         }
-        
-        .modal-actions {
-            display: flex;
-            gap: 16px;
-            justify-content: flex-end;
-            margin-top: 24px;
-        }
-        
-        .modal-btn {
-            padding: 12px 24px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-family: inherit;
-            font-size: 14px;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            border: none;
-        }
-        
-        .modal-btn-cancel {
-            background: var(--bg-tertiary);
-            color: var(--text-secondary);
-            border: 1px solid var(--border);
-        }
-        
-        .modal-btn-cancel:hover {
-            background: var(--bg-primary);
-            color: var(--text-primary);
-        }
-        
-        .modal-btn-confirm {
-            background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
-            color: var(--text-primary);
-            border: 1px solid transparent;
-        }
-        
-        .modal-btn-confirm:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-        
-        @keyframes slideUp {
-            from { opacity: 0; transform: translateY(30px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
         @media (max-width: 768px) {
-            .main-content {
-                padding: 20px;
-            }
-            
-            .stats-grid {
-                grid-template-columns: 1fr;
-            }
-            
-            .header h1 {
-                font-size: 24px;
-            }
-            
-            .header > div {
-                flex-direction: column;
-                gap: 15px;
-                text-align: center;
-            }
-            
-            .user-info {
-                justify-content: center;
-                margin-top: 15px;
-            }
-            
-            .user-details {
-                flex-direction: column;
-                text-align: center;
-                gap: 8px;
-            }
-            
-            .user-text {
-                text-align: center;
-            }
-            
-            .modal-dialog {
-                width: 95%;
-                padding: 24px;
-                max-height: 90vh;
-            }
-            
-            .summary-stats {
-                grid-template-columns: 1fr;
-                gap: 12px;
-            }
-            
-            .modal-actions {
-                flex-direction: column;
-                gap: 12px;
-            }
-            
-            .modal-btn {
-                width: 100%;
-            }
+            .main-content { padding: 20px; }
+            .stats-grid { grid-template-columns: 1fr 1fr; }
+            .header h1 { font-size: 24px; }
         }
     </style>
 </head>
@@ -738,145 +270,149 @@
         <div class="header">
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
                 <div>
-                    <h1>🎫 Event Ticket Manager</h1>
-                    <p>Create and distribute digital event tickets with QR verification</p>
+                    <h1>21MS Farewell Party</h1>
+                    <p>Automated Coupon & Invitation System | Organized by 22MS Batch</p>
                 </div>
-                {% if user %}
-                <div class="user-info">
-                    <div class="user-details">
-                        {% if user.picture %}
-                        <img src="{{ user.picture }}" alt="Profile" class="user-avatar">
-                        {% endif %}
-                        <div class="user-text">
-                            <div class="user-name">{{ user.name }}</div>
-                            <div class="user-email">{{ user.email }}</div>
-                        </div>
-                    </div>
-                    <a href="/logout" class="logout-btn">🚪 Logout</a>
+                <div style="text-align: right;">
+                    <div style="font-size: 0.85rem; color: var(--text-muted);">IISER Kolkata</div>
+                    <div style="font-size: 0.85rem; color: var(--text-muted);">22MS Batch Organizers</div>
                 </div>
-                {% endif %}
             </div>
         </div>
-        
+
         <div class="main-content">
-            <div class="nav-links" style="display: flex; justify-content: center; gap: 32px; margin-bottom: 40px;">
-                <a href="/" style="color: var(--accent-primary); padding: 12px 24px; border-radius: 8px; background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.3); transition: all 0.3s ease;">🏠 Dashboard</a>
-                <a href="/sender" style="color: var(--text-secondary); padding: 12px 24px; border-radius: 8px; background: var(--bg-tertiary); border: 1px solid var(--border); transition: all 0.3s ease;">🎫 Event Manager</a>
-                <a href="/scanner" style="color: var(--text-secondary); padding: 12px 24px; border-radius: 8px; background: var(--bg-tertiary); border: 1px solid var(--border); transition: all 0.3s ease;">📱 QR Scanner</a>
+            <div class="nav-links">
+                <a href="/sender" class="active">Event Manager</a>
+                <a href="/scanner">QR Scanner</a>
             </div>
-            
+
             <!-- Statistics Section -->
             <div class="section">
-                <h2>📊 Event Analytics</h2>
+                <h2>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#d4af37" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+                    Event Analytics
+                </h2>
                 <div class="stats-grid" id="statsGrid">
                     <div class="stat-card">
                         <div class="stat-number" id="recipientsCount">-</div>
-                        <div class="stat-label">Attendees</div>
+                        <div class="stat-label">Total Attendees</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-number" id="couponsGenerated">-</div>
-                        <div class="stat-label">Tickets Generated</div>
+                        <div class="stat-label">Coupons Generated</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-number" id="emailsSent">-</div>
-                        <div class="stat-label">Tickets Sent</div>
+                        <div class="stat-label">Emails Sent</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-number" id="couponsUsed">-</div>
-                        <div class="stat-label">Tickets Redeemed</div>
+                        <div class="stat-label">Coupons Redeemed</div>
                     </div>
                 </div>
-                <button class="btn btn-secondary" onclick="loadStats()">🔄 Refresh Analytics</button>
+                <button class="btn btn-secondary" onclick="loadStats()">Refresh Analytics</button>
             </div>
-            
+
             <!-- CSV Upload Section -->
             <div class="section">
-                <h2>👥 Upload Attendee List</h2>
+                <h2>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#d4af37" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    Upload Attendee List
+                </h2>
                 <div id="uploadAlert"></div>
-                
                 <div class="form-group">
                     <label>Upload CSV File with Attendee Email Addresses</label>
                     <div class="file-upload">
                         <input type="file" id="csvFile" accept=".csv" onchange="handleFileUpload(event)">
                         <label for="csvFile" class="file-upload-label">
-                            <div>📄 Click to select CSV file or drag and drop</div>
-                            <small>File must contain an 'email' column with attendee addresses</small>
+                            <div style="font-weight: 600; margin-bottom: 8px;">Click to select CSV file or drag and drop</div>
+                            <small>File must contain an 'email' column with attendee addresses. Optional: 'name' column.</small>
                         </label>
                     </div>
                 </div>
-                
                 <button class="btn btn-primary" id="uploadBtn" onclick="uploadCSV()" disabled>
-                    📤 Upload Attendee List
+                    Upload Attendee List
                 </button>
             </div>
-            
-            <!-- Attendee List Viewer -->
+
+            <!-- Detailed Coupon List -->
             <div class="section">
-                <h2>👥 Attendee Status Overview</h2>
+                <h2>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#d4af37" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                    Coupon Details Dashboard
+                </h2>
                 <div style="display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap;">
-                    <button class="btn btn-secondary" onclick="loadAttendeeList()">
-                        🔄 Refresh List
-                    </button>
+                    <button class="btn btn-secondary" onclick="loadCouponDetails()">Refresh Details</button>
                     <div style="display: flex; gap: 8px; align-items: center;">
-                        <label style="margin: 0; font-size: 0.9rem; color: var(--text-secondary);">Filter:</label>
-                        <select id="statusFilter" onchange="filterAttendees()" style="padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); font-size: 0.9rem;">
-                            <option value="all">All Attendees</option>
+                        <label style="font-size: 0.9rem; color: var(--text-secondary);">Filter:</label>
+                        <select id="statusFilter" onchange="filterCoupons()" style="padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); font-size: 0.9rem;">
+                            <option value="all">All</option>
                             <option value="pending">Pending</option>
-                            <option value="sent">Tickets Sent</option>
-                            <option value="used">Tickets Used</option>
+                            <option value="generated">Generated</option>
+                            <option value="sent">Sent</option>
+                            <option value="used">Used</option>
                         </select>
                     </div>
                 </div>
-                
-                <div id="attendeeListContainer" style="max-height: 400px; overflow-y: auto; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-primary);">
+                <div id="couponTableContainer" style="max-height: 500px; overflow-y: auto; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-primary);">
                     <div style="padding: 40px; text-align: center; color: var(--text-muted);">
-                        Click "Refresh List" to view attendees
+                        Click "Refresh Details" to view coupon information
                     </div>
                 </div>
             </div>
-            
-            <!-- Event Tickets Section -->
+
+            <!-- Send Invitations Section -->
             <div class="section">
-                <h2>🎫 Send Event Tickets</h2>
+                <h2>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#d4af37" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                    Send Invitations
+                </h2>
                 <div id="campaignAlert"></div>
-                
                 <div class="form-group">
                     <label for="eventName">Event Name</label>
-                    <input type="text" id="eventName" placeholder="Enter event name (e.g., Tech Conference 2024)" value="Special Event">
+                    <input type="text" id="eventName" placeholder="Enter event name" value="21MS Farewell Party">
                 </div>
-                
-                <button class="btn btn-primary" id="sendBtn" onclick="previewSendTickets()">
-                    🎫 Preview & Send Event Tickets
-                </button>
-                
-                <div class="progress-container" id="progressContainer">
-                    <div class="progress-bar">
-                        <div class="progress-fill" id="progressFill"></div>
+                <div class="form-group">
+                    <label for="attachmentFile">Optional Attachment (PDF Schedule)</label>
+                    <div class="file-upload">
+                        <input type="file" id="attachmentFile" accept=".pdf" onchange="handleAttachmentUpload(event)">
+                        <label for="attachmentFile" class="file-upload-label">
+                            <div style="font-weight: 600; margin-bottom: 8px;">Click to attach PDF schedule</div>
+                            <small>Optional: Attach event schedule or brochure PDF</small>
+                        </label>
                     </div>
-                    <div class="progress-text" id="progressText">Preparing event tickets...</div>
+                </div>
+                <button class="btn btn-primary" id="sendBtn" onclick="sendFarewellInvitations()">
+                    Send Farewell Invitations
+                </button>
+                <div id="sendProgress" style="margin-top: 20px; display: none;">
+                    <div style="background: var(--bg-primary); border-radius: 8px; height: 8px; overflow: hidden;">
+                        <div id="progressBar" style="background: linear-gradient(135deg, #d4af37 0%, #b8941f 100%); height: 100%; width: 0%; transition: width 0.5s ease;"></div>
+                    </div>
+                    <div id="progressText" style="text-align: center; margin-top: 10px; color: var(--text-secondary); font-size: 0.9rem;"></div>
                 </div>
             </div>
         </div>
     </div>
-    
+
     <script>
         let selectedFile = null;
-        
-        // Load statistics on page load
+        let attachmentFile = null;
+        let allCoupons = [];
+
         document.addEventListener('DOMContentLoaded', function() {
             loadStats();
+            loadCouponDetails();
         });
-        
+
         function showAlert(containerId, message, type) {
             const container = document.getElementById(containerId);
             container.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
-            setTimeout(() => {
-                container.innerHTML = '';
-            }, 5000);
+            setTimeout(() => { container.innerHTML = ''; }, 8000);
         }
-        
+
         function loadStats() {
-            fetch('/stats')
+            fetch('/farewell-stats')
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
@@ -886,15 +422,12 @@
                         document.getElementById('couponsUsed').textContent = data.coupon_stats.used;
                     }
                 })
-                .catch(error => {
-                    console.error('Error loading stats:', error);
-                });
+                .catch(error => console.error('Error loading stats:', error));
         }
-        
+
         function handleFileUpload(event) {
             selectedFile = event.target.files[0];
             const uploadBtn = document.getElementById('uploadBtn');
-            
             if (selectedFile && selectedFile.name.toLowerCase().endsWith('.csv')) {
                 uploadBtn.disabled = false;
                 showAlert('uploadAlert', `Selected file: ${selectedFile.name}`, 'info');
@@ -903,516 +436,167 @@
                 showAlert('uploadAlert', 'Please select a valid CSV file', 'error');
             }
         }
-        
+
+        function handleAttachmentUpload(event) {
+            attachmentFile = event.target.files[0];
+            if (attachmentFile) {
+                showAlert('campaignAlert', `Attachment selected: ${attachmentFile.name}`, 'info');
+            }
+        }
+
         function uploadCSV() {
             if (!selectedFile) {
                 showAlert('uploadAlert', 'Please select a CSV file first', 'error');
                 return;
             }
-            
             const formData = new FormData();
             formData.append('file', selectedFile);
-            
             const uploadBtn = document.getElementById('uploadBtn');
             uploadBtn.disabled = true;
-            uploadBtn.textContent = '⏳ Uploading...';
-            
-            fetch('/upload-csv', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showAlert('uploadAlert', 
-                        `✅ CSV uploaded successfully! Found ${data.valid_emails} valid emails (${data.invalid_emails} invalid)`, 
-                        'success'
-                    );
-                    loadStats(); // Refresh stats
-                } else {
-                    showAlert('uploadAlert', `❌ Upload failed: ${data.error}`, 'error');
-                }
-            })
-            .catch(error => {
-                showAlert('uploadAlert', `❌ Upload error: ${error.message}`, 'error');
-            })
-            .finally(() => {
-                uploadBtn.disabled = false;
-                uploadBtn.textContent = '📤 Upload CSV';
-            });
-        }
-        
-        function sendEventTickets() {
-            const eventName = document.getElementById('eventName').value.trim();
-            if (!eventName) {
-                showAlert('campaignAlert', 'Please enter an event name', 'error');
-                return;
-            }
-            
-            const sendBtn = document.getElementById('sendBtn');
-            const progressContainer = document.getElementById('progressContainer');
-            const progressFill = document.getElementById('progressFill');
-            const progressText = document.getElementById('progressText');
-            
-            sendBtn.disabled = true;
-            sendBtn.textContent = '⏳ Sending...';
-            progressContainer.style.display = 'block';
-            progressFill.style.width = '0%';
-            progressText.textContent = 'Generating coupons and sending emails...';
-            
-            fetch('/send-emails', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    event_name: eventName
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    progressFill.style.width = '100%';
-                    progressText.textContent = `✅ Campaign completed successfully!`;
-                    
-                    // Build detailed message with failure information if any
-                    let alertMessage = `🎉 Campaign sent successfully from ${data.sender_email}!<br>
-                        📧 ${data.emails_sent} emails sent<br>
-                        🎫 ${data.coupons_generated} coupons generated<br>
-                        ❌ ${data.emails_failed} failed deliveries`;
-                    
-                    // Add detailed failure information if there are failed emails
-                    if (data.failed_emails && data.failed_emails.length > 0) {
-                        alertMessage += `<br><br><strong>⚠️ Failed Email Details:</strong><br>`;
-                        data.failed_emails.forEach(failure => {
-                            alertMessage += `• ${failure.email}: ${failure.error}<br>`;
-                        });
-                        
-                        if (data.failure_log_file) {
-                            alertMessage += `<br>📄 Detailed log saved to: <code>${data.failure_log_file}</code>`;
-                        }
-                    }
-                    
-                    showAlert('campaignAlert', alertMessage, data.emails_failed > 0 ? 'warning' : 'success');
-                    
-                    loadStats(); // Refresh stats
-                } else {
-                    progressFill.style.width = '0%';
-                    progressText.textContent = 'Campaign failed';
-                    showAlert('campaignAlert', `❌ Campaign failed: ${data.error}`, 'error');
-                }
-            })
-            .catch(error => {
-                progressFill.style.width = '0%';
-                progressText.textContent = 'Campaign failed';
-                showAlert('campaignAlert', `❌ Campaign error: ${error.message}`, 'error');
-            })
-            .finally(() => {
-                sendBtn.disabled = false;
-                sendBtn.textContent = '📧 Generate Coupons & Send Emails';
-                setTimeout(() => {
-                    progressContainer.style.display = 'none';
-                }, 3000);
-            });
-        }
-        
-        // Global variable to store attendee data
-        let allAttendees = [];
-        
-        // Load attendee list with status markers
-        function loadAttendeeList() {
-            fetch('/recipients')
+            uploadBtn.textContent = 'Uploading...';
+
+            fetch('/upload-csv', { method: 'POST', body: formData })
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        allAttendees = data.recipients;
-                        displayAttendees(allAttendees);
+                        showAlert('uploadAlert',
+                            `CSV uploaded successfully! Found ${data.valid_emails} valid emails (${data.invalid_emails} invalid)`,
+                            'success'
+                        );
+                        loadStats();
+                        loadCouponDetails();
                     } else {
-                        document.getElementById('attendeeListContainer').innerHTML = 
-                            `<div style="padding: 40px; text-align: center; color: var(--error);">
-                                ❌ Error loading attendees: ${data.error}
-                            </div>`;
+                        showAlert('uploadAlert', `Upload failed: ${data.error}`, 'error');
+                    }
+                })
+                .catch(error => showAlert('uploadAlert', `Upload error: ${error.message}`, 'error'))
+                .finally(() => {
+                    uploadBtn.disabled = false;
+                    uploadBtn.textContent = 'Upload Attendee List';
+                });
+        }
+
+        function loadCouponDetails() {
+            fetch('/farewell-coupons')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        allCoupons = data.coupons;
+                        displayCoupons(allCoupons);
                     }
                 })
                 .catch(error => {
-                    console.error('Error loading attendees:', error);
-                    document.getElementById('attendeeListContainer').innerHTML = 
-                        `<div style="padding: 40px; text-align: center; color: var(--error);">
-                            ❌ Network error loading attendees
-                        </div>`;
+                    document.getElementById('couponTableContainer').innerHTML =
+                        `<div style="padding: 40px; text-align: center; color: var(--error);">Error loading coupon data</div>`;
                 });
         }
-        
-        // Display attendees in the list
-        function displayAttendees(attendees) {
-            const container = document.getElementById('attendeeListContainer');
-            
-            if (attendees.length === 0) {
-                container.innerHTML = 
-                    `<div style="padding: 40px; text-align: center; color: var(--text-muted);">
-                        📭 No attendees found. Upload a CSV file first.
-                    </div>`;
+
+        function displayCoupons(coupons) {
+            const container = document.getElementById('couponTableContainer');
+            if (coupons.length === 0) {
+                container.innerHTML = `<div style="padding: 40px; text-align: center; color: var(--text-muted);">No coupons found. Upload a CSV and send invitations.</div>`;
                 return;
             }
-            
-            let html = `
-                <div style="padding: 16px; border-bottom: 1px solid var(--border); background: var(--bg-secondary); font-weight: 600; display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 16px; font-size: 0.9rem; color: var(--text-secondary);">
-                    <div>📧 Email Address</div>
-                    <div>🎫 Status</div>
-                    <div>📅 Sent At</div>
-                    <div>✅ Used At</div>
-                </div>
-            `;
-            
-            attendees.forEach(attendee => {
-                const statusIcon = getStatusIcon(attendee.status);
-                const statusColor = getStatusColor(attendee.status);
-                const sentAt = attendee.sent_at ? new Date(attendee.sent_at).toLocaleDateString() : '-';
-                const usedAt = attendee.used_at ? new Date(attendee.used_at).toLocaleDateString() : '-';
-                
-                html += `
-                    <div style="padding: 16px; border-bottom: 1px solid var(--border); display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 16px; align-items: center; transition: all 0.3s ease; font-size: 0.9rem;" 
-                         onmouseover="this.style.background='var(--bg-secondary)'" 
-                         onmouseout="this.style.background='transparent'">
-                        <div style="color: var(--text-primary); font-weight: 500;">${attendee.email}</div>
-                        <div style="color: ${statusColor}; font-weight: 600;">
-                            ${statusIcon} ${attendee.status.charAt(0).toUpperCase() + attendee.status.slice(1)}
-                        </div>
-                        <div style="color: var(--text-secondary);">${sentAt}</div>
-                        <div style="color: var(--text-secondary);">${usedAt}</div>
-                    </div>
-                `;
+
+            let html = `<table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Email</th>
+                        <th>Coupon ID</th>
+                        <th>Verification Code</th>
+                        <th>Status</th>
+                        <th>Sent At</th>
+                        <th>Used At</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+
+            coupons.forEach(coupon => {
+                const statusClass = 'status-' + (coupon.status || 'pending');
+                const sentAt = coupon.sent_at ? new Date(coupon.sent_at).toLocaleString() : '-';
+                const usedAt = coupon.used_at ? new Date(coupon.used_at).toLocaleString() : '-';
+                const shortCouponId = coupon.coupon_id ? coupon.coupon_id.substring(0, 8) + '...' : '-';
+
+                html += `<tr>
+                    <td>${coupon.email}</td>
+                    <td><span class="coupon-code">${shortCouponId}</span></td>
+                    <td><span class="coupon-code">${coupon.verification_code || '-'}</span></td>
+                    <td><span class="status-badge ${statusClass}">${coupon.status || 'pending'}</span></td>
+                    <td class="timestamp">${sentAt}</td>
+                    <td class="timestamp">${usedAt}</td>
+                </tr>`;
             });
-            
+
+            html += `</tbody></table>`;
             container.innerHTML = html;
         }
-        
-        // Get status icon
-        function getStatusIcon(status) {
-            switch(status) {
-                case 'pending': return '⏳';
-                case 'generated': return '🎫';
-                case 'sent': return '📧';
-                case 'used': return '✅';
-                default: return '❓';
-            }
-        }
-        
-        // Get status color
-        function getStatusColor(status) {
-            switch(status) {
-                case 'pending': return 'var(--warning)';
-                case 'generated': return 'var(--accent-primary)';
-                case 'sent': return 'var(--success)';
-                case 'used': return 'var(--success)';
-                default: return 'var(--text-muted)';
-            }
-        }
-        
-        // Filter attendees by status
-        function filterAttendees() {
+
+        function filterCoupons() {
             const filter = document.getElementById('statusFilter').value;
-            
             if (filter === 'all') {
-                displayAttendees(allAttendees);
+                displayCoupons(allCoupons);
             } else {
-                const filtered = allAttendees.filter(attendee => attendee.status === filter);
-                displayAttendees(filtered);
+                const filtered = allCoupons.filter(c => (c.status || 'pending') === filter);
+                displayCoupons(filtered);
             }
         }
-        
-        // Preview send tickets with confirmation dialog
-        function previewSendTickets() {
+
+        function sendFarewellInvitations() {
             const eventName = document.getElementById('eventName').value.trim();
             if (!eventName) {
                 showAlert('campaignAlert', 'Please enter an event name', 'error');
                 return;
             }
-            
-            // Show loading state
+
             const sendBtn = document.getElementById('sendBtn');
+            const progressDiv = document.getElementById('sendProgress');
+            const progressBar = document.getElementById('progressBar');
+            const progressText = document.getElementById('progressText');
+
             sendBtn.disabled = true;
-            sendBtn.textContent = '⏳ Loading preview...';
-            
-            fetch('/preview-send', {
+            sendBtn.textContent = 'Sending...';
+            progressDiv.style.display = 'block';
+            progressBar.style.width = '10%';
+            progressText.textContent = 'Preparing invitations...';
+
+            // Build form data with optional attachment
+            const formData = new FormData();
+            formData.append('event_name', eventName);
+            if (attachmentFile) {
+                formData.append('attachment', attachmentFile);
+            }
+
+            fetch('/send-farewell-emails', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    event_name: eventName,
-                    include_existing: true
-                })
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ event_name: eventName })
             })
             .then(response => response.json())
             .then(data => {
+                progressBar.style.width = '100%';
                 if (data.success) {
-                    showSendConfirmationDialog(data);
+                    let msg = `Campaign completed!<br>Emails sent: ${data.emails_sent}<br>Failed: ${data.emails_failed}<br>Total recipients: ${data.total_recipients}`;
+                    if (data.failed_list && data.failed_list.length > 0) {
+                        msg += '<br><br>Failed emails:<br>' + data.failed_list.map(f => `${f.email}: ${f.error}`).join('<br>');
+                    }
+                    showAlert('campaignAlert', msg, data.emails_failed > 0 ? 'warning' : 'success');
+                    loadStats();
+                    loadCouponDetails();
                 } else {
-                    showAlert('campaignAlert', `❌ Preview failed: ${data.error}`, 'error');
+                    progressBar.style.width = '0%';
+                    showAlert('campaignAlert', `Campaign failed: ${data.error}`, 'error');
                 }
             })
             .catch(error => {
-                showAlert('campaignAlert', `❌ Preview error: ${error.message}`, 'error');
+                progressBar.style.width = '0%';
+                showAlert('campaignAlert', `Campaign error: ${error.message}`, 'error');
             })
             .finally(() => {
                 sendBtn.disabled = false;
-                sendBtn.textContent = '🎫 Preview & Send Event Tickets';
+                sendBtn.textContent = 'Send Farewell Invitations';
+                setTimeout(() => { progressDiv.style.display = 'none'; }, 5000);
             });
         }
-        
-        // Global variable to store current preview data for editing
-        let currentPreviewData = null;
-        
-        // Show confirmation dialog with recipient list
-        function showSendConfirmationDialog(previewData) {
-            currentPreviewData = JSON.parse(JSON.stringify(previewData)); // Deep copy
-            renderConfirmationDialog();
-        }
-        
-        // Render the confirmation dialog
-        function renderConfirmationDialog() {
-            // Remove existing modal if any
-            const existingModal = document.querySelector('.confirmation-modal');
-            if (existingModal) {
-                existingModal.remove();
-            }
-            
-            const modal = document.createElement('div');
-            modal.className = 'confirmation-modal';
-            modal.style.cssText = `
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: rgba(0, 0, 0, 0.8);
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                z-index: 1000;
-                backdrop-filter: blur(10px);
-                animation: fadeIn 0.3s ease-out;
-            `;
-            
-            const dialog = document.createElement('div');
-            dialog.style.cssText = `
-                background: var(--bg-secondary);
-                border-radius: 16px;
-                padding: 32px;
-                max-width: 700px;
-                width: 90%;
-                max-height: 85vh;
-                border: 1px solid var(--border);
-                box-shadow: var(--shadow);
-                animation: slideUp 0.3s ease-out;
-                display: flex;
-                flex-direction: column;
-            `;
-            
-            // Update counts
-            const totalCount = currentPreviewData.recipients.length;
-            const newCount = currentPreviewData.recipients.filter(r => !r.has_existing_ticket).length;
-            const existingCount = currentPreviewData.recipients.filter(r => r.has_existing_ticket).length;
-            
-            let recipientsList = '';
-            currentPreviewData.recipients.forEach((recipient, index) => {
-                const statusBadge = recipient.has_existing_ticket ? 
-                    `<span style="background: var(--warning); color: var(--bg-primary); padding: 4px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase;">EXISTING</span>` :
-                    `<span style="background: var(--success); color: var(--bg-primary); padding: 4px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase;">NEW</span>`;
-                
-                recipientsList += `
-                    <div id="recipient-${index}" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 0.9rem; transition: all 0.3s ease;" 
-                         onmouseover="this.style.background='var(--bg-secondary)'" 
-                         onmouseout="this.style.background='transparent'">
-                        <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
-                            <span style="color: var(--text-primary); font-weight: 500;">${recipient.email}</span>
-                            ${statusBadge}
-                        </div>
-                        <button onclick="removeRecipient(${index})" 
-                                style="background: var(--error); color: white; border: none; border-radius: 6px; padding: 6px 10px; font-size: 0.75rem; cursor: pointer; transition: all 0.3s ease; font-weight: 600;"
-                                onmouseover="this.style.background='#dc2626'; this.style.transform='scale(1.05)'"
-                                onmouseout="this.style.background='var(--error)'; this.style.transform='scale(1)'">
-                            🗑️ Remove
-                        </button>
-                    </div>
-                `;
-            });
-            
-            dialog.innerHTML = `
-                <div style="margin-bottom: 24px;">
-                    <h3 style="color: var(--text-primary); margin-bottom: 16px; font-size: 1.5rem; display: flex; align-items: center; gap: 12px; font-weight: 600;">
-                        🎫 Confirm Send Event Tickets
-                    </h3>
-                    
-                    <div style="background: var(--bg-tertiary); padding: 20px; border-radius: 12px; border: 1px solid var(--border);">
-                        <h4 style="color: var(--text-primary); margin-bottom: 16px; font-size: 1.1rem;">Event: ${currentPreviewData.event_name}</h4>
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 16px; font-size: 0.9rem;">
-                            <div style="text-align: center; padding: 12px; background: var(--bg-primary); border-radius: 8px; border: 1px solid var(--border);">
-                                <div id="total-count" style="font-size: 1.8rem; font-weight: 700; color: var(--accent-primary); margin-bottom: 4px;">${totalCount}</div>
-                                <div style="color: var(--text-secondary); font-weight: 500;">Total Recipients</div>
-                            </div>
-                            <div style="text-align: center; padding: 12px; background: var(--bg-primary); border-radius: 8px; border: 1px solid var(--border);">
-                                <div id="new-count" style="font-size: 1.8rem; font-weight: 700; color: var(--success); margin-bottom: 4px;">${newCount}</div>
-                                <div style="color: var(--text-secondary); font-weight: 500;">New Tickets</div>
-                            </div>
-                            <div style="text-align: center; padding: 12px; background: var(--bg-primary); border-radius: 8px; border: 1px solid var(--border);">
-                                <div id="existing-count" style="font-size: 1.8rem; font-weight: 700; color: var(--warning); margin-bottom: 4px;">${existingCount}</div>
-                                <div style="color: var(--text-secondary); font-weight: 500;">Existing Tickets</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 12px;">
-                        <h4 style="color: var(--text-primary); margin: 0; font-size: 1.1rem;">Recipients List:</h4>
-                        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-                            <input type="text" id="recipient-search" placeholder="Search emails..." 
-                                   style="padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-primary); color: var(--text-primary); font-size: 0.85rem; width: 200px; min-width: 150px;"
-                                   oninput="filterRecipientsList()">
-                            <div style="color: var(--text-muted); font-size: 0.8rem; white-space: nowrap;">
-                                Click "Remove" to exclude
-                            </div>
-                        </div>
-                    </div>
-                    <div id="recipients-container" style="flex: 1; max-height: 300px; overflow-y: auto; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-primary);">
-                        ${recipientsList || '<div style="padding: 40px; text-align: center; color: var(--text-muted);">No recipients to display</div>'}
-                    </div>
-                </div>
-                
-                <div style="display: flex; gap: 16px; justify-content: flex-end; margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border);">
-                    <button id="cancel-btn" 
-                            style="padding: 14px 28px; background: var(--bg-tertiary); color: var(--text-secondary); border: 1px solid var(--border); border-radius: 10px; cursor: pointer; font-family: inherit; font-size: 14px; font-weight: 500; transition: all 0.3s ease; display: flex; align-items: center; gap: 8px;">
-                        ❌ Cancel
-                    </button>
-                    <button id="confirm-btn" 
-                            style="padding: 14px 28px; background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%); color: var(--text-primary); border: none; border-radius: 10px; cursor: pointer; font-family: inherit; font-size: 14px; font-weight: 600; transition: all 0.3s ease; display: flex; align-items: center; gap: 8px;">
-                        🎫 Send <span id="send-count">${totalCount}</span> Tickets
-                    </button>
-                </div>
-            `;
-            
-            modal.appendChild(dialog);
-            document.body.appendChild(modal);
-            
-            // Add event listeners for buttons
-            document.getElementById('cancel-btn').addEventListener('click', function() {
-                modal.remove();
-                currentPreviewData = null;
-            });
-            
-            document.getElementById('confirm-btn').addEventListener('click', function() {
-                if (currentPreviewData.recipients.length === 0) {
-                    alert('No recipients selected. Please add at least one recipient.');
-                    return;
-                }
-                confirmSendTickets(currentPreviewData.event_name);
-                modal.remove();
-                currentPreviewData = null;
-            });
-            
-            // Add hover effects for buttons
-            const cancelBtn = document.getElementById('cancel-btn');
-            const confirmBtn = document.getElementById('confirm-btn');
-            
-            cancelBtn.addEventListener('mouseenter', function() {
-                this.style.background = 'var(--bg-primary)';
-                this.style.color = 'var(--text-primary)';
-                this.style.transform = 'translateY(-1px)';
-            });
-            
-            cancelBtn.addEventListener('mouseleave', function() {
-                this.style.background = 'var(--bg-tertiary)';
-                this.style.color = 'var(--text-secondary)';
-                this.style.transform = 'translateY(0)';
-            });
-            
-            confirmBtn.addEventListener('mouseenter', function() {
-                this.style.transform = 'translateY(-2px)';
-                this.style.boxShadow = '0 8px 25px rgba(99, 102, 241, 0.4)';
-            });
-            
-            confirmBtn.addEventListener('mouseleave', function() {
-                this.style.transform = 'translateY(0)';
-                this.style.boxShadow = 'none';
-            });
-            
-            // Add CSS animations if not already added
-            if (!document.querySelector('#confirmation-animations')) {
-                const style = document.createElement('style');
-                style.id = 'confirmation-animations';
-                style.textContent = `
-                    @keyframes fadeIn {
-                        from { opacity: 0; }
-                        to { opacity: 1; }
-                    }
-                    @keyframes slideUp {
-                        from { opacity: 0; transform: translateY(30px); }
-                        to { opacity: 1; transform: translateY(0); }
-                    }
-                `;
-                document.head.appendChild(style);
-            }
-        }
-        
-        // Remove recipient from the list
-        function removeRecipient(index) {
-            if (!currentPreviewData || !currentPreviewData.recipients[index]) return;
-            
-            // Remove recipient from array
-            currentPreviewData.recipients.splice(index, 1);
-            
-            // Re-render the dialog
-            renderConfirmationDialog();
-        }
-        
-        // Filter recipients list in confirmation dialog
-        function filterRecipientsList() {
-            const searchTerm = document.getElementById('recipient-search').value.toLowerCase();
-            const recipientItems = document.querySelectorAll('[id^="recipient-"]');
-            
-            recipientItems.forEach(item => {
-                const email = item.querySelector('span').textContent.toLowerCase();
-                if (email.includes(searchTerm)) {
-                    item.style.display = 'flex';
-                } else {
-                    item.style.display = 'none';
-                }
-            });
-        }
-        
-        // Confirm and send tickets
-        function confirmSendTickets(eventName) {
-            sendEventTickets();
-        }
-        
-        // Drag and drop functionality
-        const fileUpload = document.querySelector('.file-upload');
-        
-        fileUpload.addEventListener('dragover', function(e) {
-            e.preventDefault();
-            this.querySelector('.file-upload-label').style.backgroundColor = 'var(--bg-secondary)';
-            this.querySelector('.file-upload-label').style.borderColor = 'var(--accent-primary)';
-        });
-        
-        fileUpload.addEventListener('dragleave', function(e) {
-            e.preventDefault();
-            this.querySelector('.file-upload-label').style.backgroundColor = 'var(--bg-primary)';
-            this.querySelector('.file-upload-label').style.borderColor = 'var(--border)';
-        });
-        
-        fileUpload.addEventListener('drop', function(e) {
-            e.preventDefault();
-            this.querySelector('.file-upload-label').style.backgroundColor = 'var(--bg-primary)';
-            this.querySelector('.file-upload-label').style.borderColor = 'var(--border)';
-            
-            const files = e.dataTransfer.files;
-            if (files.length > 0) {
-                document.getElementById('csvFile').files = files;
-                handleFileUpload({ target: { files: files } });
-            }
-        });
     </script>
 </body>
 </html>

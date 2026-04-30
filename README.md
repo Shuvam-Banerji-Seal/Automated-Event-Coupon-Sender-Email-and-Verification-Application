@@ -128,7 +128,7 @@ The application is built with Flask and uses Google OAuth for secure authenticat
 
 ## Project Structure
 
-\`\`\`
+```
 /
 ├── app.py # Main Flask application
 ├── coupon_manager.py # Handles coupon generation and validation
@@ -142,4 +142,98 @@ The application is built with Flask and uses Google OAuth for secure authenticat
 │ ├── sender.html # Main dashboard for sending coupons
 │ └── scanner.html # QR code scanner interface
 └── static/ # CSS and JavaScript files
-\`\`\`
+```
+
+---
+
+## 21MS Farewell Party Branch (`21ms_farewell`)
+
+This specialized branch is designed for the **21MS Farewell Party** at IISER Kolkata, organized by the **22MS Batch**. It replaces the Gmail API-based email sending with direct SMTP, features beautifully designed handwriting-style invitation emails, and includes comprehensive dashboard analytics.
+
+### Key Differences from Main Branch
+
+| Feature | Main Branch | 21ms_farewell Branch |
+|---------|------------|---------------------|
+| **Email Backend** | Gmail API (OAuth required) | SMTP (direct `.env` credentials) |
+| **OAuth Requirement** | Required for sending | Optional (for login only) |
+| **Email Templates** | Standard design | Handwriting-style (Caveat, Satisfy, Kalam fonts) |
+| **Decorations** | Basic | SVG ornamental elements, Unicode characters |
+| **Attachments** | Not supported | PDF attachment support |
+| **Thank You Emails** | Gmail API async | SMTP async (no OAuth needed) |
+| **Dashboard** | Basic stats | Detailed coupon table with codes & timestamps |
+
+### 21ms_farewell Features
+
+- **SMTP-Based Email Sending**: No Google OAuth required for sending invitations. Uses Gmail SMTP with App Passwords.
+- **Beautiful Invitation Design**: Handwriting-font-styled emails with SVG decorative elements (stars, ornamental borders, corner flourishes) and Unicode characters. No emojis.
+- **PDF Attachment Support**: Attach event schedules, brochures, or other PDFs to invitation emails.
+- **Detailed Dashboard**: View all coupons with email addresses, verification codes, coupon IDs, statuses, sent timestamps, and used timestamps.
+- **Automatic Thank You Emails**: Sends a warm thank-you email via SMTP when a QR code is scanned and verified at the event entrance.
+- **CSV Integration**: Upload attendee lists via CSV, track status updates in real-time.
+- **3 Test Email Support**: Built-in test script for verifying SMTP delivery to multiple test addresses.
+
+### 21ms_farewell Setup
+
+1. **Install branch-specific requirements:**
+   ```bash
+   uv pip install --python /home/shuvam/.global-pymaster -r requirements_21ms.txt
+   ```
+
+2. **Configure `.env` file:**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your Gmail SMTP credentials and event details
+   ```
+
+3. **Required `.env` variables:**
+   - `SMTP_USERNAME`: Your Gmail address
+   - `SMTP_PASSWORD`: 16-character Gmail App Password
+   - `SMTP_SENDER_NAME`: Display name (e.g., "22MS Batch, IISER Kolkata")
+   - `COUPON_SECRET_KEY`: Generate with `python -c "import secrets; print(secrets.token_hex(32))"`
+   - `TEST_EMAIL_1`, `TEST_EMAIL_2`, `TEST_EMAIL_3`: Test recipient addresses
+
+4. **Send test invitations:**
+   ```bash
+   /home/shuvam/.global-pymaster/bin/python scripts/send_test_emails.py
+   ```
+
+5. **Start the application:**
+   ```bash
+   /home/shuvam/.global-pymaster/bin/python app.py
+   ```
+
+6. **Access the dashboard:** Open `http://localhost:5000/sender`
+
+### API Endpoints (21ms_farewell)
+
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| `/send-farewell-emails` | POST | None | Send invitations via SMTP |
+| `/farewell-stats` | GET | None | Get event statistics |
+| `/farewell-recipients` | GET | None | Get detailed recipient list |
+| `/farewell-coupons` | GET | None | Get all coupon details |
+| `/verify-coupon` | POST | None | Verify QR/code & send thank-you email |
+| `/scanner` | GET | None | QR scanner interface |
+
+### Email Template Design
+
+The invitation email uses a nostalgic, warm aesthetic:
+- **Fonts**: Caveat (headings), Satisfy (hero text), Kalam (body copy)
+- **Colors**: Midnight navy (#1a1a2e), gold/amber (#d4af37), warm cream (#fef9f0)
+- **Decorations**: SVG stars, ornamental lines, corner flourishes, scissors icon for ticket section
+- **QR Code**: Centered in a decorative frame with verification code prominently displayed
+- **No emojis**: All decorations use SVG or Unicode characters for maximum email client compatibility
+
+### File Structure (21ms_farewell additions)
+
+```
+├── src/smtp_mailer.py              # SMTP email service
+├── templates/farewell/
+│   ├── invitation.html             # Handwriting-style invitation
+│   └── thank_you.html              # Post-verification thank you
+├── scripts/send_test_emails.py     # Test email sender (3 addresses + attachment)
+├── tests/test_smtp_connection.py   # SMTP unit tests
+├── tests/test_invitation_render.py # Template rendering tests
+├── requirements_21ms.txt           # Branch dependencies
+└── FAREWELL_BRANCH_DOCUMENTATION.md # Detailed branch docs
+```

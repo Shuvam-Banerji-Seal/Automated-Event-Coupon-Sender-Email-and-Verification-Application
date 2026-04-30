@@ -471,54 +471,43 @@ def verify_coupon():
         # Mark coupon as used
         coupon_id = validation_result['coupon_id']
         if coupon_manager.mark_coupon_used(coupon_id):
-            # Send thank you email asynchronously using organizer's Gmail API credentials
+            # 21MS_FAREWELL BRANCH: Send thank you email via SMTP (no OAuth required)
             def send_thank_you_async():
                 try:
-                    # Get stored organizer credentials
-                    organizer_data = csv_manager.get_organizer_credentials()
-                    
-                    if organizer_data and google_auth_service:
-                        # Create Gmail service with organizer's credentials
-                        credentials = google_auth_service.create_credentials_from_session(organizer_data['oauth_tokens'])
-                        if credentials:
-                            gmail_service = GmailEmailService(credentials)
-                            
-                            # Prepare thank you email data
-                            attendance_data = {
-                                'email': email,
-                                'attendee_name': validation_result.get('attendee_name', ''),
-                                'event_name': validation_result.get('event_name', 'Event'),
-                                'attendance_date': time.strftime('%Y-%m-%d %H:%M:%S'),
-                                'coupon_id': coupon_id,
-                                'organizer_name': organizer_data['user_info'].get('name', 'Event Team'),
-                                'organizer_email': organizer_data['user_info'].get('email', 'Event Team'),
-                                'current_date': time.strftime('%Y-%m-%d %H:%M:%S')
-                            }
-                            
-                            # Render thank you email template in app context
-                            with app.app_context():
-                                html_content = render_template('thank_you.html', **attendance_data)
-                            
-                            subject = f"Thank you for attending {attendance_data['event_name']}!"
-                            sender_email = organizer_data['user_info']['email']
-                            
-                            # Send via Gmail API using organizer's credentials
-                            email_result = gmail_service.send_email(sender_email, email, subject, html_content)
-                            
-                            if email_result.success:
-                                logger.info(f"Thank you email sent successfully to {email} via Gmail API from organizer {sender_email}")
-                            else:
-                                logger.warning(f"Failed to send thank you email to {email}: {email_result.error_message}")
-                        else:
-                            logger.warning("Could not create Gmail credentials from stored organizer data")
+                    smtp_mailer = SMTPMailer()
+
+                    attendance_data = {
+                        'attendee_name': validation_result.get('attendee_name', email.split('@')[0]),
+                        'attendee_email': email,
+                        'event_name': validation_result.get('event_name', EVENT_NAME),
+                        'verification_code': validation_result.get('verification_code', ''),
+                        'coupon_id': coupon_id,
+                        'organizer_batch': ORGANIZER_BATCH,
+                        'organizer_institution': ORGANIZER_INSTITUTION,
+                    }
+
+                    with app.app_context():
+                        html_content = render_template('farewell/thank_you.html', **attendance_data)
+
+                    subject = f"Welcome to {attendance_data['event_name']}!"
+
+                    result = smtp_mailer.send_email(
+                        to_email=email,
+                        to_name=attendance_data['attendee_name'],
+                        subject=subject,
+                        html_body=html_content,
+                    )
+
+                    if result['success']:
+                        logger.info(f"Thank you email sent successfully to {email} via SMTP")
                     else:
-                        logger.warning("No organizer credentials stored - cannot send thank you email")
-                        
+                        logger.warning(f"Failed to send thank you email to {email}: {result['error']}")
+
                 except Exception as e:
-                    logger.error(f"Error sending thank you email via organizer Gmail API: {str(e)}")
+                    logger.error(f"Error sending thank you email via SMTP: {str(e)}")
                     import traceback
                     logger.error(traceback.format_exc())
-            
+
             # Start email sending in background thread
             email_thread = threading.Thread(target=send_thank_you_async)
             email_thread.daemon = True
@@ -870,6 +859,101 @@ def not_found(error):
 @app.errorhandler(500)
 def internal_error(error):
     return jsonify({'error': 'Internal server error'}), 500
+
+# 21MS_FAREWELL BRANCH: New routes that don't require OAuth login
+@app.route('/farewell-stats')
+def get_farewell_stats():
+    """Get system statistics - no authentication required for 21ms_farewell"""
+    if not csv_manager:
+        return jsonify({'success': False, 'error': 'CSV manager not initialized'}), 500
+    try:
+        coupon_stats = csv_manager.get_coupon_stats()
+        recipients = csv_manager.read_recipients()
+        return jsonify({
+            'success': True,
+            'recipients_count': len(recipients),
+            'coupon_stats': coupon_stats,
+        })
+    except Exception as e:
+        logger.error(f"Error getting stats: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/farewell-recipients')
+def get_farewell_recipients():
+    """Get detailed recipient list with coupon info - no auth required"""
+    if not all([csv_manager, coupon_manager]):
+        return jsonify({'success': False, 'error': 'Services not initialized'}), 500
+    try:
+        recipients = csv_manager.read_recipients()
+        detailed_recipients = []
+        import csv as csv_module
+        for recipient in recipients:
+            email = recipient['email'].lower()
+            coupon_record = None
+            try:
+                with open(csv_manager.coupons_file, 'r', newline='', encoding='utf-8') as f:
+                    reader = csv_module.DictReader(f)
+                    for row in reader:
+                        if row.get('email', '').lower() == email:
+                            coupon_record = row
+                            break
+            except:
+                pass
+            status = 'pending'
+            coupon_id = None
+            verification_code = None
+            sent_at = None
+            used_at = None
+            if coupon_record:
+                coupon_id = coupon_record.get('coupon_id')
+                verification_code = coupon_record.get('verification_code')
+                status = coupon_record.get('status', 'generated')
+                sent_at = coupon_record.get('sent_at')
+                used_at = coupon_record.get('used_at')
+            detailed_recipients.append({
+                'email': recipient['email'],
+                'status': status,
+                'coupon_id': coupon_id,
+                'verification_code': verification_code,
+                'sent_at': sent_at,
+                'used_at': used_at
+            })
+        return jsonify({
+            'success': True,
+            'recipients': detailed_recipients,
+            'total_count': len(detailed_recipients)
+        })
+    except Exception as e:
+        logger.error(f"Error getting recipients: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/farewell-coupons')
+def get_farewell_coupons():
+    """Get all coupon details for dashboard display"""
+    if not csv_manager:
+        return jsonify({'success': False, 'error': 'CSV manager not initialized'}), 500
+    try:
+        import csv as csv_module
+        coupons = []
+        with open(csv_manager.coupons_file, 'r', newline='', encoding='utf-8') as f:
+            reader = csv_module.DictReader(f)
+            for row in reader:
+                coupons.append({
+                    'coupon_id': row.get('coupon_id', ''),
+                    'email': row.get('email', ''),
+                    'verification_code': row.get('verification_code', ''),
+                    'status': row.get('status', 'generated'),
+                    'sent_at': row.get('sent_at', ''),
+                    'used_at': row.get('used_at', ''),
+                })
+        return jsonify({
+            'success': True,
+            'coupons': coupons,
+            'total': len(coupons)
+        })
+    except Exception as e:
+        logger.error(f"Error getting coupons: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 if __name__ == '__main__':
     # Development server configuration

@@ -57,3 +57,4 @@ email_service.py
 test_qr_recognition.py
 test_scanner_improvements.py
 setup.py
+test_schedule.pdf
