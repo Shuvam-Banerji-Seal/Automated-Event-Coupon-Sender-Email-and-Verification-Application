@@ -58,3 +58,5 @@ test_qr_recognition.py
 test_scanner_improvements.py
 setup.py
 test_schedule.pdf
+smtp_sample.json
+static/smtp_sample.json
