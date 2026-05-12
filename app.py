@@ -6,6 +6,7 @@ Main application entry point with integrated services
 
 import os
 import json
+import base64
 import logging
 import time
 import threading
@@ -430,7 +431,7 @@ def send_farewell_emails():
                 }
             )
 
-        def render_invitation(recipient):
+        def render_invitation(recipient, qr_src):
             return render_template(
                 "farewell/invitation.html",
                 attendee_name=recipient["attendee_name"],
@@ -440,6 +441,7 @@ def send_farewell_emails():
                 event_time=recipient["event_time"],
                 event_venue=recipient["event_venue"],
                 qr_code_base64=recipient["qr_code_base64"],
+                qr_code_src=qr_src,
                 verification_code=recipient["verification_code"],
                 coupon_id=recipient["coupon_id"],
                 organizer_batch=recipient["organizer_batch"],
@@ -458,12 +460,15 @@ def send_farewell_emails():
             )
 
             try:
-                html_body = render_invitation(recipient)
+                # For actual email: use cid:qrcode and attach QR bytes
+                qr_bytes = base64.b64decode(recipient["qr_code_base64"])
+                html_body = render_invitation(recipient, "cid:qrcode")
                 result = smtp_mailer.send_email(
                     to_email=recipient["email"],
                     to_name=recipient["attendee_name"],
                     subject=subject,
                     html_body=html_body,
+                    qr_code_bytes=qr_bytes,
                 )
 
                 if result["success"]:
@@ -815,13 +820,14 @@ def confirm_upload():
 
 @app.route("/preview-email", methods=["POST"])
 def preview_email():
-    """Render email preview HTML for a recipient."""
+    """Render email preview HTML for a recipient. Accepts optional template_type param."""
     try:
         data = request.get_json()
         email = data.get("email", "")
         name = data.get("name", email.split("@")[0])
         code = data.get("verification_code", "123456")
         coupon_id = data.get("coupon_id", "preview-0000")
+        template_type = data.get("template_type", "invitation")
 
         # Generate a dummy QR for preview
         from src.coupons import CouponManager
@@ -837,17 +843,71 @@ def preview_email():
             "event_time": EVENT_TIME,
             "event_venue": EVENT_VENUE,
             "qr_code_base64": qr,
+            "qr_code_src": "data:image/png;base64," + qr,
             "verification_code": code,
             "coupon_id": coupon_id,
             "organizer_batch": ORGANIZER_BATCH,
             "organizer_institution": ORGANIZER_INSTITUTION,
         }
-        html = render_template("farewell/invitation.html", **ctx)
+        tpl_path = f"farewell/{template_type}.html"
+        try:
+            html = render_template(tpl_path, **ctx)
+        except Exception:
+            html = render_template("farewell/invitation.html", **ctx)
+
+        subject = f"You're Invited! {EVENT_NAME}"
+        if template_type == "lunch":
+            subject = f"Lunch Invitation - {EVENT_NAME}"
+        elif template_type == "dinner":
+            subject = f"Dinner Invitation - {EVENT_NAME}"
+
         return jsonify(
-            {"success": True, "html": html, "subject": f"You're Invited! {EVENT_NAME}"}
+            {
+                "success": True,
+                "html": html,
+                "subject": subject,
+                "template": template_type,
+            }
         )
     except Exception as e:
         logger.error(f"Error previewing email: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/preview-template", methods=["POST"])
+def preview_template():
+    """Render a snippet of the current template for live preview."""
+    try:
+        data = request.get_json()
+        template_type = data.get("template_type", "invitation")
+        content = data.get("content", "")
+
+        # Validate the HTML is well-formed by wrapping in basic structure
+        from jinja2 import Environment, BaseLoader
+        import traceback
+
+        # Try to render with dummy data
+        env = Environment(loader=BaseLoader())
+        try:
+            tmpl = env.from_string(content)
+            rendered = tmpl.render(
+                attendee_name="Preview User",
+                attendee_email="preview@example.com",
+                event_name=EVENT_NAME,
+                event_date=EVENT_DATE,
+                event_time=EVENT_TIME,
+                event_venue=EVENT_VENUE,
+                qr_code_base64="",
+                qr_code_src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+                verification_code="123456",
+                coupon_id="preview-0000",
+                organizer_batch=ORGANIZER_BATCH,
+                organizer_institution=ORGANIZER_INSTITUTION,
+            )
+            return jsonify({"success": True, "html": rendered})
+        except Exception as e:
+            return jsonify({"success": False, "error": f"Template error: {str(e)}"})
+    except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
 
@@ -1272,6 +1332,7 @@ def send_with_template():
         sent, failed, failed_list = 0, 0, []
         for coupon in coupon_results.get("coupons", []):
             email = coupon["email"]
+            qr_bytes = base64.b64decode(coupon["qr_code_base64"])
             ctx = {
                 "attendee_name": coupon.get("name", email.split("@")[0]),
                 "attendee_email": email,
@@ -1280,6 +1341,7 @@ def send_with_template():
                 "event_time": EVENT_TIME,
                 "event_venue": EVENT_VENUE,
                 "qr_code_base64": coupon["qr_code_base64"],
+                "qr_code_src": "cid:qrcode",
                 "verification_code": coupon["verification_code"],
                 "coupon_id": coupon["coupon_id"],
                 "organizer_batch": ORGANIZER_BATCH,
@@ -1297,6 +1359,7 @@ def send_with_template():
                     attachment_path=attachment_path
                     if os.path.exists(attachment_path or "")
                     else None,
+                    qr_code_bytes=qr_bytes,
                 )
                 if result["success"]:
                     coupon_manager.mark_coupon_sent(coupon["coupon_id"])

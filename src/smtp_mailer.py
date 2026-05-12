@@ -110,6 +110,7 @@ class SMTPMailer:
         subject: str,
         html_body: str,
         attachment_path: Optional[str] = None,
+        qr_code_bytes: Optional[bytes] = None,
     ) -> dict:
         """Send a single HTML email via SMTP.
         Args:
@@ -118,10 +119,10 @@ class SMTPMailer:
             subject: Email subject line
             html_body: Full HTML string (already rendered Jinja2 template)
             attachment_path: Optional path to file attachment
+            qr_code_bytes: Optional raw PNG bytes of QR code for CID embedding
         Returns:
             {"success": bool, "to_email": str, "message": str, "error": str or None}
-        Use MIMEMultipart('alternative') for HTML emails.
-        Use MIMEApplication for attachments.
+        Uses MIMEMultipart('related') for HTML with embedded images (CID).
         Opens a NEW SMTP connection per call (thread-safe).
         """
         result = {
@@ -132,19 +133,34 @@ class SMTPMailer:
         }
 
         try:
-            msg = MIMEMultipart("alternative")
+            # Use 'related' multipart so CID images can be embedded
+            msg = MIMEMultipart("related")
             msg["Subject"] = subject
             msg["From"] = f"{self.sender_name} <{self.sender_email}>"
             msg["To"] = f"{to_name} <{to_email}>"
             msg["X-Mailer"] = "21MS-Farewell-Mailer"
 
+            # Create the alternative part (plain text + html)
+            alt_part = MIMEMultipart("alternative")
             text_part = MIMEText(
                 "This email requires an HTML-enabled mail client.",
                 "plain",
             )
             html_part = MIMEText(html_body, "html")
-            msg.attach(text_part)
-            msg.attach(html_part)
+            alt_part.attach(text_part)
+            alt_part.attach(html_part)
+            msg.attach(alt_part)
+
+            # Attach QR code as embedded image with Content-ID
+            if qr_code_bytes:
+                from email.mime.image import MIMEImage
+
+                qr_image = MIMEImage(qr_code_bytes, _subtype="png")
+                qr_image.add_header("Content-ID", "<qrcode>")
+                qr_image.add_header(
+                    "Content-Disposition", "inline", filename="qrcode.png"
+                )
+                msg.attach(qr_image)
 
             if attachment_path:
                 with open(attachment_path, "rb") as f:

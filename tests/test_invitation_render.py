@@ -33,6 +33,7 @@ def sample_data():
         "event_time": "7:00 PM",
         "event_venue": "IISER Kolkata Campus",
         "qr_code_base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+        "qr_code_src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
         "verification_code": "123456",
         "coupon_id": "test-coupon-00000000",
         "organizer_batch": "22MS Batch",
@@ -66,8 +67,8 @@ class TestInvitationTemplate:
         """Rendered HTML contains <img> with base64 QR data."""
         template = jinja_env.get_template("invitation.html")
         html = template.render(**sample_data)
-        assert 'data:image/png;base64,' in html
-        assert '<img' in html
+        assert "data:image/png;base64," in html
+        assert "<img" in html
 
     def test_contains_google_fonts_link(self, jinja_env, sample_data):
         """Rendered HTML contains Google Fonts link tag."""

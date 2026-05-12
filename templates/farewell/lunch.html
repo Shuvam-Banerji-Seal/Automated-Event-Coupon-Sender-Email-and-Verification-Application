@@ -117,7 +117,7 @@
 
             <!-- QR Code with simple CSS border (no absolute positioning - email safe) -->
             <div style="display: inline-block; padding: 8px; border: 2px solid #d4af37; border-radius: 16px; margin: 0 auto;">
-                <img src="data:image/png;base64,{{ qr_code_base64 }}"
+                <img src="{{ qr_code_src }}"
                      alt="QR Code for {{ attendee_name }}"
                      style="width: 220px; max-width: 100%; height: auto; display: block; border-radius: 8px;" />
             </div>
