@@ -1,602 +1,234 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>21MS Farewell - Event Manager</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --bg-primary: #0a0a0a;
-            --bg-secondary: #1a1a1a;
-            --bg-tertiary: #2a2a2a;
-            --accent-primary: #6366f1;
-            --accent-secondary: #8b5cf6;
-            --text-primary: #ffffff;
-            --text-secondary: #a1a1aa;
-            --text-muted: #71717a;
-            --success: #10b981;
-            --warning: #f59e0b;
-            --error: #ef4444;
-            --border: #374151;
-            --shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
-        }
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            min-height: 100vh;
-            padding: 20px;
-            overflow-x: hidden;
-        }
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-            background: var(--bg-secondary);
-            border-radius: 24px;
-            box-shadow: var(--shadow);
-            overflow: hidden;
-            border: 1px solid var(--border);
-        }
-        .header {
-            background: linear-gradient(135deg, #1a1a2e 0%, #2d2d44 100%);
-            color: var(--text-primary);
-            padding: 40px;
-            position: relative;
-            overflow: hidden;
-            border-bottom: 2px solid #d4af37;
-        }
-        .header h1 {
-            font-size: 2.5rem;
-            font-weight: 700;
-            margin-bottom: 12px;
-            background: linear-gradient(135deg, #d4af37 0%, #fef9f0 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        .header p {
-            font-size: 1.1rem;
-            opacity: 0.9;
-            font-weight: 400;
-            color: var(--text-secondary);
-        }
-        .main-content { padding: 40px; }
-        .section {
-            margin-bottom: 32px;
-            padding: 32px;
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            background: var(--bg-tertiary);
-        }
-        .section h2 {
-            color: var(--text-primary);
-            margin-bottom: 24px;
-            font-size: 1.5rem;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-        .form-group { margin-bottom: 24px; }
-        .form-group label {
-            display: block;
-            margin-bottom: 12px;
-            font-weight: 500;
-            color: var(--text-primary);
-            font-size: 0.95rem;
-        }
-        .form-group input, .form-group select {
-            width: 100%;
-            padding: 16px;
-            border: 2px solid var(--border);
-            border-radius: 12px;
-            font-size: 16px;
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            font-family: inherit;
-        }
-        .btn {
-            padding: 16px 32px;
-            border: none;
-            border-radius: 12px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            font-family: inherit;
-        }
-        .btn-primary {
-            background: linear-gradient(135deg, #d4af37 0%, #b8941f 100%);
-            color: #1a1a2e;
-            border: 1px solid transparent;
-        }
-        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(212, 175, 55, 0.3); }
-        .btn-secondary {
-            background: var(--bg-tertiary);
-            color: var(--text-secondary);
-            border: 1px solid var(--border);
-        }
-        .btn-secondary:hover { background: var(--bg-primary); color: var(--text-primary); border-color: #d4af37; }
-        .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none !important; }
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 24px;
-            margin-bottom: 32px;
-        }
-        .stat-card {
-            background: var(--bg-primary);
-            padding: 28px;
-            border-radius: 16px;
-            text-align: center;
-            border: 1px solid var(--border);
-            transition: all 0.3s ease;
-        }
-        .stat-card:hover { transform: translateY(-4px); border-color: #d4af37; }
-        .stat-number {
-            font-size: 2.5rem;
-            font-weight: 700;
-            background: linear-gradient(135deg, #d4af37 0%, #fef9f0 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            margin-bottom: 8px;
-        }
-        .stat-label { color: var(--text-secondary); font-size: 0.9rem; font-weight: 500; }
-        .alert {
-            padding: 20px;
-            border-radius: 12px;
-            margin-bottom: 24px;
-            border: 1px solid;
-            font-weight: 500;
-        }
-        .alert-success { background: rgba(16, 185, 129, 0.1); color: var(--success); border-color: rgba(16, 185, 129, 0.3); }
-        .alert-error { background: rgba(239, 68, 68, 0.1); color: var(--error); border-color: rgba(239, 68, 68, 0.3); }
-        .alert-info { background: rgba(99, 102, 241, 0.1); color: var(--accent-primary); border-color: rgba(99, 102, 241, 0.3); }
-        .hidden { display: none; }
-        .nav-links {
-            display: flex;
-            justify-content: center;
-            gap: 32px;
-            margin-bottom: 40px;
-            flex-wrap: wrap;
-        }
-        .nav-links a {
-            padding: 12px 24px;
-            border-radius: 8px;
-            text-decoration: none;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            border: 1px solid var(--border);
-            color: var(--text-secondary);
-            background: var(--bg-tertiary);
-        }
-        .nav-links a:hover, .nav-links a.active {
-            color: #d4af37;
-            border-color: #d4af37;
-            background: rgba(212, 175, 55, 0.1);
-        }
-        .file-upload {
-            position: relative;
-            display: inline-block;
-            cursor: pointer;
-            width: 100%;
-        }
-        .file-upload input[type=file] {
-            position: absolute;
-            opacity: 0;
-            width: 100%;
-            height: 100%;
-            cursor: pointer;
-        }
-        .file-upload-label {
-            display: block;
-            padding: 24px;
-            border: 2px dashed var(--border);
-            border-radius: 12px;
-            text-align: center;
-            background: var(--bg-primary);
-            transition: all 0.3s ease;
-            color: var(--text-secondary);
-            cursor: pointer;
-        }
-        .file-upload:hover .file-upload-label {
-            background: var(--bg-secondary);
-            border-color: #d4af37;
-            color: var(--text-primary);
-        }
-        .data-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.9rem;
-        }
-        .data-table th {
-            padding: 12px 16px;
-            text-align: left;
-            background: var(--bg-secondary);
-            color: var(--text-secondary);
-            font-weight: 600;
-            border-bottom: 1px solid var(--border);
-            position: sticky;
-            top: 0;
-        }
-        .data-table td {
-            padding: 12px 16px;
-            border-bottom: 1px solid var(--border);
-            color: var(--text-primary);
-        }
-        .data-table tr:hover td { background: rgba(212, 175, 55, 0.05); }
-        .status-badge {
-            padding: 4px 10px;
-            border-radius: 6px;
-            font-size: 0.8rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            display: inline-block;
-        }
-        .status-pending { background: rgba(245, 158, 11, 0.2); color: var(--warning); }
-        .status-generated { background: rgba(99, 102, 241, 0.2); color: var(--accent-primary); }
-        .status-sent { background: rgba(16, 185, 129, 0.2); color: var(--success); }
-        .status-used { background: rgba(16, 185, 129, 0.3); color: #34d399; }
-        .coupon-code {
-            font-family: 'Courier New', monospace;
-            background: rgba(212, 175, 55, 0.1);
-            padding: 4px 8px;
-            border-radius: 4px;
-            color: #d4af37;
-            font-size: 0.85rem;
-            letter-spacing: 2px;
-        }
-        .timestamp {
-            color: var(--text-muted);
-            font-size: 0.85rem;
-        }
-        @media (max-width: 768px) {
-            .main-content { padding: 20px; }
-            .stats-grid { grid-template-columns: 1fr 1fr; }
-            .header h1 { font-size: 24px; }
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>21MS Farewell - Event Manager</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg-primary:#0a0a0a;--bg-secondary:#1a1a1a;--bg-tertiary:#2a2a2a;--text-primary:#fff;--text-secondary:#a1a1aa;--text-muted:#71717a;--success:#10b981;--warning:#f59e0b;--error:#ef4444;--gold:#d4af37;--border:#374151}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',-apple-system,sans-serif;background:var(--bg-primary);color:var(--text-primary);min-height:100vh;padding:20px}
+.container{max-width:1400px;margin:0 auto;background:var(--bg-secondary);border-radius:24px;border:1px solid var(--border)}
+.header{background:linear-gradient(135deg,#1a1a2e 0%,#2d2d44 100%);padding:30px 40px;border-bottom:2px solid var(--gold)}
+.header h1{font-size:2rem;font-weight:700;background:linear-gradient(135deg,var(--gold),#fef9f0);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.header p{font-size:1rem;color:var(--text-secondary);margin-top:4px}
+.main-content{padding:30px 40px}
+.section{margin-bottom:28px;padding:28px;border:1px solid var(--border);border-radius:14px;background:var(--bg-tertiary)}
+.section-title{color:var(--text-primary);font-size:1.2rem;font-weight:600;margin-bottom:20px;display:flex;align-items:center;gap:10px}
+.btn{padding:10px 20px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:all .3s;font-family:inherit;display:inline-flex;align-items:center;gap:6px}
+.btn-gold{background:linear-gradient(135deg,var(--gold),#b8941f);color:#1a1a2e}
+.btn-gold:hover{transform:translateY(-2px);box-shadow:0 4px 15px rgba(212,175,55,.3)}
+.btn-outline{background:var(--bg-tertiary);color:var(--text-secondary);border:1px solid var(--border)}
+.btn-outline:hover{background:var(--bg-primary);color:var(--text-primary);border-color:var(--gold)}
+.btn-danger{background:rgba(239,68,68,.15);color:var(--error);border:1px solid rgba(239,68,68,.3)}
+.btn-danger:hover{background:rgba(239,68,68,.25)}
+.btn-sm{padding:6px 12px;font-size:12px}
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin-bottom:20px}
+.stat-card{background:var(--bg-primary);padding:22px;border-radius:12px;text-align:center;border:1px solid var(--border)}
+.stat-number{font-size:2rem;font-weight:700;background:linear-gradient(135deg,var(--gold),#fef9f0);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.stat-label{color:var(--text-secondary);font-size:.85rem;margin-top:4px}
+.alert{padding:14px 18px;border-radius:10px;margin-bottom:16px;border:1px solid;font-size:.9rem;line-height:1.5}
+.alert-success{background:rgba(16,185,129,.1);color:var(--success);border-color:rgba(16,185,129,.3)}
+.alert-error{background:rgba(239,68,68,.1);color:var(--error);border-color:rgba(239,68,68,.3)}
+.alert-info{background:rgba(99,102,241,.1);color:#818cf8;border-color:rgba(99,102,241,.3)}
+.form-row{display:flex;gap:14px;margin-bottom:16px;flex-wrap:wrap;align-items:end}
+.form-group{flex:1;min-width:180px}
+.form-group label{display:block;margin-bottom:5px;font-weight:500;font-size:.85rem}
+.form-group input,.form-group select,.form-group textarea{width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg-primary);color:var(--text-primary);font-family:inherit}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{outline:none;border-color:var(--gold)}
+.table-container{max-height:380px;overflow-y:auto;border:1px solid var(--border);border-radius:10px;background:var(--bg-primary)}
+.data-table{width:100%;border-collapse:collapse;font-size:.85rem}
+.data-table th{padding:10px 12px;text-align:left;background:var(--bg-secondary);color:var(--text-secondary);font-weight:600;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:1}
+.data-table td{padding:10px 12px;border-bottom:1px solid var(--border)}
+.data-table tr:hover td{background:rgba(212,175,55,.04)}
+.switch{position:relative;display:inline-block;width:36px;height:20px}
+.switch input{opacity:0;width:0;height:0}
+.slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:var(--bg-primary);border:1px solid var(--border);border-radius:20px;transition:.3s}
+.slider:before{position:absolute;content:"";height:14px;width:14px;left:2px;bottom:2px;background:var(--text-muted);border-radius:50%;transition:.3s}
+.switch input:checked+.slider{background:rgba(212,175,55,.3);border-color:var(--gold)}
+.switch input:checked+.slider:before{transform:translateX(16px);background:var(--gold)}
+.status-badge{padding:3px 8px;border-radius:5px;font-size:.75rem;font-weight:600}
+.status-pending{background:rgba(245,158,11,.2);color:var(--warning)}
+.status-generated{background:rgba(99,102,241,.2);color:#818cf8}
+.status-sent{background:rgba(16,185,129,.2);color:var(--success)}
+.status-used{background:rgba(16,185,129,.3);color:#34d399}
+.nav-links{display:flex;gap:12px;margin-bottom:28px;flex-wrap:wrap}
+.nav-links a{padding:8px 18px;border-radius:8px;text-decoration:none;font-weight:600;border:1px solid var(--border);color:var(--text-secondary);background:var(--bg-tertiary);transition:all .3s}
+.nav-links a:hover,.nav-links a.active{color:var(--gold);border-color:var(--gold);background:rgba(212,175,55,.1)}
+.progress-bar{width:100%;height:6px;background:var(--bg-primary);border-radius:6px;overflow:hidden}
+.progress-fill{height:100%;background:linear-gradient(135deg,var(--gold),#b8941f);width:0%;transition:width .5s;border-radius:6px}
+.side-panel{position:fixed;top:0;right:-800px;width:750px;height:100vh;background:var(--bg-secondary);border-left:1px solid var(--border);z-index:1000;transition:right .4s;display:flex;flex-direction:column}
+.side-panel.open{right:0}
+.side-panel-header{padding:18px 24px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.side-panel-body{padding:24px;overflow-y:auto;flex:1}
+.email-iframe{width:100%;height:calc(100vh - 200px);border:none;border-radius:8px;background:#fff}
+.template-editor{width:100%;height:400px;font-family:monospace;font-size:12px;padding:12px;background:var(--bg-primary);color:#e2e8f0;border:1px solid var(--border);border-radius:8px}
+.tabs{display:flex;gap:2px;margin-bottom:16px;background:var(--bg-primary);border-radius:8px;padding:3px}
+.tab{padding:8px 18px;border-radius:6px;cursor:pointer;font-size:.85rem;font-weight:500;color:var(--text-muted);transition:all .3s;border:none;background:none;font-family:inherit}
+.tab.active{background:var(--bg-tertiary);color:var(--gold)}
+@media(max-width:768px){.main-content{padding:16px}.side-panel{width:100%;right:-100%}}
+</style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
-                <div>
-                    <h1>21MS Farewell Party</h1>
-                    <p>Automated Coupon & Invitation System | Organized by 22MS Batch</p>
-                </div>
-                <div style="text-align: right;">
-                    <div style="font-size: 0.85rem; color: var(--text-muted);">IISER Kolkata</div>
-                    <div style="font-size: 0.85rem; color: var(--text-muted);">22MS Batch Organizers</div>
-                </div>
-            </div>
-        </div>
+<div class="container">
+<div class="header">
+<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+<div><h1>21MS Farewell Party</h1><p>Automated Coupon & Invitation System | 22MS Batch, IISER Kolkata</p></div>
+<div style="font-size:.85rem;color:var(--text-muted);text-align:right"><span id="smtpStatus" style="color:var(--error)">SMTP: Not configured</span></div>
+</div></div>
+<div class="main-content">
+<div class="nav-links"><a href="/sender" class="active">Dashboard</a><a href="/scanner">QR Scanner</a></div>
 
-        <div class="main-content">
-            <div class="nav-links">
-                <a href="/sender" class="active">Event Manager</a>
-                <a href="/scanner">QR Scanner</a>
-            </div>
+<!-- Stats -->
+<div class="section">
+<div class="section-title">Event Analytics</div>
+<div class="stats-grid" id="statsGrid">
+<div class="stat-card"><div class="stat-number" id="rc">-</div><div class="stat-label">Attendees</div></div>
+<div class="stat-card"><div class="stat-number" id="cg">-</div><div class="stat-label">Coupons</div></div>
+<div class="stat-card"><div class="stat-number" id="es">-</div><div class="stat-label">Sent</div></div>
+<div class="stat-card"><div class="stat-number" id="cu">-</div><div class="stat-label">Redeemed</div></div>
+</div>
+<button class="btn btn-outline btn-sm" onclick="loadStats()">Refresh</button>
+</div>
 
-            <!-- Statistics Section -->
-            <div class="section">
-                <h2>
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#d4af37" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
-                    Event Analytics
-                </h2>
-                <div class="stats-grid" id="statsGrid">
-                    <div class="stat-card">
-                        <div class="stat-number" id="recipientsCount">-</div>
-                        <div class="stat-label">Total Attendees</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-number" id="couponsGenerated">-</div>
-                        <div class="stat-label">Coupons Generated</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-number" id="emailsSent">-</div>
-                        <div class="stat-label">Emails Sent</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-number" id="couponsUsed">-</div>
-                        <div class="stat-label">Coupons Redeemed</div>
-                    </div>
-                </div>
-                <button class="btn btn-secondary" onclick="loadStats()">Refresh Analytics</button>
-            </div>
+<!-- SMTP Config -->
+<div class="section" id="smtpSection">
+<div class="section-title">SMTP Configuration</div>
+<div id="smtpAlert"></div>
+<div class="form-row">
+<div class="form-group"><label>SMTP Host</label><input type="text" id="smtpHost" value="smtp.gmail.com"></div>
+<div class="form-group" style="flex:0 0 100px"><label>Port</label><input type="number" id="smtpPort" value="587"></div>
+</div>
+<div class="form-row">
+<div class="form-group"><label>Sender Email</label><input type="email" id="smtpUsername" placeholder="your-email@gmail.com"></div>
+<div class="form-group"><label>App Password (16-char)</label><input type="password" id="smtpPassword" placeholder="xxxx xxxx xxxx xxxx"></div>
+</div>
+<div class="form-row">
+<div class="form-group"><label>Sender Name</label><input type="text" id="smtpSenderName" value="22MS Batch, IISER Kolkata"></div>
+<div class="form-group"><label>Reply-To Email</label><input type="email" id="smtpSenderEmail" placeholder="your-email@gmail.com"></div>
+</div>
+<div style="display:flex;gap:10px;flex-wrap:wrap">
+<button class="btn btn-gold" onclick="testSmtpConnection()">Test Connection</button>
+<button class="btn btn-outline" onclick="saveSmtpConfig()">Save Config</button>
+</div>
+<div id="smtpResult" style="margin-top:12px;font-size:.85rem"></div>
+</div>
 
-            <!-- CSV Upload Section -->
-            <div class="section">
-                <h2>
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#d4af37" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                    Upload Attendee List
-                </h2>
-                <div id="uploadAlert"></div>
-                <div class="form-group">
-                    <label>Upload CSV File with Attendee Email Addresses</label>
-                    <div class="file-upload">
-                        <input type="file" id="csvFile" accept=".csv" onchange="handleFileUpload(event)">
-                        <label for="csvFile" class="file-upload-label">
-                            <div style="font-weight: 600; margin-bottom: 8px;">Click to select CSV file or drag and drop</div>
-                            <small>File must contain an 'email' column with attendee addresses. Optional: 'name' column.</small>
-                        </label>
-                    </div>
-                </div>
-                <button class="btn btn-primary" id="uploadBtn" onclick="uploadCSV()" disabled>
-                    Upload Attendee List
-                </button>
-            </div>
+<!-- CSV Upload -->
+<div class="section">
+<div class="section-title">Upload Attendee List</div>
+<div id="uploadAlert"></div>
+<input type="file" id="csvFile" accept=".csv" onchange="handleCsvUpload(event)" style="width:100%;padding:60px 20px;border:2px dashed var(--border);border-radius:12px;background:var(--bg-primary);color:var(--text-muted);cursor:pointer;text-align:center">
+<div id="csvMappingSection" style="display:none;margin-top:18px">
+<div class="form-row">
+<div class="form-group"><label>Email Column</label><select id="emailColSelect" onchange="renderCsvPreview()"></select></div>
+<div class="form-group"><label>Name Column</label><select id="nameColSelect" onchange="renderCsvPreview()"></select></div>
+</div>
+<div style="margin-bottom:10px;font-weight:500;color:var(--text-secondary);font-size:.9rem">Preview (<span id="previewCount">0</span> rows)</div>
+<div class="table-container" id="csvPreviewTable"><div style="padding:30px;text-align:center;color:var(--text-muted)">Load CSV to preview</div></div>
+<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:14px">
+<button class="btn btn-gold" onclick="confirmUpload()">Confirm & Save</button>
+<button class="btn btn-outline" onclick="resetUpload()">Cancel</button>
+</div>
+</div>
+</div>
 
-            <!-- Detailed Coupon List -->
-            <div class="section">
-                <h2>
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#d4af37" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-                    Coupon Details Dashboard
-                </h2>
-                <div style="display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap;">
-                    <button class="btn btn-secondary" onclick="loadCouponDetails()">Refresh Details</button>
-                    <div style="display: flex; gap: 8px; align-items: center;">
-                        <label style="font-size: 0.9rem; color: var(--text-secondary);">Filter:</label>
-                        <select id="statusFilter" onchange="filterCoupons()" style="padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); font-size: 0.9rem;">
-                            <option value="all">All</option>
-                            <option value="pending">Pending</option>
-                            <option value="generated">Generated</option>
-                            <option value="sent">Sent</option>
-                            <option value="used">Used</option>
-                        </select>
-                    </div>
-                </div>
-                <div id="couponTableContainer" style="max-height: 500px; overflow-y: auto; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-primary);">
-                    <div style="padding: 40px; text-align: center; color: var(--text-muted);">
-                        Click "Refresh Details" to view coupon information
-                    </div>
-                </div>
-            </div>
+<!-- Template Editor -->
+<div class="section">
+<div class="section-title">Email Template Editor</div>
+<div id="templateAlert"></div>
+<div class="tabs" id="templateTabs">
+<button class="tab active" onclick="switchTemplate('invitation',this)">Invitation</button>
+<button class="tab" onclick="switchTemplate('lunch',this)">Lunch</button>
+<button class="tab" onclick="switchTemplate('dinner',this)">Dinner</button>
+</div>
+<textarea class="template-editor" id="templateEditor"></textarea>
+<div style="display:flex;gap:10px;margin-top:10px">
+<button class="btn btn-gold" onclick="saveTemplate()">Save Template</button>
+<button class="btn btn-outline" onclick="loadTemplate()">Reload</button>
+</div>
+</div>
 
-            <!-- Send Invitations Section -->
-            <div class="section">
-                <h2>
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#d4af37" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-                    Send Invitations
-                </h2>
-                <div id="campaignAlert"></div>
-                <div class="form-group">
-                    <label for="eventName">Event Name</label>
-                    <input type="text" id="eventName" placeholder="Enter event name" value="21MS Farewell Party">
-                </div>
-                <div class="form-group">
-                    <label for="attachmentFile">Optional Attachment (PDF Schedule)</label>
-                    <div class="file-upload">
-                        <input type="file" id="attachmentFile" accept=".pdf" onchange="handleAttachmentUpload(event)">
-                        <label for="attachmentFile" class="file-upload-label">
-                            <div style="font-weight: 600; margin-bottom: 8px;">Click to attach PDF schedule</div>
-                            <small>Optional: Attach event schedule or brochure PDF</small>
-                        </label>
-                    </div>
-                </div>
-                <button class="btn btn-primary" id="sendBtn" onclick="sendFarewellInvitations()">
-                    Send Farewell Invitations
-                </button>
-                <div id="sendProgress" style="margin-top: 20px; display: none;">
-                    <div style="background: var(--bg-primary); border-radius: 8px; height: 8px; overflow: hidden;">
-                        <div id="progressBar" style="background: linear-gradient(135deg, #d4af37 0%, #b8941f 100%); height: 100%; width: 0%; transition: width 0.5s ease;"></div>
-                    </div>
-                    <div id="progressText" style="text-align: center; margin-top: 10px; color: var(--text-secondary); font-size: 0.9rem;"></div>
-                </div>
-            </div>
-        </div>
-    </div>
+<!-- Recipients -->
+<div class="section">
+<div class="section-title">Recipients & Coupons</div>
+<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+<button class="btn btn-outline btn-sm" onclick="loadRecipients()">Refresh</button>
+<select id="statusFilter" onchange="filterRecipients()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-primary);color:var(--text-primary);font-size:.85rem">
+<option value="all">All</option>
+<option value="pending">Pending</option>
+<option value="generated">Generated</option>
+<option value="sent">Sent</option>
+<option value="used">Used</option>
+</select>
+<button class="btn btn-gold btn-sm" onclick="sendSelected()">Send Selected</button>
+<button class="btn btn-gold btn-sm" onclick="sendAll()">Send All</button>
+</div>
+<div class="table-container" id="recipientTable"><div style="padding:30px;text-align:center;color:var(--text-muted)">Click Refresh to load</div></div>
+</div>
 
-    <script>
-        let selectedFile = null;
-        let attachmentFile = null;
-        let allCoupons = [];
+<!-- Send -->
+<div class="section">
+<div class="section-title">Send Invitations</div>
+<div id="campaignAlert"></div>
+<div class="form-row">
+<div class="form-group"><label>Event Name</label><input type="text" id="eventName" value="21MS Farewell Party"></div>
+<div class="form-group"><label>Template</label><select id="templateTypeSelect"><option value="invitation">Invitation</option><option value="lunch">Lunch</option><option value="dinner">Dinner</option></select></div>
+<div class="form-group"><label>Attachment</label><input type="file" id="attachmentFile" accept=".pdf,.png,.jpg"></div>
+</div>
+<button class="btn btn-gold" id="sendBtn" onclick="sendSelected()">Send Invitations</button>
+<div id="sendProgress" style="display:none;margin-top:14px">
+<div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+<div id="progressText" style="text-align:center;margin-top:6px;color:var(--text-secondary);font-size:.85rem"></div>
+</div>
+</div>
+</div></div>
 
-        document.addEventListener('DOMContentLoaded', function() {
-            loadStats();
-            loadCouponDetails();
-        });
+<div class="side-panel" id="emailPreviewPanel">
+<div class="side-panel-header">
+<div><div style="font-weight:600;font-size:1.1rem">Email Preview</div><div style="color:var(--text-muted);font-size:.85rem" id="previewRecipientInfo">-</div></div>
+<button style="background:none;border:none;color:var(--text-primary);font-size:28px;cursor:pointer;padding:4px 8px" onclick="closePreview()">&times;</button>
+</div>
+<div class="side-panel-body" id="previewBody"><div style="text-align:center;color:var(--text-muted);padding:60px">Select a recipient and click preview</div></div>
+</div>
 
-        function showAlert(containerId, message, type) {
-            const container = document.getElementById(containerId);
-            container.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
-            setTimeout(() => { container.innerHTML = ''; }, 8000);
-        }
+<script>
+let csvFilePath="",csvHeaders=[],csvRows=[],csvSelected={},allRecipients=[],smtpConfigured=false,selectedEmails=new Set,currentTemplate="invitation";
+document.addEventListener('DOMContentLoaded',function(){loadStats();loadSmtpConfig();loadRecipients();loadTemplate()});
+function showAlert(id,msg,tp){const c=document.getElementById(id);if(c){c.innerHTML='<div class="alert alert-'+tp+'">'+msg+'</div>';setTimeout(()=>c.innerHTML='',8000)}}
+function loadStats(){fetch('/farewell-stats').then(r=>r.json()).then(d=>{if(d.success){document.getElementById('rc').textContent=d.recipients_count;document.getElementById('cg').textContent=d.coupon_stats.total;document.getElementById('es').textContent=d.coupon_stats.sent;document.getElementById('cu').textContent=d.coupon_stats.used}}).catch(()=>{})}
 
-        function loadStats() {
-            fetch('/farewell-stats')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        document.getElementById('recipientsCount').textContent = data.recipients_count;
-                        document.getElementById('couponsGenerated').textContent = data.coupon_stats.total;
-                        document.getElementById('emailsSent').textContent = data.coupon_stats.sent;
-                        document.getElementById('couponsUsed').textContent = data.coupon_stats.used;
-                    }
-                })
-                .catch(error => console.error('Error loading stats:', error));
-        }
+function loadSmtpConfig(){fetch('/farewell-smtp-config').then(r=>r.json()).then(d=>{if(d.success&&d.configured){document.getElementById('smtpHost').value=d.config.host||'smtp.gmail.com';document.getElementById('smtpPort').value=d.config.port||587;document.getElementById('smtpUsername').value=d.config.username||'';document.getElementById('smtpPassword').value=d.config.password||'';document.getElementById('smtpSenderName').value=d.config.sender_name||'22MS Batch, IISER Kolkata';document.getElementById('smtpSenderEmail').value=d.config.sender_email||'';document.getElementById('smtpStatus').textContent='SMTP: '+d.config.username;document.getElementById('smtpStatus').style.color='var(--success)';smtpConfigured=true}}).catch(()=>{})}
 
-        function handleFileUpload(event) {
-            selectedFile = event.target.files[0];
-            const uploadBtn = document.getElementById('uploadBtn');
-            if (selectedFile && selectedFile.name.toLowerCase().endsWith('.csv')) {
-                uploadBtn.disabled = false;
-                showAlert('uploadAlert', `Selected file: ${selectedFile.name}`, 'info');
-            } else {
-                uploadBtn.disabled = true;
-                showAlert('uploadAlert', 'Please select a valid CSV file', 'error');
-            }
-        }
+function testSmtpConnection(){const btn=event.target;btn.disabled=true;btn.textContent='Testing...';const rd=document.getElementById('smtpResult');rd.innerHTML='<span style="color:var(--text-muted)">Testing...</span>';const cfg={host:document.getElementById('smtpHost').value,port:parseInt(document.getElementById('smtpPort').value)||587,username:document.getElementById('smtpUsername').value,password:document.getElementById('smtpPassword').value,sender_name:document.getElementById('smtpSenderName').value,sender_email:document.getElementById('smtpSenderEmail').value,use_tls:true};fetch('/farewell-smtp-config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(cfg)}).then(r=>r.json()).then(d=>{if(d.success){fetch('/farewell-smtp-config/test',{method:'POST'}).then(r=>r.json()).then(t=>{if(t.success){rd.innerHTML='<span style="color:var(--success)">Connected successfully!</span>';document.getElementById('smtpStatus').textContent='SMTP: '+cfg.username;document.getElementById('smtpStatus').style.color='var(--success)';smtpConfigured=true}else{rd.innerHTML='<span style="color:var(--error)">Failed: '+(t.error||t.message)+'</span>';showAlert('smtpAlert','SMTP test failed','error')}}).catch(e=>{rd.innerHTML='<span style="color:var(--error)">Error: '+e.message+'</span>'})}else{rd.innerHTML='<span style="color:var(--error)">Save failed: '+d.error+'</span>'}}).catch(e=>{rd.innerHTML='<span style="color:var(--error)">Error: '+e.message+'</span>'}).finally(()=>{btn.disabled=false;btn.textContent='Test Connection'})}
 
-        function handleAttachmentUpload(event) {
-            attachmentFile = event.target.files[0];
-            if (attachmentFile) {
-                showAlert('campaignAlert', `Attachment selected: ${attachmentFile.name}`, 'info');
-            }
-        }
+function saveSmtpConfig(){const cfg={host:document.getElementById('smtpHost').value,port:parseInt(document.getElementById('smtpPort').value)||587,username:document.getElementById('smtpUsername').value,password:document.getElementById('smtpPassword').value,sender_name:document.getElementById('smtpSenderName').value,sender_email:document.getElementById('smtpSenderEmail').value,use_tls:true};if(!cfg.username||!cfg.password){showAlert('smtpAlert','Email and password required','error');return};fetch('/farewell-smtp-config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(cfg)}).then(r=>r.json()).then(d=>{if(d.success){showAlert('smtpAlert','SMTP config saved!','success');document.getElementById('smtpStatus').textContent='SMTP: '+cfg.username;document.getElementById('smtpStatus').style.color='var(--success)';smtpConfigured=true}else showAlert('smtpAlert','Error: '+d.error,'error')}).catch(e=>showAlert('smtpAlert','Error: '+e.message,'error'))}
 
-        function uploadCSV() {
-            if (!selectedFile) {
-                showAlert('uploadAlert', 'Please select a CSV file first', 'error');
-                return;
-            }
-            const formData = new FormData();
-            formData.append('file', selectedFile);
-            const uploadBtn = document.getElementById('uploadBtn');
-            uploadBtn.disabled = true;
-            uploadBtn.textContent = 'Uploading...';
+function handleCsvUpload(ev){const file=ev.target.files[0];if(!file||!file.name.endsWith('.csv')){showAlert('uploadAlert','Select a CSV file','error');return};showAlert('uploadAlert','Loading preview...','info');const fd=new FormData;fd.append('file',file);fetch('/preview-csv',{method:'POST',body:fd}).then(r=>r.json()).then(d=>{if(d.success){csvHeaders=d.headers;csvRows=d.rows;csvFilePath=d.filepath;csvSelected={};document.getElementById('csvMappingSection').style.display='block';const es=document.getElementById('emailColSelect'),ns=document.getElementById('nameColSelect');es.innerHTML='';ns.innerHTML='';csvHeaders.forEach(h=>{es.appendChild(new Option(h,h,h.toLowerCase().includes('email'),h.toLowerCase().includes('email')));ns.appendChild(new Option(h,h,h.toLowerCase().includes('name')||h.toLowerCase().includes('full'),h.toLowerCase().includes('name')||h.toLowerCase().includes('full')))});renderCsvPreview()}else showAlert('uploadAlert','Error: '+(d.error||'Unknown'),'error')}).catch(e=>showAlert('uploadAlert','Upload error: '+e.message,'error'))}
 
-            fetch('/upload-csv', { method: 'POST', body: formData })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        showAlert('uploadAlert',
-                            `CSV uploaded successfully! Found ${data.valid_emails} valid emails (${data.invalid_emails} invalid)`,
-                            'success'
-                        );
-                        loadStats();
-                        loadCouponDetails();
-                    } else {
-                        showAlert('uploadAlert', `Upload failed: ${data.error}`, 'error');
-                    }
-                })
-                .catch(error => showAlert('uploadAlert', `Upload error: ${error.message}`, 'error'))
-                .finally(() => {
-                    uploadBtn.disabled = false;
-                    uploadBtn.textContent = 'Upload Attendee List';
-                });
-        }
+function renderCsvPreview(){const ec=document.getElementById('emailColSelect').value,nc=document.getElementById('nameColSelect').value;document.getElementById('previewCount').textContent=csvRows.length;if(!csvRows.length){document.getElementById('csvPreviewTable').innerHTML='<div style="padding:30px;text-align:center;color:var(--text-muted)">No data</div>';return};let h='<table class="data-table"><thead><tr><th style="width:32px"><input type="checkbox" checked onchange="csvRows.forEach((_,i)=>{csvSelected[i]=this.checked});renderCsvPreview()" style="accent-color:var(--gold)"></th><th>Email ('+ec+')</th><th>Name ('+nc+')</th><th style="width:50px">X</th></tr></thead><tbody>';csvRows.forEach((r,i)=>{const e=r[ec]||'',n=nc?(r[nc]||''):'';if(csvSelected[i]===undefined)csvSelected[i]=true;h+='<tr style="'+(csvSelected[i]?'':'opacity:.4')+'"><td><input type="checkbox" '+(csvSelected[i]?'checked':'')+' onchange="csvSelected['+i+']=this.checked;renderCsvPreview()" style="accent-color:var(--gold)"></td><td>'+(e||'<span style="color:var(--error)">(empty)</span>')+'</td><td>'+(n||'-')+'</td><td><button class="btn btn-danger btn-sm" onclick="csvSelected['+i+']=false;renderCsvPreview()">X</button></td></tr>'});h+='</tbody></table>';document.getElementById('csvPreviewTable').innerHTML=h}
 
-        function loadCouponDetails() {
-            fetch('/farewell-coupons')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        allCoupons = data.coupons;
-                        displayCoupons(allCoupons);
-                    }
-                })
-                .catch(error => {
-                    document.getElementById('couponTableContainer').innerHTML =
-                        `<div style="padding: 40px; text-align: center; color: var(--error);">Error loading coupon data</div>`;
-                });
-        }
+function confirmUpload(){const ec=document.getElementById('emailColSelect').value,nc=document.getElementById('nameColSelect').value;if(!ec){showAlert('uploadAlert','Select Email column','error');return};const recipients=[];csvRows.forEach((r,i)=>{if(!csvSelected[i])return;const e=(r[ec]||'').toLowerCase().trim();if(e)recipients.push({email:e,name:nc?(r[nc]||''):'',include_dinner:true,include_lunch:true})});if(!recipients.length){showAlert('uploadAlert','No recipients selected','error');return};fetch('/confirm-upload',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filepath:csvFilePath,email_col:ec,name_col:nc,recipients})}).then(r=>r.json()).then(d=>{if(d.success){showAlert('uploadAlert',d.message,'success');document.getElementById('csvMappingSection').style.display='none';loadStats();loadRecipients()}else showAlert('uploadAlert','Error: '+(d.error||'Unknown'),'error')}).catch(e=>showAlert('uploadAlert','Confirm error: '+e.message,'error'))}
 
-        function displayCoupons(coupons) {
-            const container = document.getElementById('couponTableContainer');
-            if (coupons.length === 0) {
-                container.innerHTML = `<div style="padding: 40px; text-align: center; color: var(--text-muted);">No coupons found. Upload a CSV and send invitations.</div>`;
-                return;
-            }
+function resetUpload(){document.getElementById('csvMappingSection').style.display='none';document.getElementById('csvFile').value='';csvFilePath='';csvHeaders=[];csvRows=[];csvSelected={}}
 
-            let html = `<table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Email</th>
-                        <th>Coupon ID</th>
-                        <th>Verification Code</th>
-                        <th>Status</th>
-                        <th>Sent At</th>
-                        <th>Used At</th>
-                    </tr>
-                </thead>
-                <tbody>`;
+function switchTemplate(tp,btn){currentTemplate=tp;document.querySelectorAll('#templateTabs .tab').forEach(t=>t.classList.remove('active'));btn.classList.add('active');loadTemplate()}
+function loadTemplate(){fetch('/farewell-templates/'+currentTemplate).then(r=>r.json()).then(d=>{if(d.success)document.getElementById('templateEditor').value=d.content||'';else showAlert('templateAlert','Error: '+(d.error||'Unknown'),'error')}).catch(()=>{})}
+function saveTemplate(){const c=document.getElementById('templateEditor').value;if(!c){showAlert('templateAlert','Template is empty','error');return};fetch('/farewell-templates/'+currentTemplate,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:c})}).then(r=>r.json()).then(d=>{if(d.success)showAlert('templateAlert','Template saved!','success');else showAlert('templateAlert','Error: '+d.error,'error')}).catch(e=>showAlert('templateAlert','Error: '+e.message,'error'))}
 
-            coupons.forEach(coupon => {
-                const statusClass = 'status-' + (coupon.status || 'pending');
-                const sentAt = coupon.sent_at ? new Date(coupon.sent_at).toLocaleString() : '-';
-                const usedAt = coupon.used_at ? new Date(coupon.used_at).toLocaleString() : '-';
-                const shortCouponId = coupon.coupon_id ? coupon.coupon_id.substring(0, 8) + '...' : '-';
+function loadRecipients(){fetch('/farewell-recipients').then(r=>r.json()).then(d=>{if(d.success){allRecipients=d.recipients;displayRecipients(allRecipients)}}).catch(()=>{})}
 
-                html += `<tr>
-                    <td>${coupon.email}</td>
-                    <td><span class="coupon-code">${shortCouponId}</span></td>
-                    <td><span class="coupon-code">${coupon.verification_code || '-'}</span></td>
-                    <td><span class="status-badge ${statusClass}">${coupon.status || 'pending'}</span></td>
-                    <td class="timestamp">${sentAt}</td>
-                    <td class="timestamp">${usedAt}</td>
-                </tr>`;
-            });
+function displayRecipients(list){const c=document.getElementById('recipientTable');if(!list.length){c.innerHTML='<div style="padding:30px;text-align:center;color:var(--text-muted)">No recipients</div>';return};let h='<table class="data-table"><thead><tr><th style="width:32px"><input type="checkbox" onchange="selectedEmails=new Set(allRecipients.map(r=>r.email));displayRecipients(allRecipients)" style="accent-color:var(--gold)"></th><th>Email</th><th>Name</th><th>Status</th><th>Code</th><th>Sent</th><th>Used</th><th>Preview</th><th>Remove</th></tr></thead><tbody>';list.forEach(r=>{const sc='status-'+(r.status||'pending');const nm=(r.name||r.email.split('@')[0]).replace(/'/g,"\\'");h+='<tr id="rec-'+r.email.replace(/@/g,'_').replace(/\./g,'_')+'"><td><input type="checkbox" '+(selectedEmails.has(r.email)?'checked':'')+' onchange="if(this.checked)selectedEmails.add(\''+r.email+'\');else selectedEmails.delete(\''+r.email+'\')" style="accent-color:var(--gold)"></td><td>'+r.email+'</td><td>'+nm+'</td><td><span class="status-badge '+sc+'">'+(r.status||'pending')+'</span></td><td><span style="font-family:monospace;background:rgba(212,175,55,.1);padding:2px 6px;border-radius:4px;color:var(--gold);font-size:.8rem;letter-spacing:1px">'+(r.verification_code||'-')+'</span></td><td style="color:var(--text-muted);font-size:.8rem">'+(r.sent_at?new Date(r.sent_at).toLocaleString():'-')+'</td><td style="color:var(--text-muted);font-size:.8rem">'+(r.used_at?new Date(r.used_at).toLocaleString():'-')+'</td><td><button class="btn btn-outline btn-sm" onclick="previewEmail(\''+r.email+'\',\''+nm+'\',\''+(r.verification_code||'')+'\',\''+(r.coupon_id||'')+'\')">View</button></td><td><button class="btn btn-danger btn-sm" onclick="var tr=document.getElementById(\'rec-\'+r.email.replace(/@/g,\'_\').replace(/\\./g,\'_\'));if(tr){tr.style.opacity=\'.3\';tr.style.pointerEvents=\'none\';selectedEmails.delete(r.email)}">X</button></td></tr>'});h+='</tbody></table>';c.innerHTML=h}
 
-            html += `</tbody></table>`;
-            container.innerHTML = html;
-        }
+function filterRecipients(){const f=document.getElementById('statusFilter').value;displayRecipients(f==='all'?allRecipients:allRecipients.filter(r=>(r.status||'pending')===f))}
 
-        function filterCoupons() {
-            const filter = document.getElementById('statusFilter').value;
-            if (filter === 'all') {
-                displayCoupons(allCoupons);
-            } else {
-                const filtered = allCoupons.filter(c => (c.status || 'pending') === filter);
-                displayCoupons(filtered);
-            }
-        }
+function previewEmail(email,name,code,cid){document.getElementById('emailPreviewPanel').classList.add('open');document.getElementById('previewRecipientInfo').textContent=email;document.getElementById('previewBody').innerHTML='<div style="text-align:center;padding:40px;color:var(--text-muted)">Loading...</div>';if(!code||code==='-'){document.getElementById('previewBody').innerHTML='<div style="text-align:center;padding:40px;color:var(--text-muted)">No coupon yet</div>';return};fetch('/preview-email',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,name,verification_code:code,coupon_id:cid})}).then(r=>r.json()).then(d=>{if(d.success){const eh=d.html.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');document.getElementById('previewBody').innerHTML='<div style="margin-bottom:10px;color:var(--text-secondary);font-size:.85rem">Subject: '+d.subject+'</div><iframe class="email-iframe" srcdoc="'+eh+'"></iframe>'}else{document.getElementById('previewBody').innerHTML='<div style="text-align:center;padding:40px;color:var(--error)">'+d.error+'</div>'}}).catch(e=>{document.getElementById('previewBody').innerHTML='<div style="text-align:center;padding:40px;color:var(--error)">'+e.message+'</div>'})}
+function closePreview(){document.getElementById('emailPreviewPanel').classList.remove('open')}
 
-        function sendFarewellInvitations() {
-            const eventName = document.getElementById('eventName').value.trim();
-            if (!eventName) {
-                showAlert('campaignAlert', 'Please enter an event name', 'error');
-                return;
-            }
+function sendSelected(){const en=document.getElementById('eventName').value.trim();if(!en){showAlert('campaignAlert','Enter event name','error');return};if(!smtpConfigured){showAlert('campaignAlert','Configure SMTP first','error');return};const emails=Array.from(selectedEmails);if(!emails.length){showAlert('campaignAlert','Select recipients with checkboxes','error');return};const btn=document.getElementById('sendBtn'),pd=document.getElementById('sendProgress');btn.disabled=true;btn.textContent='Sending...';pd.style.display='block';document.getElementById('progressFill').style.width='10%';document.getElementById('progressText').textContent='Sending '+emails.length+' invitations...';const tt=document.getElementById('templateTypeSelect').value;fetch('/send-farewell-emails',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({event_name:en,selected_emails:emails,template_type:tt})}).then(r=>r.json()).then(d=>{document.getElementById('progressFill').style.width='100%';if(d.success){let m='Sent: '+d.emails_sent+', Failed: '+d.emails_failed;if(d.failed_list&&d.failed_list.length)m+='<br>Failed:<br>'+d.failed_list.map(f=>f.email+': '+f.error).join('<br>');showAlert('campaignAlert',m,d.emails_failed>0?'warning':'success');loadStats();loadRecipients()}else{document.getElementById('progressFill').style.width='0%';showAlert('campaignAlert','Failed: '+d.error,'error')}}).catch(e=>{document.getElementById('progressFill').style.width='0%';showAlert('campaignAlert','Error: '+e.message,'error')}).finally(()=>{btn.disabled=false;btn.textContent='Send Invitations';setTimeout(()=>pd.style.display='none',5000)})}
 
-            const sendBtn = document.getElementById('sendBtn');
-            const progressDiv = document.getElementById('sendProgress');
-            const progressBar = document.getElementById('progressBar');
-            const progressText = document.getElementById('progressText');
-
-            sendBtn.disabled = true;
-            sendBtn.textContent = 'Sending...';
-            progressDiv.style.display = 'block';
-            progressBar.style.width = '10%';
-            progressText.textContent = 'Preparing invitations...';
-
-            // Build form data with optional attachment
-            const formData = new FormData();
-            formData.append('event_name', eventName);
-            if (attachmentFile) {
-                formData.append('attachment', attachmentFile);
-            }
-
-            fetch('/send-farewell-emails', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ event_name: eventName })
-            })
-            .then(response => response.json())
-            .then(data => {
-                progressBar.style.width = '100%';
-                if (data.success) {
-                    let msg = `Campaign completed!<br>Emails sent: ${data.emails_sent}<br>Failed: ${data.emails_failed}<br>Total recipients: ${data.total_recipients}`;
-                    if (data.failed_list && data.failed_list.length > 0) {
-                        msg += '<br><br>Failed emails:<br>' + data.failed_list.map(f => `${f.email}: ${f.error}`).join('<br>');
-                    }
-                    showAlert('campaignAlert', msg, data.emails_failed > 0 ? 'warning' : 'success');
-                    loadStats();
-                    loadCouponDetails();
-                } else {
-                    progressBar.style.width = '0%';
-                    showAlert('campaignAlert', `Campaign failed: ${data.error}`, 'error');
-                }
-            })
-            .catch(error => {
-                progressBar.style.width = '0%';
-                showAlert('campaignAlert', `Campaign error: ${error.message}`, 'error');
-            })
-            .finally(() => {
-                sendBtn.disabled = false;
-                sendBtn.textContent = 'Send Farewell Invitations';
-                setTimeout(() => { progressDiv.style.display = 'none'; }, 5000);
-            });
-        }
-    </script>
+function sendAll(){selectedEmails=new Set(allRecipients.map(r=>r.email));displayRecipients(allRecipients);sendSelected()}
+</script>
 </body>
 </html>

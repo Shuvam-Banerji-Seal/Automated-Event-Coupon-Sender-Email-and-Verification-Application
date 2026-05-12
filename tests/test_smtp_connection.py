@@ -30,7 +30,7 @@ class TestSMTPMailerInit:
         monkeypatch.delenv("SMTP_USERNAME", raising=False)
         with pytest.raises(EnvironmentError) as exc_info:
             SMTPMailer()
-        assert "SMTP_USERNAME" in str(exc_info.value)
+        assert "credentials" in str(exc_info.value).lower()
 
 
 class TestSMTPConnection:
@@ -146,4 +146,6 @@ class TestSendBatch:
         )
         elapsed = time.time() - start
 
-        assert elapsed >= delay * (len(recipients) - 1), "Delay not enforced between sends"
+        assert elapsed >= delay * (len(recipients) - 1), (
+            "Delay not enforced between sends"
+        )

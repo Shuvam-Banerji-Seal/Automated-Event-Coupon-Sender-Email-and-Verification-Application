@@ -20,30 +20,51 @@ class SMTPMailer:
     No OAuth required.
     """
 
-    REQUIRED_VARS = [
-        "SMTP_HOST",
-        "SMTP_PORT",
-        "SMTP_USERNAME",
-        "SMTP_PASSWORD",
-        "SMTP_SENDER_NAME",
-        "SMTP_SENDER_EMAIL",
-    ]
+    SMTP_CONFIG_FILE = "smtp_config.json"
 
     def __init__(self):
-        """Load all config from environment. Raise EnvironmentError if any required var is missing."""
-        missing = [v for v in self.REQUIRED_VARS if not os.getenv(v)]
-        if missing:
-            raise EnvironmentError(
-                f"SMTPMailer missing required environment variables: {', '.join(missing)}"
-            )
+        """Load config from smtp_config.json (if exists) or environment. Raise if missing."""
+        self.host = "smtp.gmail.com"
+        self.port = 587
+        self.username = ""
+        self.password = ""
+        self.sender_name = ""
+        self.sender_email = ""
+        self.use_tls = True
 
-        self.host = os.getenv("SMTP_HOST")
-        self.port = int(os.getenv("SMTP_PORT", "587"))
-        self.username = os.getenv("SMTP_USERNAME")
-        self.password = os.getenv("SMTP_PASSWORD")
-        self.sender_name = os.getenv("SMTP_SENDER_NAME")
-        self.sender_email = os.getenv("SMTP_SENDER_EMAIL")
-        self.use_tls = os.getenv("SMTP_USE_TLS", "True").lower() == "true"
+        # Try loading from UI-saved config first
+        config_loaded = False
+        if os.path.exists(self.SMTP_CONFIG_FILE):
+            try:
+                import json as _json
+
+                with open(self.SMTP_CONFIG_FILE, "r") as _f:
+                    cfg = _json.load(_f)
+                self.host = cfg.get("host", self.host)
+                self.port = int(cfg.get("port", self.port))
+                self.username = cfg.get("username", "")
+                self.password = cfg.get("password", "")
+                self.sender_name = cfg.get("sender_name", "")
+                self.sender_email = cfg.get("sender_email", "")
+                self.use_tls = cfg.get("use_tls", True)
+                config_loaded = bool(self.username and self.password)
+            except Exception:
+                pass
+
+        # Fall back to environment variables
+        if not config_loaded:
+            self.host = os.getenv("SMTP_HOST", self.host)
+            self.port = int(os.getenv("SMTP_PORT", str(self.port)))
+            self.username = os.getenv("SMTP_USERNAME", self.username)
+            self.password = os.getenv("SMTP_PASSWORD", self.password)
+            self.sender_name = os.getenv("SMTP_SENDER_NAME", self.sender_name)
+            self.sender_email = os.getenv("SMTP_SENDER_EMAIL", self.sender_email)
+            self.use_tls = os.getenv("SMTP_USE_TLS", "True").lower() == "true"
+
+        if not self.username or not self.password:
+            raise EnvironmentError(
+                "SMTPMailer missing credentials. Configure via Settings panel or .env file."
+            )
 
     def test_connection(self) -> dict:
         """Attempt SMTP login and immediately disconnect.
@@ -70,7 +91,9 @@ class SMTPMailer:
             server.quit()
 
             result["success"] = True
-            result["message"] = f"Connected to {self.host}:{self.port} and authenticated successfully"
+            result["message"] = (
+                f"Connected to {self.host}:{self.port} and authenticated successfully"
+            )
         except smtplib.SMTPAuthenticationError as e:
             result["message"] = f"Authentication failed: {e}"
         except smtplib.SMTPException as e:
@@ -125,8 +148,12 @@ class SMTPMailer:
 
             if attachment_path:
                 with open(attachment_path, "rb") as f:
-                    attach = MIMEApplication(f.read(), Name=os.path.basename(attachment_path))
-                attach["Content-Disposition"] = f'attachment; filename="{os.path.basename(attachment_path)}"'
+                    attach = MIMEApplication(
+                        f.read(), Name=os.path.basename(attachment_path)
+                    )
+                attach["Content-Disposition"] = (
+                    f'attachment; filename="{os.path.basename(attachment_path)}"'
+                )
                 msg.attach(attach)
 
             if self.use_tls:
@@ -189,7 +216,11 @@ class SMTPMailer:
             email = recipient.get("email", "")
             name = recipient.get("name", email.split("@")[0])
 
-            print(f"[21MS Farewell Mailer] Sending {i}/{total} → {email} ... ", end="", flush=True)
+            print(
+                f"[21MS Farewell Mailer] Sending {i}/{total} → {email} ... ",
+                end="",
+                flush=True,
+            )
 
             try:
                 html_body = template_renderer(recipient)
