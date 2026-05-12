@@ -365,23 +365,24 @@ def send_farewell_emails():
                 }
             ), 400
 
-        # Filter out recipients who already have SENT coupons
+        # Filter out recipients who already have coupon records (ANY status)
+        # This prevents duplicate coupons when uploading new CSV with old names
         import csv as csv_module
 
-        sent_emails = set()
+        existing_emails = set()
         try:
             with open(csv_manager.coupons_file, "r", newline="", encoding="utf-8") as f:
                 reader = csv_module.DictReader(f)
                 for row in reader:
-                    if row.get("status") == "sent" and row.get("email"):
-                        sent_emails.add(row.get("email", "").lower())
+                    if row.get("email"):
+                        existing_emails.add(row.get("email", "").lower())
         except FileNotFoundError:
             pass
 
         pending_recipients = []
         for r in recipients:
             email = r.get("email", "").lower()
-            if email and email not in sent_emails:
+            if email and email not in existing_emails:
                 pending_recipients.append(r)
 
         if not pending_recipients:
@@ -798,7 +799,8 @@ def confirm_upload():
             for r in valid_recipients:
                 writer.writerow(r)
 
-        csv_manager.reset_coupons_for_fresh_upload()
+        # NEVER delete coupons.csv — existing coupon records must persist
+        # New coupons will be generated only for NEW recipients on send
 
         logger.info(
             f"Confirmed {len(valid_recipients)} recipients (invalid: {invalid_count})"
@@ -1380,8 +1382,34 @@ def send_with_template():
         if not recipients:
             return jsonify({"success": False, "error": "No matching recipients"}), 400
 
+        # Filter out recipients who already have coupon records
+        import csv as csv_module
+
+        existing_emails = set()
+        try:
+            with open(csv_manager.coupons_file, "r", newline="", encoding="utf-8") as f:
+                reader = csv_module.DictReader(f)
+                for row in reader:
+                    if row.get("email"):
+                        existing_emails.add(row.get("email", "").lower())
+        except FileNotFoundError:
+            pass
+
+        new_recipients = [
+            r for r in recipients if r.get("email", "").lower() not in existing_emails
+        ]
+        if not new_recipients:
+            return jsonify(
+                {
+                    "success": False,
+                    "error": "All selected recipients already have coupons",
+                }
+            ), 400
+
         smtp_mailer = SMTPMailer()
-        coupon_results = coupon_manager.generate_coupons_batch(recipients, event_name)
+        coupon_results = coupon_manager.generate_coupons_batch(
+            new_recipients, event_name
+        )
 
         if coupon_results.get("generated", 0) == 0:
             return jsonify(
