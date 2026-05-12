@@ -25,9 +25,16 @@ class TestSMTPMailerInit:
         assert mailer.username == os.getenv("SMTP_USERNAME")
         assert mailer.sender_name == os.getenv("SMTP_SENDER_NAME")
 
-    def test_raises_on_missing_env(self, monkeypatch):
-        """SMTPMailer raises EnvironmentError when SMTP_USERNAME is missing."""
+    def test_raises_on_missing_env(self, monkeypatch, tmp_path):
+        """SMTPMailer raises EnvironmentError when both config file and env vars are missing."""
+        # Backup and clear smtp_config.json check by setting a temp path
+        monkeypatch.setattr(
+            SMTPMailer, "SMTP_CONFIG_FILE", str(tmp_path / "nonexistent.json")
+        )
         monkeypatch.delenv("SMTP_USERNAME", raising=False)
+        monkeypatch.delenv("SMTP_PASSWORD", raising=False)
+        monkeypatch.delenv("SMTP_HOST", raising=False)
+        monkeypatch.delenv("SMTP_PORT", raising=False)
         with pytest.raises(EnvironmentError) as exc_info:
             SMTPMailer()
         assert "credentials" in str(exc_info.value).lower()

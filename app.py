@@ -1189,18 +1189,77 @@ def test_smtp_config():
         return jsonify({"success": False, "message": str(e), "error": str(e)})
 
 
+@app.route("/farewell-smtp-config/upload", methods=["POST"])
+def upload_smtp_config():
+    """Upload SMTP configuration as a JSON file."""
+    try:
+        if "file" not in request.files:
+            return jsonify({"success": False, "error": "No file uploaded"}), 400
+        file = request.files["file"]
+        if not file.filename or not file.filename.lower().endswith(".json"):
+            return jsonify({"success": False, "error": "File must be a .json"}), 400
+        content = file.read().decode("utf-8")
+        config = json.loads(content)
+        required = ["username", "password"]
+        for key in required:
+            if key not in config or not config[key]:
+                return jsonify(
+                    {"success": False, "error": f"Missing required field: {key}"}
+                ), 400
+        with open(SMTP_CONFIG_FILE, "w") as f:
+            json.dump(
+                {
+                    "host": config.get("host", "smtp.gmail.com"),
+                    "port": int(config.get("port", 587)),
+                    "username": config["username"],
+                    "password": config["password"],
+                    "sender_name": config.get("sender_name", config["username"]),
+                    "sender_email": config.get("sender_email", config["username"]),
+                    "use_tls": config.get("use_tls", True),
+                },
+                f,
+                indent=2,
+            )
+        logger.info(f"SMTP config uploaded via JSON for {config['username']}")
+        return jsonify(
+            {"success": True, "message": "SMTP config loaded from JSON file"}
+        )
+    except json.JSONDecodeError:
+        return jsonify({"success": False, "error": "Invalid JSON format"}), 400
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route("/farewell-smtp-config", methods=["POST"])
 def save_smtp_config():
-    """Save SMTP configuration."""
+    """Save SMTP configuration. Handles masked password as 'keep existing'."""
     try:
         data = request.get_json()
         if not data:
             return jsonify({"success": False, "error": "No data provided"}), 400
+
+        new_password = data.get("password", "")
+
+        # If password is masked (********), load existing password
+        existing_config = {}
+        if os.path.exists(SMTP_CONFIG_FILE):
+            try:
+                with open(SMTP_CONFIG_FILE, "r") as f:
+                    existing_config = json.load(f)
+            except:
+                pass
+
+        if new_password in ("********", "", "****") and existing_config.get("password"):
+            new_password = existing_config["password"]
+
+        if not new_password:
+            new_password = os.getenv("SMTP_PASSWORD", "")
+
         config = {
             "host": data.get("host", "smtp.gmail.com"),
             "port": int(data.get("port", 587)),
             "username": data.get("username", ""),
-            "password": data.get("password", ""),
+            "password": new_password,
             "sender_name": data.get("sender_name", ""),
             "sender_email": data.get("sender_email", ""),
             "use_tls": data.get("use_tls", True),

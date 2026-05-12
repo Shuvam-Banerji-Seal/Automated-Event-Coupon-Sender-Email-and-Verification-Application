@@ -515,27 +515,22 @@
         }
         
         @media (max-width: 768px) {
-            .main-content {
-                padding: 20px;
-            }
-            
-            .header h1 {
-                font-size: 24px;
-            }
-            
-            .camera-container {
-                max-width: 300px;
-            }
-            
-            .scanner-overlay {
-                width: 150px;
-                height: 150px;
-            }
-            
-            .scanner-corners {
-                width: 170px;
-                height: 170px;
-            }
+            body { padding: 8px; }
+            .main-content { padding: 12px; }
+            .container { border-radius: 16px; }
+            .header { padding: 20px; }
+            .header h1 { font-size: 20px; }
+            .camera-container { max-width: 100%; }
+            .scanner-overlay { width: 140px; height: 140px; }
+            .scanner-corners { width: 160px; height: 160px; }
+            .btn { padding: 14px 18px; font-size: 15px; width: 100%; margin: 4px 0; }
+            .form-group input, .form-group select { padding: 14px; font-size: 16px; }
+            .stats-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+            .stat-card { padding: 16px; }
+            .stat-number { font-size: 1.5rem; }
+            [class*="modal-"] { width: 95% !important; padding: 20px !important; }
+            .camera-buttons { flex-direction: column; }
+            .manual-section input[type="text"] { font-size: 24px; padding: 16px; }
         }
     </style>
 </head>
@@ -550,10 +545,9 @@
         </div>
         
         <div class="main-content">
-            <div class="nav-links">
-                <a href="/">🏠 Dashboard</a>
-                <a href="/sender">🎫 Event Manager</a>
-                <a href="/scanner">📱 Ticket Scanner</a>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+                <div style="font-size:1.1rem;font-weight:600;color:var(--text-primary)">QR Scanner</div>
+                <a href="/sender" style="color:var(--text-secondary);font-size:.85rem;text-decoration:none">Settings &larr;</a>
             </div>
             
             <!-- Device Registration Modal -->
