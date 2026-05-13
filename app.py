@@ -1112,6 +1112,23 @@ def download_failed_emails(filename):
         return jsonify({"error": str(e)}), 500
 
 
+# SQLite backup integrity check
+@app.route("/backup-check")
+def backup_check():
+    """Verify CSV ↔ SQLite consistency and repair if needed."""
+    if not csv_manager:
+        return jsonify({"success": False, "error": "Not initialized"}), 500
+    try:
+        integrity = csv_manager.db.verify_integrity(csv_manager.coupons_file)
+        if not integrity.get("match") and csv_manager.coupons_file:
+            repaired = csv_manager.db.repair_from_csv(csv_manager.coupons_file)
+            integrity["repaired"] = repaired
+        return jsonify({"success": True, "integrity": integrity})
+    except Exception as e:
+        logger.error(f"Backup check error: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 # Error handlers
 @app.errorhandler(404)
 def not_found(error):

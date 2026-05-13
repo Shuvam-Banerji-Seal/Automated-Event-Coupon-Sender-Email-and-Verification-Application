@@ -7,6 +7,8 @@ import csv
 import os
 import fcntl
 import json
+import sqlite3
+import threading
 from datetime import datetime
 from typing import List, Dict, Optional, Any
 from dataclasses import dataclass, asdict
@@ -37,6 +39,162 @@ class CouponRecord:
         return cls(**data)
 
 
+class SQLiteBackup:
+    """SQLite database that mirrors coupons.csv as a secondary backup.
+
+    The CSV is always the primary store. Every CSV write operation also
+    syncs to this SQLite database for redundancy and faster reads.
+    """
+
+    DB_FILE = "coupons_backup.db"
+
+    def __init__(self, db_path: Optional[str] = None):
+        self.db_path = db_path or self.DB_FILE
+        self.lock = threading.Lock()
+        self._init_db()
+
+    def _init_db(self):
+        """Create the coupons table if it doesn't exist."""
+        with self.lock:
+            conn = sqlite3.connect(self.db_path)
+            try:
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS coupons (
+                        coupon_id TEXT PRIMARY KEY,
+                        email TEXT NOT NULL,
+                        encrypted_data TEXT,
+                        qr_code_data TEXT,
+                        verification_code TEXT,
+                        sent_at TEXT,
+                        used_at TEXT,
+                        status TEXT DEFAULT 'generated'
+                    )
+                """)
+                conn.commit()
+            finally:
+                conn.close()
+
+    def upsert_coupon(self, row: Dict[str, str]) -> bool:
+        """Insert or replace a coupon record in SQLite."""
+        with self.lock:
+            conn = sqlite3.connect(self.db_path)
+            try:
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO coupons
+                    (coupon_id, email, encrypted_data, qr_code_data,
+                     verification_code, sent_at, used_at, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                    (
+                        row.get("coupon_id", ""),
+                        row.get("email", ""),
+                        row.get("encrypted_data", ""),
+                        row.get("qr_code_data", ""),
+                        row.get("verification_code", ""),
+                        row.get("sent_at"),
+                        row.get("used_at"),
+                        row.get("status", "generated"),
+                    ),
+                )
+                conn.commit()
+                return True
+            except Exception as e:
+                logging.getLogger(__name__).error(f"SQLite upsert error: {e}")
+                return False
+            finally:
+                conn.close()
+
+    def upsert_batch(self, rows: List[Dict[str, str]]) -> bool:
+        """Insert or replace multiple coupon records in SQLite."""
+        with self.lock:
+            conn = sqlite3.connect(self.db_path)
+            try:
+                conn.executemany(
+                    """
+                    INSERT OR REPLACE INTO coupons
+                    (coupon_id, email, encrypted_data, qr_code_data,
+                     verification_code, sent_at, used_at, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                    [
+                        (
+                            r.get("coupon_id", ""),
+                            r.get("email", ""),
+                            r.get("encrypted_data", ""),
+                            r.get("qr_code_data", ""),
+                            r.get("verification_code", ""),
+                            r.get("sent_at"),
+                            r.get("used_at"),
+                            r.get("status", "generated"),
+                        )
+                        for r in rows
+                    ],
+                )
+                conn.commit()
+                return True
+            except Exception as e:
+                logging.getLogger(__name__).error(f"SQLite batch upsert error: {e}")
+                return False
+            finally:
+                conn.close()
+
+    def sync_from_csv(self, csv_file: str) -> int:
+        """Sync all data from a CSV file into SQLite. Returns count of records synced."""
+        count = 0
+        try:
+            with open(csv_file, "r", newline="", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                rows = list(reader)
+            if rows:
+                self.upsert_batch(rows)
+                count = len(rows)
+        except FileNotFoundError:
+            pass
+        except Exception as e:
+            logging.getLogger(__name__).error(f"SQLite sync error: {e}")
+        return count
+
+    def verify_integrity(self, csv_file: str) -> Dict[str, Any]:
+        """Compare SQLite data with CSV and report differences."""
+        result = {
+            "csv_count": 0,
+            "db_count": 0,
+            "match": False,
+            "missing_in_db": [],
+            "missing_in_csv": [],
+        }
+        try:
+            # Count CSV
+            with open(csv_file, "r", newline="", encoding="utf-8") as f:
+                csv_rows = list(csv.DictReader(f))
+            result["csv_count"] = len(csv_rows)
+            csv_ids = {r["coupon_id"] for r in csv_rows if r.get("coupon_id")}
+
+            # Count DB
+            conn = sqlite3.connect(self.db_path)
+            try:
+                db_rows = conn.execute(
+                    "SELECT coupon_id, email, status FROM coupons"
+                ).fetchall()
+                result["db_count"] = len(db_rows)
+                db_ids = {r[0] for r in db_rows}
+            finally:
+                conn.close()
+
+            result["missing_in_db"] = list(csv_ids - db_ids)
+            result["missing_in_csv"] = list(db_ids - csv_ids)
+            result["match"] = csv_ids == db_ids
+        except Exception as e:
+            result["error"] = str(e)
+        return result
+
+    def repair_from_csv(self, csv_file: str) -> Dict[str, Any]:
+        """Repair SQLite database by re-syncing full CSV data."""
+        synced = self.sync_from_csv(csv_file)
+        return {"synced": synced, "status": "repaired" if synced > 0 else "no_data"}
+
+
 class CSVManager:
     """Manages CSV file operations with file locking for concurrent access"""
 
@@ -48,9 +206,15 @@ class CSVManager:
         self.coupons_file = coupons_file
         self.recipients_file = recipients_file
         self.logger = logging.getLogger(__name__)
+        self.db = SQLiteBackup()
 
         # Ensure coupons file exists with headers
         self._initialize_coupons_file()
+
+        # Sync existing CSV data to SQLite backup on startup
+        synced = self.db.sync_from_csv(self.coupons_file)
+        if synced > 0:
+            self.logger.info(f"SQLite backup synced: {synced} records")
 
     def _initialize_coupons_file(self):
         """Initialize coupons CSV file with headers if it doesn't exist"""
@@ -251,6 +415,8 @@ class CSVManager:
                 writer.writerow(coupon.to_dict())
 
             self.logger.info(f"Saved coupon {coupon.coupon_id} for {coupon.email}")
+            # Sync to SQLite backup
+            self.db.upsert_coupon(coupon.to_dict())
             return True
 
         except Exception as e:
@@ -278,6 +444,8 @@ class CSVManager:
                     writer.writerow(coupon.to_dict())
 
             self.logger.info(f"Saved {len(coupons)} coupons in batch")
+            # Sync to SQLite backup
+            self.db.upsert_batch([c.to_dict() for c in coupons])
             return True
 
         except Exception as e:
@@ -370,6 +538,11 @@ class CSVManager:
                     writer.writerows(coupons)
 
             self.logger.info(f"Updated coupon {coupon_id} status to {status}")
+            # Sync updated row to SQLite backup
+            for row in coupons:
+                if row.get("coupon_id") == coupon_id:
+                    self.db.upsert_coupon(row)
+                    break
             return True
 
         except Exception as e:
