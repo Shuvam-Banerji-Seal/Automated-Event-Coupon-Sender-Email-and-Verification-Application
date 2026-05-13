@@ -198,14 +198,25 @@ class CSVManager:
                 pass
 
     def read_recipients(self) -> List[Dict[str, str]]:
-        """Read recipient data from CSV file (all columns)"""
+        """Read recipient data from CSV file (all columns). Converts boolean strings."""
         recipients = []
         try:
             with self._file_lock(self.recipients_file, "r") as f:
                 reader = csv.DictReader(f)
                 for row in reader:
                     if row.get("email"):
-                        recipient = {k: v.strip() for k, v in row.items() if k}
+                        recipient = {}
+                        for k, v in row.items():
+                            if not k:
+                                continue
+                            v = v.strip()
+                            # Convert 'True'/'False' strings to Python booleans
+                            if v.lower() == "true":
+                                recipient[k] = True
+                            elif v.lower() == "false":
+                                recipient[k] = False
+                            else:
+                                recipient[k] = v
                         recipients.append(recipient)
 
             self.logger.info(
