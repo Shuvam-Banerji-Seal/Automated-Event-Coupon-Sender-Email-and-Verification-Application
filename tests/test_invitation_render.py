@@ -38,6 +38,7 @@ def sample_data():
         "coupon_id": "test-coupon-00000000",
         "organizer_batch": "22MS Batch",
         "organizer_institution": "IISER Kolkata",
+        "include_qr": True,
     }
 
 

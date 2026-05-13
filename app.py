@@ -432,7 +432,11 @@ def send_farewell_emails():
                 }
             )
 
+        # Build lookup for recipient options
+        email_to_opts = {r.get("email", "").lower(): r for r in pending_recipients}
+
         def render_invitation(recipient, qr_src):
+            opts = email_to_opts.get(recipient["attendee_email"].lower(), {})
             return render_template(
                 "farewell/invitation.html",
                 attendee_name=recipient["attendee_name"],
@@ -447,6 +451,7 @@ def send_farewell_emails():
                 coupon_id=recipient["coupon_id"],
                 organizer_batch=recipient["organizer_batch"],
                 organizer_institution=recipient["organizer_institution"],
+                include_qr=opts.get("include_qr", True),
             )
 
         subject = f"You're Invited! {event_name}"
@@ -778,6 +783,7 @@ def confirm_upload():
                         "name": name,
                         "include_dinner": recipient_opts.get("include_dinner", True),
                         "include_lunch": recipient_opts.get("include_lunch", True),
+                        "include_qr": recipient_opts.get("include_qr", True),
                     }
                 )
 
@@ -793,7 +799,14 @@ def confirm_upload():
         # Write confirmed recipients to the CSV file used by the system
         with open(csv_manager.recipients_file, "w", newline="", encoding="utf-8") as f:
             writer = csv_module.DictWriter(
-                f, fieldnames=["email", "name", "include_dinner", "include_lunch"]
+                f,
+                fieldnames=[
+                    "email",
+                    "name",
+                    "include_dinner",
+                    "include_lunch",
+                    "include_qr",
+                ],
             )
             writer.writeheader()
             for r in valid_recipients:
@@ -850,6 +863,7 @@ def preview_email():
             "coupon_id": coupon_id,
             "organizer_batch": ORGANIZER_BATCH,
             "organizer_institution": ORGANIZER_INSTITUTION,
+            "include_qr": data.get("include_qr", True),
         }
         tpl_path = f"farewell/{template_type}.html"
         try:
@@ -1406,6 +1420,9 @@ def send_with_template():
                 }
             ), 400
 
+        # Build lookup for recipient options (include_qr etc.)
+        recipient_opts = {r.get("email", "").lower(): r for r in new_recipients}
+
         smtp_mailer = SMTPMailer()
         coupon_results = coupon_manager.generate_coupons_batch(
             new_recipients, event_name
@@ -1419,6 +1436,7 @@ def send_with_template():
         sent, failed, failed_list = 0, 0, []
         for coupon in coupon_results.get("coupons", []):
             email = coupon["email"]
+            opts = recipient_opts.get(email.lower(), {})
             qr_bytes = base64.b64decode(coupon["qr_code_base64"])
             ctx = {
                 "attendee_name": coupon.get("name", email.split("@")[0]),
@@ -1433,6 +1451,7 @@ def send_with_template():
                 "coupon_id": coupon["coupon_id"],
                 "organizer_batch": ORGANIZER_BATCH,
                 "organizer_institution": ORGANIZER_INSTITUTION,
+                "include_qr": opts.get("include_qr", True),
             }
             try:
                 tpl = f"farewell/{template_type}.html"
