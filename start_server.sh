@@ -123,7 +123,13 @@ OLD_PID=$(lsof -ti:5000 2>/dev/null || true)
 if [ -n "$OLD_PID" ]; then
     echo -e "${YELLOW}  ⚠ Stopping existing server (PID: $OLD_PID)...${NC}"
     kill -9 "$OLD_PID" 2>/dev/null || true
-    sleep 1
+    # Wait until port is actually free
+    for i in $(seq 1 10); do
+        if ! lsof -ti:5000 >/dev/null 2>&1; then
+            break
+        fi
+        sleep 1
+    done
     echo -e "${GREEN}  ✓ Stopped${NC}"
 else
     echo -e "${GREEN}  ✓ No existing server${NC}"
