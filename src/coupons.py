@@ -48,13 +48,13 @@ class CouponManager:
                     "error": "This coupon has already been used",
                     "error_code": "ALREADY_USED",
                 }
-            if coupon_record.status == "sent":
+            if coupon_record.status in ("sent", "generated"):
                 used_at = datetime.now(timezone.utc).isoformat()
                 success = self.csv_manager.update_coupon_status(
                     coupon_record.coupon_id,
                     "used",
                     used_at=used_at,
-                    if_current_status="sent",
+                    if_current_status=coupon_record.status,
                 )
                 if success:
                     self.logger.info(
