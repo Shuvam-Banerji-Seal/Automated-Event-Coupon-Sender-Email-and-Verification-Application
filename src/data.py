@@ -425,6 +425,8 @@ class CSVManager:
     def save_coupon(self, coupon: CouponRecord) -> bool:
         """Save a single coupon record to CSV"""
         try:
+            # Ensure file exists with headers before appending
+            self._initialize_coupons_file()
             with self._file_lock(self.coupons_file, "a") as f:
                 writer = csv.DictWriter(
                     f,
@@ -453,6 +455,7 @@ class CSVManager:
     def save_coupons_batch(self, coupons: List[CouponRecord]) -> bool:
         """Save multiple coupon records in batch"""
         try:
+            self._initialize_coupons_file()
             with self._file_lock(self.coupons_file, "a") as f:
                 writer = csv.DictWriter(
                     f,

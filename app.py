@@ -868,11 +868,11 @@ def preview_csv():
 
         rows = []
         headers = []
-        with open(filepath, "r", newline="", encoding="utf-8") as f:
-            reader = csv_module.DictReader(f)
-            headers = reader.fieldnames or []
-            for row in reader:
-                rows.append({k: v for k, v in row.items() if k})
+        raw = open(filepath, "r", encoding="utf-8-sig").read()
+        reader = csv_module.DictReader(raw.splitlines())
+        headers = reader.fieldnames or []
+        for row in reader:
+            rows.append({k: v for k, v in row.items() if k})
         return jsonify(
             {
                 "success": True,
@@ -919,35 +919,35 @@ def confirm_upload():
         invalid_count = 0
         errors = []
 
-        with open(filepath, "r", newline="", encoding="utf-8") as f:
-            reader = csv_module.DictReader(f)
-            for i, row in enumerate(reader):
-                email = row.get(email_col, "").strip().lower()
-                if not email:
-                    invalid_count += 1
-                    continue
-                if not csv_manager.validate_email_format(email):
-                    invalid_count += 1
-                    errors.append(f"Invalid email at row {i + 2}: {email}")
-                    continue
-                name = row.get(name_col, "").strip() if name_col else ""
-                if not name:
-                    name = email.split("@")[0]
-                # Find per-recipient options
-                recipient_opts = {}
-                for rd in recipients_data:
-                    if rd.get("email", "").lower() == email:
-                        recipient_opts = rd
-                        break
-                valid_recipients.append(
-                    {
-                        "email": email,
-                        "name": name,
-                        "include_dinner": recipient_opts.get("include_dinner", True),
-                        "include_lunch": recipient_opts.get("include_lunch", True),
-                        "include_qr": recipient_opts.get("include_qr", True),
-                    }
-                )
+        raw = open(filepath, "r", encoding="utf-8-sig").read()
+        reader = csv_module.DictReader(raw.splitlines())
+        for i, row in enumerate(reader):
+            email = row.get(email_col, "").strip().lower()
+            if not email:
+                invalid_count += 1
+                continue
+            if not csv_manager.validate_email_format(email):
+                invalid_count += 1
+                errors.append(f"Invalid email at row {i + 2}: {email}")
+                continue
+            name = row.get(name_col, "").strip() if name_col else ""
+            if not name:
+                name = email.split("@")[0]
+            # Find per-recipient options
+            recipient_opts = {}
+            for rd in recipients_data:
+                if rd.get("email", "").lower() == email:
+                    recipient_opts = rd
+                    break
+            valid_recipients.append(
+                {
+                    "email": email,
+                    "name": name,
+                    "include_dinner": recipient_opts.get("include_dinner", True),
+                    "include_lunch": recipient_opts.get("include_lunch", True),
+                    "include_qr": recipient_opts.get("include_qr", True),
+                }
+            )
 
         if not valid_recipients:
             return jsonify(
