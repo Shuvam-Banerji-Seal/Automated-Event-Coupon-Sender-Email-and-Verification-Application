@@ -42,9 +42,7 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 # Configuration
-app.config["SECRET_KEY"] = os.environ.get(
-    "SECRET_KEY", "dev-secret-key-change-in-production"
-)
+app.config["SECRET_KEY"] = os.environ["SECRET_KEY"]
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16MB max file size
 app.config["UPLOAD_FOLDER"] = "uploads"
 
@@ -486,13 +484,23 @@ def send_farewell_emails():
                 else:
                     failed += 1
                     failed_list.append(
-                        {"email": recipient["email"], "error": result.get("error")}
+                        {
+                            "email": recipient["email"],
+                            "error": result.get("error"),
+                            "timestamp": datetime.now().isoformat(),
+                        }
                     )
 
             except Exception as e:
                 logger.error(f"Failed to send to {recipient['email']}: {str(e)}")
                 failed += 1
-                failed_list.append({"email": recipient["email"], "error": str(e)})
+                failed_list.append(
+                    {
+                        "email": recipient["email"],
+                        "error": str(e),
+                        "timestamp": datetime.now().isoformat(),
+                    }
+                )
 
             if i < len(email_recipients):
                 time.sleep(1.0)
@@ -1472,10 +1480,22 @@ def send_with_template():
                     sent += 1
                 else:
                     failed += 1
-                    failed_list.append({"email": email, "error": result.get("error")})
+                    failed_list.append(
+                        {
+                            "email": email,
+                            "error": result.get("error"),
+                            "timestamp": datetime.now().isoformat(),
+                        }
+                    )
             except Exception as e:
                 failed += 1
-                failed_list.append({"email": email, "error": str(e)})
+                failed_list.append(
+                    {
+                        "email": email,
+                        "error": str(e),
+                        "timestamp": datetime.now().isoformat(),
+                    }
+                )
                 logger.error(f"Error sending to {email}: {str(e)}")
 
         return jsonify(

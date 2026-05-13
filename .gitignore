@@ -60,3 +60,11 @@ setup.py
 test_schedule.pdf
 smtp_sample.json
 static/smtp_sample.json
+
+# Security - never commit these
+*.pem
+smtp_config.json
+organizer_credentials.json
+uploads/
+coupons.csv.backup
+wl-copy
