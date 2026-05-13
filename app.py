@@ -44,6 +44,34 @@ app = Flask(__name__)
 
 # Configuration
 app.config["SECRET_KEY"] = os.environ["SECRET_KEY"]
+
+# zrok tunnel host pattern (any shares.zrok.io subdomain)
+ZROK_HOST_SUFFIX = ".shares.zrok.io"
+
+
+@app.before_request
+def restrict_zrok_tunnel():
+    """Block admin pages when accessed through the zrok public tunnel."""
+    host = request.host if request.host else ""
+    if ZROK_HOST_SUFFIX in host:
+        # Allow only scanner-related paths through the tunnel
+        allowed_prefixes = (
+            "/scanner",
+            "/verify-coupon",
+            "/coupon-status",
+            "/favicon.ico",
+            "/static/",
+        )
+        path = request.path
+        if not any(path.startswith(p) for p in allowed_prefixes):
+            return jsonify(
+                {
+                    "error": "Access denied. Use the scanner page.",
+                    "scanner_url": f"{request.scheme}://{request.host}/scanner",
+                }
+            ), 403
+
+
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16MB max file size
 app.config["UPLOAD_FOLDER"] = "uploads"
 
@@ -89,6 +117,51 @@ def login_required(f):
     def decorated_function(*args, **kwargs):
         if "user" not in session:
             return redirect(url_for("login"))
+        return f(*args, **kwargs)
+
+    return decorated_function
+
+
+def _get_server_ip():
+    """Get the server's LAN IP address for access-control comparison."""
+    import socket
+
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
+
+
+# Cache the server IP at startup
+SERVER_LAN_IP = _get_server_ip()
+ADMIN_ALLOWED_IPS = {"127.0.0.1", "::1", SERVER_LAN_IP}
+
+
+def admin_only(f):
+    """Decorator to restrict route access to the host machine only.
+    Remote devices on the LAN are denied access (403) and redirected to /scanner.
+    This protects all management routes (sender, SMTP config, email sending, etc.)
+    while keeping the scanner accessible to staff devices on the network.
+    """
+    from functools import wraps
+
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        client_ip = request.remote_addr or "unknown"
+        if client_ip not in ADMIN_ALLOWED_IPS:
+            logger.warning(f"Admin access denied for {client_ip} on {request.path}")
+            if request.is_json or request.content_type == "application/json":
+                return jsonify(
+                    {
+                        "success": False,
+                        "error": "Access denied. Admin panel is only available on the host machine.",
+                    }
+                ), 403
+            return redirect(url_for("scanner"))
         return f(*args, **kwargs)
 
     return decorated_function
@@ -203,15 +276,17 @@ def logout():
 
 # Main routes
 @app.route("/")
+@admin_only
 def dashboard():
-    """21MS_FAREWELL BRANCH: Main dashboard route - no OAuth required"""
+    """21MS_FAREWELL BRANCH: Main dashboard route - admin only"""
     user = get_current_user()
     return render_template("sender.html", user=user)
 
 
 @app.route("/sender")
+@admin_only
 def sender():
-    """21MS_FAREWELL BRANCH: Sender interface route - no OAuth required"""
+    """21MS_FAREWELL BRANCH: Sender interface route - admin only"""
     user = get_current_user()
     return render_template("sender.html", user=user)
 
@@ -359,6 +434,7 @@ def send_emails():
 
 # 21MS_FAREWELL BRANCH: New route for SMTP-based email sending
 @app.route("/send-farewell-emails", methods=["POST"])
+@admin_only
 def send_farewell_emails():
     """21MS_FAREWELL BRANCH: Send coupon emails via SMTP. Does not require OAuth login.
 
@@ -482,9 +558,21 @@ def send_farewell_emails():
             )
 
             try:
-                # For actual email: use cid:qrcode and attach QR bytes
-                qr_bytes = base64.b64decode(recipient["qr_code_base64"])
-                html_body = render_invitation(recipient, "cid:qrcode")
+                # Determine if this recipient gets a QR gala entry pass
+                r_opts = email_to_opts.get(recipient["attendee_email"].lower(), {})
+                has_qr = r_opts.get("include_qr", True)
+                if isinstance(has_qr, str):
+                    has_qr = has_qr.lower() not in ("false", "0", "no")
+
+                if has_qr:
+                    # Gala dinner invitee: embed QR as CID image
+                    qr_bytes = base64.b64decode(recipient["qr_code_base64"])
+                    html_body = render_invitation(recipient, "cid:qrcode")
+                else:
+                    # Farewell-only invitee: no QR entry pass
+                    qr_bytes = None
+                    html_body = render_invitation(recipient, "")
+
                 result = smtp_mailer.send_email(
                     to_email=recipient["email"],
                     to_name=recipient["attendee_name"],
@@ -762,6 +850,7 @@ def coupon_status(coupon_id):
 
 
 @app.route("/preview-csv", methods=["POST"])
+@admin_only
 def preview_csv():
     """Upload CSV and return its contents for preview with column mapping."""
     if not csv_manager:
@@ -799,6 +888,7 @@ def preview_csv():
 
 
 @app.route("/confirm-upload", methods=["POST"])
+@admin_only
 def confirm_upload():
     """Confirm CSV upload with column mapping and per-recipient options."""
     if not csv_manager:
@@ -906,6 +996,7 @@ def confirm_upload():
 
 
 @app.route("/preview-email", methods=["POST"])
+@admin_only
 def preview_email():
     """Render email preview HTML for a recipient. Accepts optional template_type param."""
     try:
@@ -916,11 +1007,23 @@ def preview_email():
         coupon_id = data.get("coupon_id", "preview-0000")
         template_type = data.get("template_type", "invitation")
 
-        # Generate a dummy QR for preview
-        from src.coupons import CouponManager
+        # Determine if this recipient gets a QR gala entry pass
+        include_qr = data.get("include_qr", True)
+        if isinstance(include_qr, str):
+            include_qr = include_qr.lower() not in ("false", "0", "no")
 
-        cm = CouponManager()
-        qr = cm.create_qr_code('{"v":"' + code + '","e":"' + email + '"}')
+        if include_qr:
+            # Generate a QR for preview
+            from src.coupons import CouponManager
+
+            cm = CouponManager()
+            qr = cm.create_qr_code('{"v":"' + code + '","e":"' + email + '"}')
+            qr_src = "data:image/png;base64," + qr
+        else:
+            # Farewell-only: no QR or verification code
+            qr = ""
+            qr_src = ""
+            code = ""
 
         ctx = {
             "attendee_name": name,
@@ -930,12 +1033,12 @@ def preview_email():
             "event_time": EVENT_TIME,
             "event_venue": EVENT_VENUE,
             "qr_code_base64": qr,
-            "qr_code_src": "data:image/png;base64," + qr,
+            "qr_code_src": qr_src,
             "verification_code": code,
             "coupon_id": coupon_id,
             "organizer_batch": ORGANIZER_BATCH,
             "organizer_institution": ORGANIZER_INSTITUTION,
-            "include_qr": data.get("include_qr", True),
+            "include_qr": include_qr,
         }
         tpl_path = f"farewell/{template_type}.html"
         try:
@@ -963,6 +1066,7 @@ def preview_email():
 
 
 @app.route("/preview-template", methods=["POST"])
+@admin_only
 def preview_template():
     """Render a snippet of the current template for live preview."""
     try:
@@ -1001,6 +1105,7 @@ def preview_template():
 
 
 @app.route("/upload-csv", methods=["POST"])
+@admin_only
 def upload_csv():
     """Handle CSV file uploads and validation"""
     if not csv_manager:
@@ -1055,6 +1160,7 @@ def upload_csv():
 
 
 @app.route("/failed-emails-logs")
+@admin_only
 @login_required
 def get_failed_emails_logs():
     """Get list of failed email log files"""
@@ -1090,6 +1196,7 @@ def get_failed_emails_logs():
 
 
 @app.route("/download-failed-emails/<filename>")
+@admin_only
 def download_failed_emails(filename):
     """Download a specific failed emails log file"""
     try:
@@ -1114,6 +1221,7 @@ def download_failed_emails(filename):
 
 # SQLite backup integrity check
 @app.route("/backup-check")
+@admin_only
 def backup_check():
     """Verify CSV ↔ SQLite consistency and repair if needed."""
     if not csv_manager:
@@ -1142,6 +1250,7 @@ def internal_error(error):
 
 # 21MS_FAREWELL BRANCH: New routes that don't require OAuth login
 @app.route("/farewell-stats")
+@admin_only
 def get_farewell_stats():
     """Get system statistics - no authentication required for 21ms_farewell"""
     if not csv_manager:
@@ -1162,6 +1271,7 @@ def get_farewell_stats():
 
 
 @app.route("/farewell-recipients")
+@admin_only
 def get_farewell_recipients():
     """Get detailed recipient list with coupon info - no auth required"""
     if not all([csv_manager, coupon_manager]):
@@ -1199,6 +1309,8 @@ def get_farewell_recipients():
             detailed_recipients.append(
                 {
                     "email": recipient["email"],
+                    "name": recipient.get("name", ""),
+                    "include_qr": recipient.get("include_qr", True),
                     "status": status,
                     "coupon_id": coupon_id,
                     "verification_code": verification_code,
@@ -1219,6 +1331,7 @@ def get_farewell_recipients():
 
 
 @app.route("/farewell-coupons")
+@admin_only
 def get_farewell_coupons():
     """Get all coupon details for dashboard display"""
     if not csv_manager:
@@ -1253,6 +1366,7 @@ SMTP_CONFIG_FILE = "smtp_config.json"
 
 
 @app.route("/farewell-smtp-config", methods=["GET"])
+@admin_only
 def get_smtp_config():
     """Return current SMTP configuration (masking password)."""
     config = {}
@@ -1284,6 +1398,7 @@ def get_smtp_config():
 
 
 @app.route("/farewell-smtp-config/test", methods=["POST"])
+@admin_only
 def test_smtp_config():
     """Test the current SMTP configuration."""
     try:
@@ -1297,6 +1412,7 @@ def test_smtp_config():
 
 
 @app.route("/farewell-smtp-config/upload", methods=["POST"])
+@admin_only
 def upload_smtp_config():
     """Upload SMTP configuration as a JSON file."""
     try:
@@ -1338,6 +1454,7 @@ def upload_smtp_config():
 
 
 @app.route("/farewell-smtp-config", methods=["POST"])
+@admin_only
 def save_smtp_config():
     """Save SMTP configuration. Handles masked password as 'keep existing'."""
     try:
@@ -1403,6 +1520,7 @@ def get_template_path(template_type: str) -> str:
 
 
 @app.route("/farewell-templates", methods=["GET"])
+@admin_only
 def get_templates():
     """Return list of available templates."""
     templates = []
@@ -1421,6 +1539,7 @@ def get_templates():
 
 
 @app.route("/farewell-templates/<template_type>", methods=["GET"])
+@admin_only
 def get_template(template_type):
     """Return HTML content of a specific template."""
     if template_type not in TEMPLATE_TYPES:
@@ -1436,6 +1555,7 @@ def get_template(template_type):
 
 
 @app.route("/farewell-templates/<template_type>", methods=["POST"])
+@admin_only
 def save_template(template_type):
     """Save HTML content to a template file."""
     if template_type not in TEMPLATE_TYPES:
@@ -1462,6 +1582,7 @@ def save_template(template_type):
 
 
 @app.route("/farewell-send-with-template", methods=["POST"])
+@admin_only
 def send_with_template():
     """Send invitations using a specific template type for each recipient."""
     if not all([coupon_manager, csv_manager]):
@@ -1528,21 +1649,33 @@ def send_with_template():
         for coupon in coupon_results.get("coupons", []):
             email = coupon["email"]
             opts = recipient_opts.get(email.lower(), {})
-            qr_bytes = base64.b64decode(coupon["qr_code_base64"])
+            has_qr = opts.get("include_qr", True)
+            if isinstance(has_qr, str):
+                has_qr = has_qr.lower() not in ("false", "0", "no")
+
+            if has_qr:
+                qr_bytes = base64.b64decode(coupon["qr_code_base64"])
+                qr_src = "cid:qrcode"
+            else:
+                qr_bytes = None
+                qr_src = ""
+
             ctx = {
-                "attendee_name": coupon.get("name", email.split("@")[0]),
+                "attendee_name": opts.get(
+                    "name", coupon.get("name", email.split("@")[0])
+                ),
                 "attendee_email": email,
                 "event_name": event_name,
                 "event_date": EVENT_DATE,
                 "event_time": EVENT_TIME,
                 "event_venue": EVENT_VENUE,
-                "qr_code_base64": coupon["qr_code_base64"],
-                "qr_code_src": "cid:qrcode",
-                "verification_code": coupon["verification_code"],
+                "qr_code_base64": coupon["qr_code_base64"] if has_qr else "",
+                "qr_code_src": qr_src,
+                "verification_code": coupon["verification_code"] if has_qr else "",
                 "coupon_id": coupon["coupon_id"],
                 "organizer_batch": ORGANIZER_BATCH,
                 "organizer_institution": ORGANIZER_INSTITUTION,
-                "include_qr": opts.get("include_qr", True),
+                "include_qr": has_qr,
             }
             try:
                 tpl = f"farewell/{template_type}.html"
@@ -1611,13 +1744,49 @@ if __name__ == "__main__":
     ssl_enabled = os.environ.get("SSL_ENABLED", "false").lower() == "true"
 
     ssl_context = None
+    protocol = "http"
     if ssl_enabled:
         cert_file = os.environ.get("SSL_CERT", "cert.pem")
         key_file = os.environ.get("SSL_KEY", "key.pem")
         if os.path.exists(cert_file) and os.path.exists(key_file):
             ssl_context = (cert_file, key_file)
-            print(f"[+] HTTPS enabled with {cert_file}, {key_file}")
+            protocol = "https"
         else:
             print(f"[!] SSL cert files not found: {cert_file}, {key_file}")
+            print(
+                "[!] Falling back to HTTP (camera access may not work on remote devices)"
+            )
+
+    # Startup banner
+    print()
+    print("=" * 60)
+    print("  21MS FAREWELL PARTY — Event Coupon System")
+    print("=" * 60)
+    print()
+    print(f"  Server LAN IP : {SERVER_LAN_IP}")
+    print(f"  Protocol       : {protocol.upper()}")
+    print(f"  Port           : {port}")
+    print()
+    print("  ┌─ ADMIN (host machine only) ────────────────────┐")
+    print(f"  │  {protocol}://localhost:{port}/sender")
+    print(f"  │  {protocol}://127.0.0.1:{port}/sender")
+    print("  └────────────────────────────────────────────────┘")
+    print()
+    print("  ┌─ SCANNER (share with staff devices) ──────────┐")
+    print(f"  │  {protocol}://{SERVER_LAN_IP}:{port}/scanner")
+    print("  │")
+    if protocol == "https":
+        print("  │  ⚠  Staff devices must accept the self-signed")
+        print("  │     certificate warning to connect.")
+    else:
+        print("  │  ⚠  Camera access requires HTTPS on most")
+        print("  │     browsers. Set SSL_ENABLED=true in .env")
+    print("  └────────────────────────────────────────────────┘")
+    print()
+    print("  Access control: Admin routes blocked for remote IPs")
+    print(f"  Allowed admin IPs: {ADMIN_ALLOWED_IPS}")
+    print()
+    print("=" * 60)
+    print()
 
     app.run(host="0.0.0.0", port=port, debug=debug_mode, ssl_context=ssl_context)
