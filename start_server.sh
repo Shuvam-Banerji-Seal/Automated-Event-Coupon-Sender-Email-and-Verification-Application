@@ -119,10 +119,11 @@ fi
 
 # ---- Kill existing server ----
 echo -e "${YELLOW}[5] Checking for existing server...${NC}"
-OLD_PID=$(lsof -ti:5000 2>/dev/null || true)
-if [ -n "$OLD_PID" ]; then
-    echo -e "${YELLOW}  ⚠ Stopping existing server (PID: $OLD_PID)...${NC}"
-    kill -9 "$OLD_PID" 2>/dev/null || true
+OLD_PIDS=$(lsof -ti:5000 2>/dev/null || true)
+if [ -n "$OLD_PIDS" ]; then
+    echo -e "${YELLOW}  ⚠ Stopping existing server(s)...${NC}"
+    # Use fuser to kill ALL processes on port 5000
+    fuser -k 5000/tcp 2>/dev/null || true
     # Wait until port is actually free
     for i in $(seq 1 10); do
         if ! lsof -ti:5000 >/dev/null 2>&1; then
