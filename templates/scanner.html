@@ -2683,21 +2683,6 @@
             
             modal.style.display = 'flex';
         }
-            } else {
-                content.innerHTML = `
-                    <div style="text-align: center;">
-                        <div style="font-size: 72px; margin-bottom: 20px; animation: shake 0.6s ease-in-out;">❌</div>
-                        <h2 style="color: var(--error); margin-bottom: 15px; font-size: 28px;">${result.title}</h2>
-                        <p style="color: var(--text-secondary); font-size: 18px; margin-bottom: 30px;">${result.message}</p>
-                    </div>
-                `;
-            }
-            
-            modal.style.display = 'block';
-            
-            // Add keyboard listener for Enter/Esc
-            document.addEventListener('keydown', handleVerificationModalKeys);
-        }
         
         // Close verification modal
         function closeVerificationModal() {
