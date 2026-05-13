@@ -140,15 +140,42 @@ class SQLiteBackup:
                 conn.close()
 
     def sync_from_csv(self, csv_file: str) -> int:
-        """Sync all data from a CSV file into SQLite. Returns count of records synced."""
+        """Sync all data from a CSV file into SQLite. Clears stale records first."""
         count = 0
         try:
             with open(csv_file, "r", newline="", encoding="utf-8") as f:
                 reader = csv.DictReader(f)
                 rows = list(reader)
-            if rows:
-                self.upsert_batch(rows)
-                count = len(rows)
+            with self.lock:
+                conn = sqlite3.connect(self.db_path)
+                try:
+                    conn.execute("DELETE FROM coupons")
+                    if rows:
+                        conn.executemany(
+                            """
+                            INSERT INTO coupons
+                            (coupon_id, email, encrypted_data, qr_code_data,
+                             verification_code, sent_at, used_at, status)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                            [
+                                (
+                                    r.get("coupon_id", ""),
+                                    r.get("email", ""),
+                                    r.get("encrypted_data", ""),
+                                    r.get("qr_code_data", ""),
+                                    r.get("verification_code", ""),
+                                    r.get("sent_at"),
+                                    r.get("used_at"),
+                                    r.get("status", "generated"),
+                                )
+                                for r in rows
+                            ],
+                        )
+                        count = len(rows)
+                    conn.commit()
+                finally:
+                    conn.close()
         except FileNotFoundError:
             pass
         except Exception as e:
@@ -451,6 +478,20 @@ class CSVManager:
         except Exception as e:
             self.logger.error(f"Error saving coupon batch: {str(e)}")
             return False
+
+    def find_coupons_by_email(self, email: str) -> List[CouponRecord]:
+        """Find all coupons for a given email (not just the first match)."""
+        results = []
+        try:
+            with self._file_lock(self.coupons_file, "r") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    if row.get("email", "").lower() == email.lower():
+                        results.append(CouponRecord.from_dict(row))
+            return results
+        except Exception as e:
+            self.logger.error(f"Error finding coupons for {email}: {str(e)}")
+            return []
 
     def find_coupon(self, coupon_id: str) -> Optional[CouponRecord]:
         """Find a coupon by ID"""

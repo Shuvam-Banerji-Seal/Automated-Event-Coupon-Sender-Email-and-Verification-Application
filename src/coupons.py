@@ -150,6 +150,24 @@ class CouponManager:
             Dictionary containing coupon data
         """
         try:
+            # Check if email already has a coupon — prevent duplicate generation
+            existing_records = self.csv_manager.find_coupons_by_email(email.lower())
+            if existing_records:
+                existing = existing_records[-1]  # most recent entry
+                self.logger.info(
+                    f"Coupon already exists for {email}, returning existing"
+                )
+                return {
+                    "success": True,
+                    "coupon_id": existing.coupon_id,
+                    "email": email,
+                    "event_name": event_name,
+                    "qr_code_base64": existing.qr_code_data,
+                    "encrypted_data": existing.encrypted_data,
+                    "verification_code": existing.verification_code,
+                    "existing": True,
+                }
+
             # Generate unique identifiers
             coupon_id = self.generate_coupon_id()
             verification_code = self.generate_verification_code()
