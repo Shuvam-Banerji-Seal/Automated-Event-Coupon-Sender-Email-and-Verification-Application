@@ -28,13 +28,78 @@ class CouponManager:
         self.csv_manager = csv_manager or CSVManager()
         self.logger = logging.getLogger(__name__)
 
+    def validate_and_mark_used(
+        self, verification_code: str, email: str
+    ) -> Dict[str, Any]:
+        """S-09: Atomic validate + mark used under a single CSV scan."""
+        try:
+            coupon_record = self.csv_manager.find_coupon_by_verification_code(
+                verification_code, email
+            )
+            if not coupon_record:
+                return {
+                    "valid": False,
+                    "error": "Invalid verification code or email",
+                    "error_code": "NOT_FOUND",
+                }
+            if coupon_record.status == "used":
+                return {
+                    "valid": False,
+                    "error": "This coupon has already been used",
+                    "error_code": "ALREADY_USED",
+                }
+            if coupon_record.status == "sent":
+                used_at = datetime.now(timezone.utc).isoformat()
+                success = self.csv_manager.update_coupon_status(
+                    coupon_record.coupon_id,
+                    "used",
+                    used_at=used_at,
+                    if_current_status="sent",
+                )
+                if success:
+                    self.logger.info(
+                        f"Coupon {coupon_record.coupon_id} validated and marked as used"
+                    )
+                    return {
+                        "valid": True,
+                        "coupon_id": coupon_record.coupon_id,
+                        "email": email,
+                        "event_name": "",
+                        "created_at": coupon_record.sent_at or "",
+                        "verification_code": verification_code,
+                    }
+                else:
+                    # TOCTOU hit - another request marked it first
+                    return {
+                        "valid": False,
+                        "error": "This coupon was just used by another request",
+                        "error_code": "RACE_LOST",
+                    }
+            return {
+                "valid": False,
+                "error": f"Coupon status is '{coupon_record.status}', cannot be used",
+                "error_code": "INVALID_STATUS",
+            }
+        except Exception as e:
+            self.logger.error(f"Error in validate_and_mark_used: {str(e)}")
+            return {
+                "valid": False,
+                "error": "System error during verification",
+                "error_code": "SYSTEM_ERROR",
+            }
+
     def generate_coupon_id(self) -> str:
         """Generate unique coupon ID using UUID4"""
         return str(uuid.uuid4())
 
     def generate_verification_code(self) -> str:
         """Generate 6-digit verification code using cryptographically secure RNG"""
-        return "".join(secrets.choice(string.digits) for _ in range(6))
+        while True:
+            code = "".join(secrets.choice(string.digits) for _ in range(6))
+            # L-07: Check for collision with existing codes in CSV
+            existing = self.csv_manager.find_coupon_by_verification_code(code, "")
+            if not existing:
+                return code
 
     def create_qr_code(self, data: str) -> str:
         """
@@ -348,6 +413,21 @@ class CouponManager:
                     "error": "Invalid verification code or email",
                     "error_code": "NOT_FOUND",
                 }
+
+            # L-02: Check expiry (48 hours from sent_at or 72 hours from generation)
+            if coupon_record.sent_at:
+                from datetime import timezone
+
+                sent_dt = datetime.fromisoformat(coupon_record.sent_at)
+                age_hours = (
+                    datetime.now(timezone.utc) - sent_dt
+                ).total_seconds() / 3600
+                if age_hours > 48:
+                    return {
+                        "valid": False,
+                        "error": "This coupon has expired",
+                        "error_code": "EXPIRED",
+                    }
 
             # Check if already used
             if coupon_record.status == "used":

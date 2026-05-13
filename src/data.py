@@ -289,18 +289,19 @@ class CSVManager:
             return None
 
     def find_coupon_by_verification_code(
-        self, verification_code: str, email: str
+        self, verification_code: str, email: Optional[str] = None
     ) -> Optional[CouponRecord]:
-        """Find a coupon by verification code and email for security"""
+        """Find a coupon by verification code. If email is provided, also match email."""
         try:
             with self._file_lock(self.coupons_file, "r") as f:
                 reader = csv.DictReader(f)
                 for row in reader:
-                    if (
-                        row.get("verification_code") == verification_code
-                        and row.get("email", "").lower() == email.lower()
-                    ):
-                        return CouponRecord.from_dict(row)
+                    if row.get("verification_code") == verification_code:
+                        if (
+                            email is None
+                            or row.get("email", "").lower() == email.lower()
+                        ):
+                            return CouponRecord.from_dict(row)
 
             return None
 
@@ -314,8 +315,17 @@ class CSVManager:
         status: str,
         used_at: Optional[str] = None,
         sent_at: Optional[str] = None,
+        if_current_status: Optional[str] = None,
     ) -> bool:
-        """Update coupon status and timestamps"""
+        """Update coupon status and timestamps.
+
+        Args:
+            coupon_id: ID of coupon to update
+            status: New status value
+            used_at: Optional used timestamp
+            sent_at: Optional sent timestamp
+            if_current_status: If set, only update when current status matches (TOCTOU guard)
+        """
         try:
             # Read all coupons
             coupons = []
@@ -325,6 +335,10 @@ class CSVManager:
                 reader = csv.DictReader(f)
                 for row in reader:
                     if row.get("coupon_id") == coupon_id:
+                        # S-09: TOCTOU guard - skip if current status doesn't match precondition
+                        if if_current_status and row.get("status") != if_current_status:
+                            coupons.append(row)
+                            continue
                         row["status"] = status
                         if used_at:
                             row["used_at"] = used_at

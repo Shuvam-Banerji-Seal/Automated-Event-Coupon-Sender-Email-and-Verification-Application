@@ -11,7 +11,8 @@ import logging
 import time
 import threading
 import shutil
-from datetime import datetime
+from datetime import datetime, timedelta
+from collections import defaultdict
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
@@ -60,6 +61,23 @@ except Exception as e:
     csv_manager = None
     coupon_manager = None
     google_auth_service = None
+
+
+# S-08: Simple in-memory rate limiter for verify-coupon
+rate_limit_store = defaultdict(list)
+RATE_LIMIT_MAX = 10  # max attempts
+RATE_LIMIT_WINDOW = 60  # seconds
+
+
+def check_rate_limit(ip: str) -> bool:
+    """Returns True if request is allowed, False if rate limited."""
+    now = datetime.now()
+    window_start = now - timedelta(seconds=RATE_LIMIT_WINDOW)
+    rate_limit_store[ip] = [t for t in rate_limit_store[ip] if t > window_start]
+    if len(rate_limit_store[ip]) >= RATE_LIMIT_MAX:
+        return False
+    rate_limit_store[ip].append(now)
+    return True
 
 
 # Authentication helper functions
@@ -528,6 +546,18 @@ def send_farewell_emails():
 @app.route("/verify-coupon", methods=["POST"])
 def verify_coupon():
     """Verify QR coupon or verification code and mark as used"""
+    # S-08: Rate limit by IP
+    client_ip = request.remote_addr or "unknown"
+    if not check_rate_limit(client_ip):
+        logger.warning(f"Rate limit exceeded for {client_ip}")
+        return jsonify(
+            {
+                "success": False,
+                "error": "Too many attempts. Please try again later.",
+                "error_code": "RATE_LIMITED",
+            }
+        ), 429
+
     if not coupon_manager:
         return jsonify(
             {"success": False, "error": "Coupon manager not initialized"}
@@ -570,19 +600,47 @@ def verify_coupon():
                 }
             ), 400
 
-        if not validation_result.get("valid"):
-            return jsonify(
-                {
-                    "success": False,
-                    "error": validation_result.get("error", "Invalid coupon"),
-                    "error_code": validation_result.get("error_code", "INVALID"),
-                    "used_at": validation_result.get("used_at"),
-                }
+        # S-09: Use atomic validate-and-mark for verification code path (TOCTOU safe)
+        if (
+            verification_code
+            and len(verification_code) == 6
+            and verification_code.isdigit()
+        ):
+            atomic_result = coupon_manager.validate_and_mark_used(
+                verification_code, email
             )
+            if not atomic_result.get("valid"):
+                return jsonify(
+                    {
+                        "success": False,
+                        "error": atomic_result.get("error", "Invalid coupon"),
+                        "error_code": atomic_result.get("error_code", "INVALID"),
+                    }
+                )
+            coupon_id = atomic_result["coupon_id"]
+            validation_result = atomic_result
+        else:
+            # Encrypted data path (no TOCTOU fix needed - encrypted data is single-use)
+            if not validation_result.get("valid"):
+                return jsonify(
+                    {
+                        "success": False,
+                        "error": validation_result.get("error", "Invalid coupon"),
+                        "error_code": validation_result.get("error_code", "INVALID"),
+                        "used_at": validation_result.get("used_at"),
+                    }
+                )
+            coupon_id = validation_result["coupon_id"]
+            if not coupon_manager.mark_coupon_used(coupon_id):
+                return jsonify(
+                    {
+                        "success": False,
+                        "error": "Failed to mark coupon as used",
+                        "error_code": "UPDATE_FAILED",
+                    }
+                ), 500
 
-        # Mark coupon as used
-        coupon_id = validation_result["coupon_id"]
-        if coupon_manager.mark_coupon_used(coupon_id):
+        if coupon_id:
             # 21MS_FAREWELL BRANCH: Send thank you email via SMTP (no OAuth required)
             def send_thank_you_async():
                 try:
@@ -752,8 +810,14 @@ def confirm_upload():
         name_col = data.get("name_col", "")
         recipients_data = data.get("recipients", [])
 
+        # S-10: Prevent path traversal - validate filepath is within uploads folder
         if not filepath or not os.path.exists(filepath):
             return jsonify({"success": False, "error": "Uploaded file not found"}), 400
+        upload_dir = os.path.abspath(app.config["UPLOAD_FOLDER"])
+        abs_path = os.path.abspath(filepath)
+        if not abs_path.startswith(upload_dir):
+            logger.warning(f"Path traversal attempt blocked: {filepath}")
+            return jsonify({"success": False, "error": "Invalid file path"}), 400
         if not email_col:
             return jsonify(
                 {"success": False, "error": "Email column must be selected"}
@@ -907,11 +971,12 @@ def preview_template():
         content = data.get("content", "")
 
         # Validate the HTML is well-formed by wrapping in basic structure
-        from jinja2 import Environment, BaseLoader
+        # S-13: Use SandboxedEnvironment to prevent SSTI
+        from jinja2.sandbox import SandboxedEnvironment
         import traceback
 
         # Try to render with dummy data
-        env = Environment(loader=BaseLoader())
+        env = SandboxedEnvironment()
         try:
             tmpl = env.from_string(content)
             rendered = tmpl.render(
@@ -1025,21 +1090,22 @@ def get_failed_emails_logs():
 
 
 @app.route("/download-failed-emails/<filename>")
-@login_required
 def download_failed_emails(filename):
     """Download a specific failed emails log file"""
     try:
-        # Security check: ensure filename is safe
-        if not filename.startswith("failed_emails_") or not filename.endswith(".csv"):
+        # S-11: Prevent path traversal
+        safe_name = secure_filename(filename)
+        if not safe_name.startswith("failed_emails_") or not safe_name.endswith(".csv"):
             return jsonify({"error": "Invalid filename"}), 400
 
-        filepath = os.path.join("logs", filename)
-        if not os.path.exists(filepath):
+        logs_dir = os.path.abspath("logs")
+        filepath = os.path.join(logs_dir, safe_name)
+        if not filepath.startswith(logs_dir) or not os.path.exists(filepath):
             return jsonify({"error": "File not found"}), 404
 
         from flask import send_file
 
-        return send_file(filepath, as_attachment=True, download_name=filename)
+        return send_file(filepath, as_attachment=True, download_name=safe_name)
 
     except Exception as e:
         logger.error(f"Error downloading failed emails file: {str(e)}")
