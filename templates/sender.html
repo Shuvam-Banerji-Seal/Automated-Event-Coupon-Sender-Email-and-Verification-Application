@@ -149,8 +149,8 @@ body{font-family:'Inter',-apple-system,sans-serif;background:var(--bg-primary);c
 <div class="section-title">Email Template Editor</div>
 <div id="templateAlert"></div>
 <div class="tabs" id="templateTabs">
-<button class="tab active" onclick="switchTemplate('invitation',this)">21MS</button>
-<button class="tab" onclick="switchTemplate('class_of_2027_invitation',this)">Class of 2027</button>
+<button class="tab active" onclick="switchTemplate('invitation',this)">Seniors</button>
+<button class="tab" onclick="switchTemplate('class_of_2027_invitation',this)">Organizers</button>
 </div>
 <textarea class="template-editor" id="templateEditor"></textarea>
 <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
@@ -187,7 +187,7 @@ body{font-family:'Inter',-apple-system,sans-serif;background:var(--bg-primary);c
 <div id="campaignAlert"></div>
 <div class="form-row">
 <div class="form-group"><label>Event Name</label><input type="text" id="eventName" value="21MS Farewell Party"></div>
-<div class="form-group"><label>Template</label><select id="templateTypeSelect"><option value="invitation">21MS (Graduating)</option><option value="class_of_2027_invitation">Class of 2027 (Organizers)</option></select></div>
+<div class="form-group"><label>Template</label><select id="templateTypeSelect"><option value="invitation">Seniors (21MS + 24MP)</option><option value="class_of_2027_invitation">Organizers (22MS + 25MP)</option></select></div>
 <div class="form-group"><label>Attachment</label><input type="file" id="attachmentFile" accept=".pdf,.png,.jpg"></div>
 </div>
 <button class="btn btn-gold" id="sendBtn" onclick="sendSelected()">Send Invitations</button>
