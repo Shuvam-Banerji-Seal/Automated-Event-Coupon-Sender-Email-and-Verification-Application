@@ -28,7 +28,7 @@ from src.smtp_mailer import SMTPMailer  # 21MS_FAREWELL BRANCH
 load_dotenv()
 
 # 21MS_FAREWELL BRANCH: Load event config from environment
-EVENT_NAME = os.getenv("EVENT_NAME", "21MS Farewell Party")
+EVENT_NAME = os.getenv("EVENT_NAME", "21MS + 24MP Farewell Party")
 EVENT_DATE = os.getenv("EVENT_DATE", "To Be Announced")
 EVENT_TIME = os.getenv("EVENT_TIME", "To Be Announced")
 EVENT_VENUE = os.getenv("EVENT_VENUE", "IISER Kolkata Campus")
@@ -439,7 +439,7 @@ def send_farewell_emails():
     """21MS_FAREWELL BRANCH: Send coupon emails via SMTP. Does not require OAuth login.
 
     Request body (JSON):
-    {"event_name": "21MS Farewell Party"}
+    {"event_name": "21MS + 24MP Farewell Party"}
     """
     if not all([coupon_manager, csv_manager]):
         return jsonify({"success": False, "error": "Services not initialized"}), 500
