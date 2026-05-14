@@ -1051,6 +1051,8 @@ def preview_email():
             subject = f"Lunch Invitation - {EVENT_NAME}"
         elif template_type == "dinner":
             subject = f"Dinner Invitation - {EVENT_NAME}"
+        elif template_type == "class_of_2027_invitation":
+            subject = "Farewell 2026 Invitation"
 
         return jsonify(
             {
@@ -1687,7 +1689,9 @@ def send_with_template():
                 result = smtp_mailer.send_email(
                     to_email=email,
                     to_name=ctx["attendee_name"],
-                    subject=f"You're Invited! {event_name}",
+                    subject="Farewell 2026 Invitation"
+                    if template_type == "class_of_2027_invitation"
+                    else f"You're Invited! {event_name}",
                     html_body=html_body,
                     attachment_path=attachment_path
                     if os.path.exists(attachment_path or "")
