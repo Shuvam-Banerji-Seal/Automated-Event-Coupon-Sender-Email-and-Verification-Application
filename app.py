@@ -1505,13 +1505,17 @@ def save_smtp_config():
 # Template management routes (Lunch, Dinner)
 # ============================================================
 TEMPLATES_DIR = "templates/farewell"
-TEMPLATE_TYPES = ["invitation", "lunch", "dinner"]
+TEMPLATE_TYPES = ["invitation", "22ms_invitation", "mp_invitation", "lunch", "dinner"]
 
 
 def get_template_path(template_type: str) -> str:
     """Get the file path for a template type."""
     if template_type == "invitation":
         return os.path.join(TEMPLATES_DIR, "invitation.html")
+    elif template_type == "22ms_invitation":
+        return os.path.join(TEMPLATES_DIR, "22ms_invitation.html")
+    elif template_type == "mp_invitation":
+        return os.path.join(TEMPLATES_DIR, "mp_invitation.html")
     elif template_type == "lunch":
         return os.path.join(TEMPLATES_DIR, "lunch.html")
     elif template_type == "dinner":

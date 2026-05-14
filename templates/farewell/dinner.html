@@ -105,6 +105,7 @@
             </div>
         </div>
 
+        {% if include_qr %}
         <!-- QR TICKET SECTION -->
         <div style="background: #fef9f0; border-top: 3px dashed #d4af37; border-bottom: 3px dashed #d4af37; padding: 25px 30px; text-align: center;">
 
@@ -138,6 +139,7 @@
                 This coupon is unique to {{ attendee_email }} and is non-transferable.
             </div>
         </div>
+        {% endif %}
 
         <!-- FOOTER SECTION -->
         <div style="background: #1a1a2e; padding: 30px; text-align: center; border-radius: 0 0 12px 12px;">
