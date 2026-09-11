@@ -2435,7 +2435,7 @@
                         message: 'Attendee admitted',
                         details: {
                             'Email': data.email,
-                            'Event': data.event_name || '21MS + 24MP Farewell',
+                            'Event': data.event_name || 'DCS Freshers Welcome 2026',
                             'Code': verificationCode,
                             'Verified': new Date().toLocaleString()
                         },
@@ -2529,14 +2529,21 @@
                 if (result.success) {
                     updateStatus('VERIFIED', 'success');
                     
+                    const foodPref = result.food_preference || 'Vegetarian';
+                    const foodColor = result.food_color || '#2d8a3e';
+                    const isNonVeg = foodPref.toLowerCase().includes('non');
+                    
                     showVerificationModal({
                         success: true,
                         title: 'VERIFIED',
                         message: 'Attendee admitted',
+                        foodPreference: foodPref,
+                        foodColor: foodColor,
                         details: {
                             'Coupon ID': result.coupon_id ? result.coupon_id.substring(0,8) + '...' : '-',
                             'Email': result.email,
-                            'Event': result.event_name || '21MS + 24MP Farewell',
+                            'Meal': foodPref,
+                            'Event': result.event_name || 'DCS Freshers Welcome 2026',
                             'Verified': new Date().toLocaleString()
                         },
                         autoClose: true
@@ -2613,28 +2620,32 @@
             const content = document.getElementById('verificationContent');
             
             if (result.success) {
+                const fc = result.foodColor || '#10b981';
+                const fp = result.foodPreference || 'Vegetarian';
                 const detailsHtml = result.details ? Object.entries(result.details).map(([key, value]) => 
                     `<div style="display: flex; justify-content: space-between; margin-bottom: 8px; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.08); font-size: 1rem;">
                         <span style="color: #a1a1aa;">${key}:</span>
-                        <span style="color: #fff; font-weight: 600;">${value}</span>
+                        <span style="color: #fff; font-weight: 600;${key === 'Meal' ? ' color:' + fc : ''}">${value}</span>
                     </div>`
                 ).join('') : '';
 
                 content.innerHTML = `
                     <div style="text-align: center;">
-                        <!-- Large green checkmark -->
-                        <div style="width: 100px; height: 100px; background: rgba(16,185,129,0.15); border-radius: 50%; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center; border: 4px solid #10b981;">
-                            <span style="font-size: 48px; color: #10b981; font-weight: bold;">&#10003;</span>
+                        <div style="width: 100px; height: 100px; background: ${fc}22; border-radius: 50%; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center; border: 4px solid ${fc};">
+                            <span style="font-size: 48px; color: ${fc}; font-weight: bold;">&#10003;</span>
                         </div>
-                        <h2 style="color: #10b981; margin-bottom: 8px; font-size: 32px; font-weight: 700;">VERIFIED</h2>
-                        <p style="color: #a1a1aa; font-size: 18px; margin-bottom: 24px;">${result.message || 'Attendee admitted'}</p>
+                        <h2 style="color: ${fc}; margin-bottom: 8px; font-size: 32px; font-weight: 700;">VERIFIED</h2>
+                        <p style="color: #a1a1aa; font-size: 18px; margin-bottom: 6px;">${result.message || 'Attendee admitted'}</p>
+                        <div style="display:inline-block; padding:6px 16px; border-radius:20px; background:${fc}22; border:2px solid ${fc}; margin-bottom:20px;">
+                            <span style="color:${fc}; font-weight:700; font-size:16px;">${fp}</span>
+                        </div>
                         
-                        <div style="background: rgba(16,185,129,0.08); padding: 20px; border-radius: 12px; border: 1px solid rgba(16,185,129,0.25); text-align: left; margin-bottom: 20px;">
+                        <div style="background: ${fc}08; padding: 20px; border-radius: 12px; border: 1px solid ${fc}40; text-align: left; margin-bottom: 20px;">
                             ${detailsHtml}
                         </div>
                         
                         <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
-                            <button onclick="closeVerificationModal(); resumeScanning();" class="btn btn-primary" style="min-width: 140px; padding: 14px 28px; font-size: 16px; background: #10b981; border: none; border-radius: 10px; color: #fff; font-weight: 600; cursor: pointer;">
+                            <button onclick="closeVerificationModal(); resumeScanning();" class="btn btn-primary" style="min-width: 140px; padding: 14px 28px; font-size: 16px; background: ${fc}; border: none; border-radius: 10px; color: #fff; font-weight: 600; cursor: pointer;">
                                 Scan Next &rarr;
                             </button>
                         </div>

@@ -22,7 +22,8 @@ import secrets
 from src.coupons import CouponManager
 from src.data import CSVManager
 from src.auth import GoogleAuthService, GmailEmailService
-from src.smtp_mailer import SMTPMailer  # 21MS_FAREWELL BRANCH
+from src.smtp_mailer import SMTPMailer
+from src.smtp_pool import SMTPPool
 
 # Load environment variables
 load_dotenv()
@@ -34,6 +35,37 @@ EVENT_TIME = os.getenv("EVENT_TIME", "To Be Announced")
 EVENT_VENUE = os.getenv("EVENT_VENUE", "IISER Kolkata Campus")
 ORGANIZER_BATCH = "22MS Batch"
 ORGANIZER_INSTITUTION = "IISER Kolkata"
+
+
+def _food_preference_info(raw):
+    """Normalize a food preference value into (label, color).
+
+    Returns (label, color):
+        "Vegetarian"    -> green   #2d8a3e
+        "Non-Vegetarian" -> crimson #DC143C
+    """
+    if isinstance(raw, str) and raw.strip().lower() in (
+        "non-veg",
+        "nonveg",
+        "non_veg",
+        "nv",
+        "non-vegetarian",
+        "non veg",
+    ):
+        return "Non-Vegetarian", "#DC143C"
+    return "Vegetarian", "#2d8a3e"
+
+
+def _first_name(name, email):
+    """Extract the first name from a full name for the email greeting.
+
+    "Subham Banerjee Seal" -> "Subham" | "Kenta" -> "Kenta"
+    Falls back to the email local-part if no name is available.
+    """
+    if isinstance(name, str) and name.strip():
+        return name.strip().split()[0]
+    return (email or "").split("@")[0] or "Guest"
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -51,7 +83,11 @@ ZROK_HOST_SUFFIX = ".shares.zrok.io"
 
 @app.before_request
 def restrict_zrok_tunnel():
-    """Block admin pages when accessed through the zrok public tunnel."""
+    """Block admin pages when accessed through the zrok public tunnel.
+    Disabled entirely when DISABLE_ADMIN_CHECK=true (admin pages then
+    work over the tunnel too)."""
+    if DISABLE_ADMIN_CHECK:
+        return None
     host = request.host if request.host else ""
     if ZROK_HOST_SUFFIX in host:
         # Allow only scanner-related paths through the tunnel
@@ -92,9 +128,12 @@ except Exception as e:
 
 
 # S-08: Simple in-memory rate limiter for verify-coupon
+# Configurable via env: RATE_LIMIT_MAX (attempts) and RATE_LIMIT_WINDOW (seconds).
+# NOTE: when accessed through the zrok tunnel all clients share one IP (127.0.0.1),
+# so a high default is used to avoid blocking event scanners.
 rate_limit_store = defaultdict(list)
-RATE_LIMIT_MAX = 10  # max attempts
-RATE_LIMIT_WINDOW = 60  # seconds
+RATE_LIMIT_MAX = int(os.getenv("RATE_LIMIT_MAX", "300"))  # max attempts per window
+RATE_LIMIT_WINDOW = int(os.getenv("RATE_LIMIT_WINDOW", "60"))  # seconds
 
 
 def check_rate_limit(ip: str) -> bool:
@@ -139,6 +178,11 @@ def _get_server_ip():
 # Cache the server IP at startup
 SERVER_LAN_IP = _get_server_ip()
 ADMIN_ALLOWED_IPS = {"127.0.0.1", "::1", SERVER_LAN_IP}
+DISABLE_ADMIN_CHECK = os.getenv("DISABLE_ADMIN_CHECK", "false").lower() in (
+    "true",
+    "1",
+    "yes",
+)
 
 
 def admin_only(f):
@@ -146,11 +190,14 @@ def admin_only(f):
     Remote devices on the LAN are denied access (403) and redirected to /scanner.
     This protects all management routes (sender, SMTP config, email sending, etc.)
     while keeping the scanner accessible to staff devices on the network.
+    Set DISABLE_ADMIN_CHECK=true in .env to allow access from any IP.
     """
     from functools import wraps
 
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        if DISABLE_ADMIN_CHECK:
+            return f(*args, **kwargs)
         client_ip = request.remote_addr or "unknown"
         if client_ip not in ADMIN_ALLOWED_IPS:
             logger.warning(f"Admin access denied for {client_ip} on {request.path}")
@@ -527,7 +574,7 @@ def send_farewell_emails():
         # Build lookup for recipient options
         email_to_opts = {r.get("email", "").lower(): r for r in pending_recipients}
 
-        def render_invitation(recipient, qr_src):
+        def render_invitation(recipient, qr_src, food_label, food_color):
             opts = email_to_opts.get(recipient["attendee_email"].lower(), {})
             return render_template(
                 "farewell/invitation.html",
@@ -544,6 +591,12 @@ def send_farewell_emails():
                 organizer_batch=recipient["organizer_batch"],
                 organizer_institution=recipient["organizer_institution"],
                 include_qr=opts.get("include_qr", True),
+                food_preference=food_label,
+                food_color=food_color,
+                first_name=_first_name(
+                    opts.get("name", recipient["attendee_name"]),
+                    recipient["attendee_email"],
+                ),
             )
 
         subject = f"You're Invited! {event_name}"
@@ -564,14 +617,29 @@ def send_farewell_emails():
                 if isinstance(has_qr, str):
                     has_qr = has_qr.lower() not in ("false", "0", "no")
 
+                food_label, food_color = _food_preference_info(
+                    r_opts.get("food_preference")
+                )
+
                 if has_qr:
-                    # Gala dinner invitee: embed QR as CID image
-                    qr_bytes = base64.b64decode(recipient["qr_code_base64"])
-                    html_body = render_invitation(recipient, "cid:qrcode")
+                    # Gala dinner invitee: embed QR as CID image (black on white,
+                    # the color-coding lives on the coupon BOX via food_color)
+                    qr_b64 = coupon_manager.create_qr_code(
+                        json.dumps(
+                            {
+                                "v": recipient["verification_code"],
+                                "e": recipient["email"],
+                            }
+                        )
+                    )
+                    qr_bytes = base64.b64decode(qr_b64)
+                    html_body = render_invitation(
+                        recipient, "cid:qrcode", food_label, food_color
+                    )
                 else:
                     # Farewell-only invitee: no QR entry pass
                     qr_bytes = None
-                    html_body = render_invitation(recipient, "")
+                    html_body = render_invitation(recipient, "", food_label, food_color)
 
                 result = smtp_mailer.send_email(
                     to_email=recipient["email"],
@@ -732,20 +800,24 @@ def verify_coupon():
             # 21MS_FAREWELL BRANCH: Send thank you email via SMTP (no OAuth required)
             def send_thank_you_async():
                 try:
-                    smtp_mailer = SMTPMailer()
+                    pool = SMTPPool()
 
                     attendance_data = {
                         "attendee_name": validation_result.get(
                             "attendee_name", email.split("@")[0]
                         ),
                         "attendee_email": email,
-                        "event_name": validation_result.get("event_name", EVENT_NAME),
+                        "event_name": validation_result.get("event_name") or EVENT_NAME,
                         "verification_code": validation_result.get(
                             "verification_code", ""
                         ),
                         "coupon_id": coupon_id,
                         "organizer_batch": ORGANIZER_BATCH,
                         "organizer_institution": ORGANIZER_INSTITUTION,
+                        "first_name": _first_name(
+                            validation_result.get("attendee_name", email.split("@")[0]),
+                            email,
+                        ),
                     }
 
                     with app.app_context():
@@ -753,9 +825,9 @@ def verify_coupon():
                             "farewell/thank_you.html", **attendance_data
                         )
 
-                    subject = f"Welcome to {attendance_data['event_name']}!"
+                    subject = f"Welcome, {attendance_data['first_name']}! 🎉 {attendance_data['event_name']}"
 
-                    result = smtp_mailer.send_email(
+                    result = pool.send_email(
                         to_email=email,
                         to_name=attendance_data["attendee_name"],
                         subject=subject,
@@ -764,23 +836,30 @@ def verify_coupon():
 
                     if result["success"]:
                         logger.info(
-                            f"Thank you email sent successfully to {email} via SMTP"
+                            f"Thank you email sent to {email} via SMTPPool ({result.get('config_used', 'unknown')})"
                         )
                     else:
                         logger.warning(
-                            f"Failed to send thank you email to {email}: {result['error']}"
+                            f"Failed to send thank you email to {email}: {result.get('error')}"
                         )
 
                 except Exception as e:
-                    logger.error(f"Error sending thank you email via SMTP: {str(e)}")
-                    import traceback
-
-                    logger.error(traceback.format_exc())
+                    logger.error(f"Error sending thank you email: {str(e)}")
 
             # Start email sending in background thread
             email_thread = threading.Thread(target=send_thank_you_async)
             email_thread.daemon = True
             email_thread.start()
+
+            # Look up food preference from the coupon record (stored at generation time)
+            food_preference = "Vegetarian"
+            food_color = "#2d8a3e"
+            try:
+                fp = validation_result.get("food_preference", "")
+                if fp:
+                    food_preference, food_color = _food_preference_info(fp)
+            except Exception:
+                pass
 
             # Return immediately without waiting for email
             return jsonify(
@@ -791,7 +870,9 @@ def verify_coupon():
                     "email": validation_result["email"],
                     "event_name": validation_result["event_name"],
                     "created_at": validation_result["created_at"],
-                    "thank_you_email": "sending",  # Indicate email is being sent in background
+                    "food_preference": food_preference,
+                    "food_color": food_color,
+                    "thank_you_email": "sending",
                 }
             )
         else:
@@ -946,6 +1027,12 @@ def confirm_upload():
                     "include_dinner": recipient_opts.get("include_dinner", True),
                     "include_lunch": recipient_opts.get("include_lunch", True),
                     "include_qr": recipient_opts.get("include_qr", True),
+                    "food_preference": (
+                        row.get("food_preference")
+                        or row.get("food_pref")
+                        or row.get("food")
+                        or "Vegetarian"
+                    ),
                 }
             )
 
@@ -968,6 +1055,7 @@ def confirm_upload():
                     "include_dinner",
                     "include_lunch",
                     "include_qr",
+                    "food_preference",
                 ],
             )
             writer.writeheader()
@@ -1012,8 +1100,10 @@ def preview_email():
         if isinstance(include_qr, str):
             include_qr = include_qr.lower() not in ("false", "0", "no")
 
+        food_label, food_color = _food_preference_info(data.get("food_preference"))
+
         if include_qr:
-            # Generate a QR for preview
+            # Generate a QR for preview (black on white)
             from src.coupons import CouponManager
 
             cm = CouponManager()
@@ -1039,6 +1129,9 @@ def preview_email():
             "organizer_batch": ORGANIZER_BATCH,
             "organizer_institution": ORGANIZER_INSTITUTION,
             "include_qr": include_qr,
+            "food_preference": food_label,
+            "food_color": food_color,
+            "first_name": _first_name(name, email),
         }
         tpl_path = f"farewell/{template_type}.html"
         try:
@@ -1504,6 +1597,343 @@ def save_smtp_config():
 
 
 # ============================================================
+# SMTP Pool management routes (rotation, multi-account)
+# ============================================================
+
+
+@app.route("/farewell-smtp-pool", methods=["GET"])
+@admin_only
+def get_smtp_pool():
+    """Return all SMTP pool configs with usage stats."""
+    pool = SMTPPool()
+    status = pool.get_status()
+    return jsonify({"success": True, **status})
+
+
+@app.route("/farewell-smtp-pool", methods=["POST"])
+@admin_only
+def add_smtp_pool_config():
+    """Add a new SMTP config to the rotation pool."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "error": "No data provided"}), 400
+        username = data.get("username", "")
+        password = data.get("password", "")
+        if not username or not password:
+            return jsonify(
+                {"success": False, "error": "Username and password are required"}
+            ), 400
+        # Don't store masked passwords
+        if password in ("********", "****", ""):
+            # Try to keep existing password
+            pool = SMTPPool()
+            for c in pool.configs:
+                if c.get("username") == username:
+                    password = c["password"]
+                    break
+            if password in ("********", "****", ""):
+                return jsonify(
+                    {
+                        "success": False,
+                        "error": "Password is required (cannot be masked)",
+                    }
+                ), 400
+
+        cfg = {
+            "host": data.get("host", "smtp.gmail.com"),
+            "port": int(data.get("port", 587)),
+            "username": username,
+            "password": password,
+            "sender_name": data.get("sender_name", ""),
+            "sender_email": data.get("sender_email", username),
+            "use_tls": data.get("use_tls", True),
+            "daily_limit": int(data.get("daily_limit", 500)),
+            "active": data.get("active", True),
+        }
+        pool = SMTPPool()
+        pool.add_config(cfg)
+        return jsonify(
+            {"success": True, "message": f"SMTP config added for {username}"}
+        )
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/farewell-smtp-pool/<int:index>", methods=["PUT"])
+@admin_only
+def update_smtp_pool_config(index):
+    """Update an existing SMTP pool config."""
+    try:
+        data = request.get_json()
+        pool = SMTPPool()
+        # Handle masked password
+        if data.get("password") in ("********", "****", ""):
+            data.pop("password", None)
+        if "daily_limit" in data:
+            data["daily_limit"] = int(data["daily_limit"])
+        pool.update_config(index, data)
+        return jsonify({"success": True, "message": "Config updated"})
+    except IndexError:
+        return jsonify({"success": False, "error": "Config not found"}), 404
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/farewell-smtp-pool/<int:index>", methods=["DELETE"])
+@admin_only
+def delete_smtp_pool_config(index):
+    """Remove an SMTP config from the pool."""
+    try:
+        pool = SMTPPool()
+        pool.remove_config(index)
+        return jsonify({"success": True, "message": "Config removed"})
+    except IndexError:
+        return jsonify({"success": False, "error": "Config not found"}), 404
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/farewell-smtp-pool/<int:index>/activate", methods=["POST"])
+@admin_only
+def activate_smtp_pool_config(index):
+    """Set a specific config as the active one."""
+    try:
+        pool = SMTPPool()
+        pool.set_active(index)
+        return jsonify({"success": True, "message": "Active config updated"})
+    except IndexError:
+        return jsonify({"success": False, "error": "Config not found"}), 404
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/farewell-smtp-pool/<int:index>/test", methods=["POST"])
+@admin_only
+def test_smtp_pool_config(index):
+    """Test a specific SMTP config in the pool."""
+    try:
+        pool = SMTPPool()
+        if index >= len(pool.configs):
+            return jsonify({"success": False, "error": "Config not found"}), 404
+        cfg = pool.configs[index]
+        mailer = SMTPMailer.__new__(SMTPMailer)
+        mailer.host = cfg.get("host", "smtp.gmail.com")
+        mailer.port = int(cfg.get("port", 587))
+        mailer.username = cfg.get("username", "")
+        mailer.password = cfg.get("password", "")
+        mailer.sender_name = cfg.get("sender_name", "")
+        mailer.sender_email = cfg.get("sender_email", "")
+        mailer.use_tls = cfg.get("use_tls", True)
+        result = mailer.test_connection()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e), "error": str(e)})
+
+
+@app.route("/farewell-smtp-test-creds", methods=["POST"])
+@admin_only
+def test_smtp_creds():
+    """Test arbitrary SMTP credentials (for form-based testing before adding to pool)."""
+    try:
+        data = request.get_json()
+        mailer = SMTPMailer.__new__(SMTPMailer)
+        mailer.host = data.get("host", "smtp.gmail.com")
+        mailer.port = int(data.get("port", 587))
+        mailer.username = data.get("username", "")
+        mailer.password = data.get("password", "")
+        mailer.sender_name = data.get("sender_name", "")
+        mailer.sender_email = data.get("sender_email", "")
+        mailer.use_tls = data.get("use_tls", True)
+        if not mailer.username or not mailer.password:
+            return jsonify(
+                {"success": False, "message": "Username and password required"}
+            )
+        result = mailer.test_connection()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e), "error": str(e)})
+
+
+@app.route("/farewell-retry-failed", methods=["POST"])
+@admin_only
+def retry_failed_emails():
+    """Retry emails that previously failed. Accepts list of {email, error} or reads from latest failure log."""
+    try:
+        data = request.get_json() or {}
+        failed_list = data.get("failed_list", [])
+
+        if not failed_list:
+            # Find the latest failure log
+            log_dir = os.path.join("logs")
+            if os.path.isdir(log_dir):
+                files = sorted(
+                    [f for f in os.listdir(log_dir) if f.startswith("failed_emails_")],
+                    reverse=True,
+                )
+                if files:
+                    import csv as csv_mod
+
+                    with open(
+                        os.path.join(log_dir, files[0]),
+                        "r",
+                        newline="",
+                        encoding="utf-8",
+                    ) as f:
+                        reader = csv_mod.DictReader(f)
+                        failed_list = [{"email": row["email"]} for row in reader]
+
+        if not failed_list:
+            return jsonify(
+                {"success": False, "error": "No failed emails to retry"}
+            ), 400
+
+        # Extract emails and re-send via the normal send flow
+        emails = [item["email"] for item in failed_list if item.get("email")]
+        if not emails:
+            return jsonify(
+                {"success": False, "error": "No valid emails in failed list"}
+            ), 400
+
+        # Delegate to the send_with_template endpoint logic
+        event_name = data.get("event_name", EVENT_NAME)
+        template_type = data.get("template_type", "invitation")
+
+        pool = SMTPPool()
+        recipients = csv_manager.read_recipients()
+        if not recipients:
+            return jsonify({"success": False, "error": "No recipients found"}), 400
+
+        email_set = {e.lower() for e in emails}
+        recipients = [r for r in recipients if r.get("email", "").lower() in email_set]
+        if not recipients:
+            return jsonify(
+                {"success": False, "error": "No matching recipients for failed emails"}
+            ), 400
+
+        # Read existing coupons to dedupe
+        existing_emails = set()
+        try:
+            with open(csv_manager.coupons_file, "r", newline="", encoding="utf-8") as f:
+                import csv as csv_mod
+
+                reader = csv_mod.DictReader(f)
+                for row in reader:
+                    existing_emails.add(row.get("email", "").lower())
+        except FileNotFoundError:
+            pass
+
+        # For retry, include recipients that already have coupons (they were sent but failed)
+        # Reuse existing coupon codes if available
+        coupon_map = {}
+        try:
+            with open(csv_manager.coupons_file, "r", newline="", encoding="utf-8") as f:
+                import csv as csv_mod
+
+                reader = csv_mod.DictReader(f)
+                for row in reader:
+                    if row.get("email"):
+                        coupon_map[row["email"].lower()] = row
+        except FileNotFoundError:
+            pass
+
+        sent, failed, failed_list_out = 0, 0, []
+        for r in recipients:
+            email = r.get("email", "")
+            name = r.get("name", email.split("@")[0])
+            existing_coupon = coupon_map.get(email.lower())
+
+            if existing_coupon and existing_coupon.get("verification_code"):
+                # Reuse existing coupon
+                vcode = existing_coupon["verification_code"]
+                cid = existing_coupon["coupon_id"]
+            else:
+                # Generate new coupon
+                batch = coupon_manager.generate_coupons_batch([r], event_name)
+                if batch.get("coupons"):
+                    c = batch["coupons"][0]
+                    vcode = c["verification_code"]
+                    cid = c["coupon_id"]
+                else:
+                    failed += 1
+                    failed_list_out.append(
+                        {"email": email, "error": "Failed to generate coupon"}
+                    )
+                    continue
+
+            food_label, food_color = _food_preference_info(r.get("food_preference"))
+            has_qr = r.get("include_qr", True)
+            if isinstance(has_qr, str):
+                has_qr = has_qr.lower() not in ("false", "0", "no")
+
+            if has_qr:
+                qr_b64 = coupon_manager.create_qr_code(
+                    json.dumps({"v": vcode, "e": email})
+                )
+                qr_bytes = base64.b64decode(qr_b64)
+                qr_src = "cid:qrcode"
+            else:
+                qr_bytes = None
+                qr_src = ""
+                qr_b64 = ""
+
+            ctx = {
+                "attendee_name": name,
+                "attendee_email": email,
+                "event_name": event_name,
+                "event_date": EVENT_DATE,
+                "event_time": EVENT_TIME,
+                "event_venue": EVENT_VENUE,
+                "qr_code_base64": qr_b64 if has_qr else "",
+                "qr_code_src": qr_src,
+                "verification_code": vcode if has_qr else "",
+                "coupon_id": cid,
+                "organizer_batch": ORGANIZER_BATCH,
+                "organizer_institution": ORGANIZER_INSTITUTION,
+                "include_qr": has_qr,
+                "food_preference": food_label,
+                "food_color": food_color,
+                "first_name": _first_name(name, email),
+            }
+            try:
+                tpl = f"farewell/{template_type}.html"
+                with app.app_context():
+                    html_body = render_template(tpl, **ctx)
+                result = pool.send_email(
+                    to_email=email,
+                    to_name=name,
+                    subject=f"You're Invited! {event_name}",
+                    html_body=html_body,
+                    qr_code_bytes=qr_bytes,
+                )
+                if result["success"]:
+                    if not existing_coupon:
+                        coupon_manager.mark_coupon_sent(cid)
+                    sent += 1
+                else:
+                    failed += 1
+                    failed_list_out.append(
+                        {"email": email, "error": result.get("error", "Unknown")}
+                    )
+            except Exception as e:
+                failed += 1
+                failed_list_out.append({"email": email, "error": str(e)})
+
+            time.sleep(1.0)
+
+        return jsonify(
+            {
+                "success": True,
+                "emails_sent": sent,
+                "emails_failed": failed,
+                "failed_list": failed_list_out,
+            }
+        )
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ============================================================
 # Template management routes (Lunch, Dinner)
 # ============================================================
 TEMPLATES_DIR = "templates/farewell"
@@ -1586,6 +2016,24 @@ def save_template(template_type):
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@app.route("/farewell-upload-attachment", methods=["POST"])
+@admin_only
+def upload_attachment():
+    """Upload an attachment file (PDF/image) for inclusion in emails."""
+    if "file" not in request.files:
+        return jsonify({"success": False, "error": "No file provided"}), 400
+    f = request.files["file"]
+    if not f.filename:
+        return jsonify({"success": False, "error": "No file selected"}), 400
+    # Save to a known location
+    safe_name = f"attachment_{int(time.time())}_{f.filename}"
+    upload_dir = os.path.join(os.path.dirname(__file__), "uploads")
+    os.makedirs(upload_dir, exist_ok=True)
+    filepath = os.path.join(upload_dir, safe_name)
+    f.save(filepath)
+    return jsonify({"success": True, "path": filepath, "filename": f.filename})
+
+
 @app.route("/farewell-send-with-template", methods=["POST"])
 @admin_only
 def send_with_template():
@@ -1638,9 +2086,10 @@ def send_with_template():
             ), 400
 
         # Build lookup for recipient options (include_qr etc.)
-        recipient_opts = {r.get("email", "").lower(): r for r in new_recipients}
+        # Use a list to support multiple entries per email (e.g. testing both veg & non-veg)
+        recipient_opts_list = list(new_recipients)
 
-        smtp_mailer = SMTPMailer()
+        smtp_pool = SMTPPool()
         coupon_results = coupon_manager.generate_coupons_batch(
             new_recipients, event_name
         )
@@ -1651,19 +2100,33 @@ def send_with_template():
             ), 500
 
         sent, failed, failed_list = 0, 0, []
+        # Make a mutable copy so we can pop matched recipients (handles duplicate emails)
+        remaining_recipients = list(recipient_opts_list)
         for coupon in coupon_results.get("coupons", []):
             email = coupon["email"]
-            opts = recipient_opts.get(email.lower(), {})
+            # Find and remove the matching recipient (supports duplicate emails)
+            opts = {}
+            for idx, r in enumerate(remaining_recipients):
+                if r.get("email", "").lower() == email.lower():
+                    opts = remaining_recipients.pop(idx)
+                    break
             has_qr = opts.get("include_qr", True)
             if isinstance(has_qr, str):
                 has_qr = has_qr.lower() not in ("false", "0", "no")
 
+            food_label, food_color = _food_preference_info(opts.get("food_preference"))
+
             if has_qr:
-                qr_bytes = base64.b64decode(coupon["qr_code_base64"])
+                # Black-on-white QR; the color-coding lives on the coupon BOX
+                qr_b64 = coupon_manager.create_qr_code(
+                    json.dumps({"v": coupon["verification_code"], "e": email})
+                )
+                qr_bytes = base64.b64decode(qr_b64)
                 qr_src = "cid:qrcode"
             else:
                 qr_bytes = None
                 qr_src = ""
+                qr_b64 = ""
 
             ctx = {
                 "attendee_name": opts.get(
@@ -1674,19 +2137,22 @@ def send_with_template():
                 "event_date": EVENT_DATE,
                 "event_time": EVENT_TIME,
                 "event_venue": EVENT_VENUE,
-                "qr_code_base64": coupon["qr_code_base64"] if has_qr else "",
+                "qr_code_base64": qr_b64 if has_qr else "",
                 "qr_code_src": qr_src,
                 "verification_code": coupon["verification_code"] if has_qr else "",
                 "coupon_id": coupon["coupon_id"],
                 "organizer_batch": ORGANIZER_BATCH,
                 "organizer_institution": ORGANIZER_INSTITUTION,
                 "include_qr": has_qr,
+                "food_preference": food_label,
+                "food_color": food_color,
+                "first_name": _first_name(opts.get("name", email.split("@")[0]), email),
             }
             try:
                 tpl = f"farewell/{template_type}.html"
                 with app.app_context():
                     html_body = render_template(tpl, **ctx)
-                result = smtp_mailer.send_email(
+                result = smtp_pool.send_email(
                     to_email=email,
                     to_name=ctx["attendee_name"],
                     subject="Farewell 2026 Invitation"

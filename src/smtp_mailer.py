@@ -138,7 +138,7 @@ class SMTPMailer:
             msg["Subject"] = subject
             msg["From"] = f"{self.sender_name} <{self.sender_email}>"
             msg["To"] = f"{to_name} <{to_email}>"
-            msg["X-Mailer"] = "21MS-Farewell-Mailer"
+            msg["X-Mailer"] = "DCS-Freshers-Mailer"
 
             # Create the alternative part (plain text + html)
             alt_part = MIMEMultipart("alternative")

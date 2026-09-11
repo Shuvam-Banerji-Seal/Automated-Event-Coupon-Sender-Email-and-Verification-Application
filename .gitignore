@@ -1,70 +1,88 @@
+# ============================================================
+# SECRETS — never commit these
+# ============================================================
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+smtp_config.json
+smtp_configs.json
+smtp_counters.json
+organizer_credentials.json
+client_secret*.json
+token.json
+credentials.json
+
+# ============================================================
+# EVENT DATA (contains attendee PII — names, emails, codes)
+# ============================================================
+coupons.csv
+coupons*.csv
+responses*.csv
+*.csv.backup*
+coupons_backup.db*
+sample_attendees.csv
+test_attendees.csv
+dcs_*.csv
+uploads/
+backups/
+archive/
+logs/
+Farewell Party*/
+Freshers*/
+
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+*.sql
+
+# ============================================================
 # Python
+# ============================================================
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
 .Python
 env/
 venv/
 .venv/
+ENV/
 pip-selfcheck.json
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
 
-# Environment variables
-.env
-.env.*
-!/.env.example
-
-# IDEs and editors
+# ============================================================
+# Tooling / editors / OS
+# ============================================================
 .idea/
 .vscode/
 *.swp
 *.swo
-
-# OS-specific
+*~
 .DS_Store
 Thumbs.db
+.kiro/
+.claude/
 
-# Logs and databases
-logs/
-*.log
-*.sql
-*.sqlite3
-*.db
-
-# Uploads and backups
-uploads/
-backups/
-coupons.csv
-responses - Sheet1.csv
-sample_attendees.csv
-
-# Ngrok
+# ============================================================
+# Tunnels
+# ============================================================
 ngrok
 ngrok.exe
-.ngrok2/
 ngrok.log
+.ngrok2/
+.zrok/
 
-# Kiro
-.kiro/
-
-# Credentials
-organizer_credentials.json
-
-# Unused Code and Scripts
+# ============================================================
+# Legacy / scratch — kept out of the tree
+# ============================================================
 old_code/
-database_models.py
-email_service.py
-test_qr_recognition.py
-test_scanner_improvements.py
-setup.py
-test_schedule.pdf
-smtp_sample.json
-static/smtp_sample.json
-
-# Security - never commit these
-*.pem
-smtp_config.json
-organizer_credentials.json
-uploads/
-coupons.csv.backup
 wl-copy
+plans/
+*.log

@@ -67,6 +67,9 @@ class CouponManager:
                         "event_name": "",
                         "created_at": coupon_record.sent_at or "",
                         "verification_code": verification_code,
+                        "food_preference": getattr(
+                            coupon_record, "food_preference", "Vegetarian"
+                        ),
                     }
                 else:
                     # TOCTOU hit - another request marked it first
@@ -101,12 +104,14 @@ class CouponManager:
             if not existing:
                 return code
 
-    def create_qr_code(self, data: str) -> str:
+    def create_qr_code(self, data: str, back_color: str = "white") -> str:
         """
         Generate QR code from data and return as base64 string
 
         Args:
             data: String data to encode in QR code
+            back_color: Background color for the QR image.
+                "white" (default) | "#2d8a3e" (veg green) | "#DC143C" (non-veg crimson)
 
         Returns:
             Base64 encoded PNG image of QR code
@@ -123,7 +128,7 @@ class CouponManager:
             qr.make(fit=True)
 
             # Create image
-            img = qr.make_image(fill_color="black", back_color="white")
+            img = qr.make_image(fill_color="black", back_color=back_color)
 
             # Convert to base64
             buffer = BytesIO()
@@ -291,6 +296,7 @@ class CouponManager:
                     qr_code_data=qr_code_base64,
                     verification_code=verification_code,
                     status="generated",
+                    food_preference=recipient.get("food_preference", "Vegetarian"),
                 )
 
                 coupon_records.append(coupon_record)
@@ -304,6 +310,9 @@ class CouponManager:
                         "qr_code_base64": qr_code_base64,
                         "encrypted_data": encrypted_data,
                         "verification_code": verification_code,
+                        "food_preference": recipient.get(
+                            "food_preference", "Vegetarian"
+                        ),
                     }
                 )
 

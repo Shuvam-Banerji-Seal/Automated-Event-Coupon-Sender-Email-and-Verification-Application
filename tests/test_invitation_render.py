@@ -39,6 +39,9 @@ def sample_data():
         "organizer_batch": "22MS Batch",
         "organizer_institution": "IISER Kolkata",
         "include_qr": True,
+        "food_preference": "Vegetarian",
+        "food_color": "#2d8a3e",
+        "first_name": "Test",
     }
 
 
@@ -58,43 +61,101 @@ class TestInvitationTemplate:
         html = template.render(**sample_data)
         assert "Test Attendee" in html
 
-    def test_contains_verification_code(self, jinja_env, sample_data):
-        """Rendered HTML contains the verification code."""
+    def test_contains_attendee_email(self, jinja_env, sample_data):
+        """Rendered HTML contains the attendee email."""
         template = jinja_env.get_template("invitation.html")
         html = template.render(**sample_data)
-        assert "123456" in html
+        assert "test@example.com" in html
+
+    def test_greeting_uses_first_name(self, jinja_env, sample_data):
+        """Greeting uses the first name (Dear Test, not Dear Test Attendee)."""
+        template = jinja_env.get_template("invitation.html")
+        html = template.render(**sample_data)
+        assert "Dear <span" in html
+        assert ">Test</span>," in html  # first name inside the styled span
+        assert ">Test Attendee</span>," not in html
+        # full name still appears as HOLDER
+        assert "Test Attendee" in html
 
     def test_contains_qr_code_img_tag(self, jinja_env, sample_data):
-        """Rendered HTML contains <img> with base64 QR data."""
+        """Rendered HTML contains the QR <img> with the provided src."""
         template = jinja_env.get_template("invitation.html")
         html = template.render(**sample_data)
         assert "data:image/png;base64," in html
         assert "<img" in html
+        assert "Freshers Entry QR Coupon" in html
 
-    def test_contains_google_fonts_link(self, jinja_env, sample_data):
-        """Rendered HTML contains Google Fonts link tag."""
+    def test_contains_food_preference(self, jinja_env, sample_data):
+        """Rendered HTML contains the attendee's food preference and color."""
         template = jinja_env.get_template("invitation.html")
         html = template.render(**sample_data)
-        assert "fonts.googleapis.com" in html
-        assert "Caveat" in html
+        assert "Vegetarian" in html
+        assert "#2d8a3e" in html
 
-    def test_contains_caveat_font(self, jinja_env, sample_data):
-        """Rendered HTML references Caveat font."""
+    def test_nonveg_food_icon(self, jinja_env, sample_data):
+        """Non-Vegetarian preference renders crimson color and inline SVG triangle icon."""
+        data = dict(sample_data, food_preference="Non-Vegetarian", food_color="#DC143C")
+        template = jinja_env.get_template("invitation.html")
+        html = template.render(**data)
+        assert "Non-Vegetarian" in html
+        assert "#DC143C" in html
+        # Non-veg icon is an inline SVG polygon (red triangle)
+        assert '<polygon points="14,2 26,24 2,24" fill="#DC143C"/>' in html
+        # Veg icon (green circle) should NOT be present
+        assert '<circle cx="14" cy="14" r="12" fill="#2d8a3e"/>' not in html
+
+    def test_veg_food_icon(self, jinja_env, sample_data):
+        """Vegetarian preference renders inline SVG green circle icon (no triangle)."""
         template = jinja_env.get_template("invitation.html")
         html = template.render(**sample_data)
-        assert "Caveat" in html
+        assert '<circle cx="14" cy="14" r="12" fill="#2d8a3e"/>' in html
+        assert '<polygon points="14,2 26,24 2,24"' not in html
 
-    def test_contains_satisfy_font(self, jinja_env, sample_data):
-        """Rendered HTML references Satisfy font."""
+    def test_contains_food_token(self, jinja_env, sample_data):
+        """The QR coupon heading is 'Your Food Token'."""
         template = jinja_env.get_template("invitation.html")
         html = template.render(**sample_data)
-        assert "Satisfy" in html
+        assert "Your Food Token" in html
+        assert "Your Reaction Token" not in html
 
-    def test_contains_kalam_font(self, jinja_env, sample_data):
-        """Rendered HTML references Kalam font."""
+    def test_element_tiles_present(self, jinja_env, sample_data):
+        """The K (19th), W (Wednesday) and Be (4 PM) tiles are present."""
         template = jinja_env.get_template("invitation.html")
         html = template.render(**sample_data)
-        assert "Kalam" in html
+        assert "POTASSIUM" in html
+        assert "TUNGSTEN" in html
+        assert "BERYLLIUM" in html
+        assert "19" in html
+        assert "WED" in html
+        assert "4 PM" in html
+
+    def test_no_base64_decorative_images(self, jinja_env, sample_data):
+        """No base64 data-URI PNGs for decorative elements (only QR img uses src)."""
+        template = jinja_env.get_template("invitation.html")
+        html = template.render(**sample_data)
+        # Decorative elements are inline SVGs, not base64 PNGs
+        assert "data:image/png;base64," not in html.replace(
+            sample_data["qr_code_src"], ""
+        )
+        # Inline SVGs ARE present (header, atom, food icons, molecule, hex pattern)
+        assert "<svg" in html
+        # No <filter> or radialGradient (the old blur elements)
+        assert "<filter" not in html
+        assert "radialGradient" not in html
+
+    def test_no_schedule_section(self, jinja_env, sample_data):
+        """The agenda/schedule section is removed."""
+        template = jinja_env.get_template("invitation.html")
+        html = template.render(**sample_data)
+        assert "REACTION SCHEDULE" not in html
+        assert "Registration & Kit Collection" not in html
+
+    def test_no_fake_contact_email(self, jinja_env, sample_data):
+        """The non-existent dcs-freshers contact email is removed."""
+        template = jinja_env.get_template("invitation.html")
+        html = template.render(**sample_data)
+        assert "dcs-freshers@iiserkol.ac.in" not in html
+        assert "Questions?" not in html
 
     def test_no_broken_template_tags(self, jinja_env, sample_data):
         """Rendered HTML contains no {{ or }} (all variables substituted)."""
@@ -104,10 +165,10 @@ class TestInvitationTemplate:
         assert "}}" not in html
 
     def test_email_width_constraint(self, jinja_env, sample_data):
-        """Rendered HTML contains max-width: 600px."""
+        """Rendered HTML contains max-width: 640px container."""
         template = jinja_env.get_template("invitation.html")
         html = template.render(**sample_data)
-        assert "600px" in html or "max-width" in html
+        assert "640px" in html or "max-width" in html
 
 
 class TestThankYouTemplate:
@@ -124,7 +185,9 @@ class TestThankYouTemplate:
         """Rendered thank_you contains the attendee name."""
         template = jinja_env.get_template("thank_you.html")
         html = template.render(**sample_data)
-        assert "Test Attendee" in html
+        assert "Test" in html  # first_name used in greeting
+        assert "test@example.com" in html
+        assert "123456" in html  # verification code
 
     def test_thank_you_no_broken_template_tags(self, jinja_env, sample_data):
         """Rendered thank_you contains no {{ or }} (all variables substituted)."""

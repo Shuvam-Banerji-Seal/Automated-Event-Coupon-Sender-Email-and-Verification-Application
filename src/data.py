@@ -28,6 +28,7 @@ class CouponRecord:
     sent_at: Optional[str] = None
     used_at: Optional[str] = None
     status: str = "generated"  # generated, sent, used, expired
+    food_preference: str = "Vegetarian"  # Vegetarian or Non-Vegetarian
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for CSV writing"""
@@ -255,21 +256,19 @@ class CSVManager:
                 "sent_at",
                 "used_at",
                 "status",
+                "food_preference",
             ]
             with open(self.coupons_file, "w", newline="", encoding="utf-8") as f:
                 writer = csv.writer(f)
                 writer.writerow(headers)
             self.logger.info(f"Created coupons file: {self.coupons_file}")
         else:
-            # Check if verification_code column exists, add if missing
-            self._ensure_verification_code_column()
+            # Check if columns exist, add if missing
+            self._ensure_coupon_columns()
 
-    def _ensure_verification_code_column(self):
-        """Ensure verification_code column exists in existing CSV file"""
+    def _ensure_coupon_columns(self):
+        """Ensure all required columns exist in existing CSV file"""
         try:
-            import tempfile
-            import shutil
-
             # Read existing data
             with open(self.coupons_file, "r", newline="", encoding="utf-8") as f:
                 reader = csv.DictReader(f)
@@ -293,6 +292,7 @@ class CSVManager:
                     "sent_at",
                     "used_at",
                     "status",
+                    "food_preference",
                 ]
 
                 # Check if structure needs fixing
@@ -439,6 +439,7 @@ class CSVManager:
                         "sent_at",
                         "used_at",
                         "status",
+                        "food_preference",
                     ],
                 )
                 writer.writerow(coupon.to_dict())
@@ -468,6 +469,7 @@ class CSVManager:
                         "sent_at",
                         "used_at",
                         "status",
+                        "food_preference",
                     ],
                 )
                 for coupon in coupons:

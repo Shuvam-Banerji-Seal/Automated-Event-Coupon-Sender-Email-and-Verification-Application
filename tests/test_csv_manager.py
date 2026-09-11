@@ -53,6 +53,7 @@ class TestCSVInit:
             "sent_at",
             "used_at",
             "status",
+            "food_preference",
         ]
         assert headers == expected
 
