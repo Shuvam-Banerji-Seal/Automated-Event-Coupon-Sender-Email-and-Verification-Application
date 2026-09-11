@@ -8,71 +8,9 @@ requirement of this suite, not a convenience: the predecessor's test file called
 the real SMTP sender, and running the suite delivered mail.
 """
 
-import importlib
 import io
-import os
-import sys
 
 import pytest
-
-
-@pytest.fixture
-def client(tmp_path, monkeypatch):
-    """A fully isolated app instance.
-
-    Every path the app writes to is redirected into a temp directory. The old
-    suite wiped the production database precisely because this was not done.
-    """
-    monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "test.db"))
-    monkeypatch.setenv("SECRET_KEY", "test-key-not-a-real-secret")
-    monkeypatch.setenv("COUPON_SECRET_KEY", "0" * 64)
-    monkeypatch.setenv("DISABLE_ADMIN_CHECK", "true")
-    monkeypatch.setenv("SCANNER_PIN", "")
-    monkeypatch.setenv("EVENT_NAME", "Test Event")
-    monkeypatch.chdir(tmp_path)
-
-    # Seed templates live next to the real app, not in the temp cwd.
-    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    (tmp_path / "templates").mkdir(exist_ok=True)
-    os.symlink(os.path.join(root, "templates", "seed"), tmp_path / "templates" / "seed")
-
-    sys.modules.pop("app", None)
-    app_module = importlib.import_module("app")
-    app_module.app.config.update(TESTING=True)
-
-    sent = []
-
-    class Recorder:
-        """Stands in for the SMTP pool; records instead of delivering."""
-
-        accounts = [object()]
-        available = True
-
-        def send(self, message):
-            sent.append(message)
-            return {"success": True, "to_email": message.to_email, "account": "test"}
-
-        def close(self):
-            pass
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *exc):
-            return False
-
-    monkeypatch.setattr(app_module.mailer, "campaign", lambda **kw: Recorder())
-    monkeypatch.setattr(
-        app_module.mailer, "status",
-        lambda: {"accounts": [], "total_remaining": 500, "configured": True},
-    )
-
-    with app_module.app.test_client() as test_client:
-        test_client.app_module = app_module
-        test_client.sent = sent
-        yield test_client
-
-    sys.modules.pop("app", None)
 
 
 SHEET = (
@@ -317,6 +255,103 @@ class TestScanning:
         coupon = store.find_by_email("ada@iiserkol.ac.in")
         client.get(f"/api/scan/lookup?q={coupon.verification_code}")
         assert store.find_by_id(coupon.coupon_id).status != "used"
+
+
+class TestScanRateLimiting:
+    """Guessing must be blocked; a busy door must never be.
+
+    The first version limited requests per IP. Behind the public tunnel every
+    scanner shares one source address, so a ten-scanner burst had 296 of 448
+    legitimate scans rejected. Only failed lookups count now.
+    """
+
+    def _issue(self, client):
+        load_recipients(client)
+        job = client.post("/api/send/start", json={
+            "template": "invitation", "audience": "pending", "throttle": 0}).get_json()
+        _wait_for_job(client, job["job_id"])
+        return client.app_module.store
+
+    def test_repeated_bad_guesses_are_blocked(self, client):
+        codes = [f"{n:06d}" for n in range(900000, 900040)]
+        blocked = False
+        for code in codes:
+            r = client.post("/api/scan",
+                            json={"payload": code, "scanner": "guesser"})
+            if r.status_code == 429:
+                blocked = True
+                break
+        assert blocked, "brute-force guessing was never rate limited"
+
+    def test_one_bad_device_does_not_block_the_others(self, client):
+        store = self._issue(client)
+        for n in range(40):
+            client.post("/api/scan",
+                        json={"payload": f"{900000 + n:06d}", "scanner": "guesser"})
+        coupon = store.find_by_email("ada@iiserkol.ac.in")
+        good = client.post("/api/scan",
+                           json={"payload": coupon.qr_payload, "scanner": "gate-1"})
+        assert good.status_code == 200
+        assert good.get_json()["success"] is True
+
+    def test_valid_scans_do_not_count_toward_the_limit(self, client):
+        """A volunteer admitting a long queue must never be throttled."""
+        store = self._issue(client)
+        coupon = store.find_by_email("ada@iiserkol.ac.in")
+        for _ in range(60):
+            # Same coupon repeatedly: 'already used' is a real coupon, not a guess.
+            r = client.post("/api/scan",
+                            json={"payload": coupon.qr_payload, "scanner": "gate-1"})
+            assert r.status_code != 429
+
+
+class TestThankYouMail:
+    def _issue(self, client):
+        load_recipients(client)
+        job = client.post("/api/send/start", json={
+            "template": "invitation", "audience": "pending", "throttle": 0}).get_json()
+        _wait_for_job(client, job["job_id"])
+        return client.app_module.store
+
+    def test_checking_in_queues_a_thank_you(self, client):
+        store = self._issue(client)
+        before = store.outbox_stats()["total"]
+        coupon = store.find_by_email("ada@iiserkol.ac.in")
+        client.post("/api/scan", json={"payload": coupon.qr_payload})
+        assert store.outbox_stats()["total"] == before + 1
+
+    def test_only_one_thank_you_per_guest(self, client):
+        """Six scanners racing the same coupon must not queue six emails."""
+        store = self._issue(client)
+        coupon = store.find_by_email("ada@iiserkol.ac.in")
+        for _ in range(5):
+            client.post("/api/scan", json={"payload": coupon.qr_payload})
+        rows = [r for r in store.recent_outbox(50)
+                if r["to_email"] == coupon.email and r["kind"] == "thank_you"]
+        assert len(rows) == 1
+
+    def test_a_refused_scan_queues_nothing(self, client):
+        store = self._issue(client)
+        before = store.outbox_stats()["total"]
+        client.post("/api/scan", json={"payload": "000000"})
+        assert store.outbox_stats()["total"] == before
+
+    def test_scan_response_is_not_delayed_by_mail(self, client):
+        """Delivery happens on the worker; the request only writes a row."""
+        import time
+        store = self._issue(client)
+        coupon = store.find_by_email("ada@iiserkol.ac.in")
+        started = time.perf_counter()
+        client.post("/api/scan", json={"payload": coupon.qr_payload})
+        assert time.perf_counter() - started < 1.0
+
+    def test_outbox_endpoint_reports_the_queue(self, client):
+        store = self._issue(client)
+        coupon = store.find_by_email("ada@iiserkol.ac.in")
+        client.post("/api/scan", json={"payload": coupon.qr_payload})
+        data = client.get("/api/outbox").get_json()
+        assert data["success"] is True
+        assert data["worker"]["total"] >= 1
 
 
 class TestExportAndReset:

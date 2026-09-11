@@ -10,7 +10,7 @@
 
 <div id="checks" class="stack mb-2"></div>
 
-<div class="grid cols-4 mb-2">
+<div class="grid cols-5 mb-2">
   <div class="stat">
     <div class="stat-label">Recipients</div>
     <div class="stat-value tnum" id="s-recipients">—</div>
@@ -25,6 +25,11 @@
     <div class="stat-label">Checked in</div>
     <div class="stat-value tnum" id="s-used">—</div>
     <div class="meter ok"><span id="s-used-bar" style="width:0"></span></div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Thank-you mail</div>
+    <div class="stat-value tnum" id="s-thanks">—</div>
+    <div class="stat-meta" id="s-thanks-meta">sent on check-in</div>
   </div>
   <div class="stat">
     <div class="stat-label">Sending capacity left</div>
@@ -80,6 +85,7 @@
           </button>
         </div>
         <div id="scanner-lock"></div>
+        <div id="scanner-public"></div>
         <div style="text-align:center;padding:6px 0">
           <img id="scanner-qr" alt="QR code linking to the scanner page"
                width="170" height="170"
@@ -135,6 +141,19 @@ function renderChecks(d) {
       'Anyone who can reach this machine on the network can redeem coupons. ' +
       'Set SCANNER_PIN in your .env and restart.', '']);
   }
+  // Every guest costs two messages: an invitation and a thank-you on arrival.
+  // A single Gmail account tops out around 500 a day, which is easy to overrun
+  // without noticing until sending stops mid-event.
+  const needed = d.stats.recipients * 2;
+  const capacity = d.smtp.configured ? d.smtp.total_remaining : 0;
+  if (d.smtp.configured && d.stats.recipients > 0 && capacity < needed) {
+    checks.push(['warn', 'Daily sending capacity may not cover the event',
+      `${fmtNumber(d.stats.recipients)} guests need about ${fmtNumber(needed)} messages ` +
+      `(one invitation plus one thank-you each), but only ${fmtNumber(capacity)} sends ` +
+      `remain today. Add another mail account, or send invitations today and ` +
+      `leave the thank-yous for the event itself.`,
+      '<a class="btn sm" href="/settings">Add an account</a>']);
+  }
   if (d.stats.pending > 0 && d.stats.total > 0) {
     checks.push(['info', `${fmtNumber(d.stats.pending)} recipients have no coupon yet`,
       'They will be issued one when you next send.',
@@ -163,6 +182,14 @@ function renderStats(d) {
   document.getElementById('s-used-bar').style.width = `${pct}%`;
   document.getElementById('s-recipients-meta').textContent =
     s.pending ? `${fmtNumber(s.pending)} awaiting a coupon` : 'all have coupons';
+
+  const ob = d.outbox || {};
+  document.getElementById('s-thanks').textContent = fmtNumber(ob.sent || 0);
+  const waiting = (ob.queued || 0) + (ob.sending || 0);
+  document.getElementById('s-thanks-meta').textContent =
+    ob.failed ? `${fmtNumber(ob.failed)} failed · ${fmtNumber(waiting)} waiting`
+              : waiting ? `${fmtNumber(waiting)} waiting to go out`
+                        : 'sent on check-in';
 
   const cap = d.smtp.total_remaining || 0;
   document.getElementById('s-capacity').textContent = d.smtp.configured ? fmtNumber(cap) : '—';
@@ -248,6 +275,13 @@ async function load() {
     document.getElementById('scanner-url').value = url;
     document.getElementById('scanner-qr').src =
       '/api/qr/scanner.png';
+    const t = overview.tunnel || {};
+    document.getElementById('scanner-public').innerHTML = t.running
+      ? '<div class="notice ok small"><svg><use href="#i-check-circle"/></svg><div>' +
+        'Public — works on any network</div></div>'
+      : '<div class="notice small"><svg><use href="#i-info"/></svg><div>' +
+        'Local network only. <a href="/settings">Publish it</a> to work anywhere.</div></div>';
+
     document.getElementById('scanner-lock').innerHTML = overview.scanner_locked
       ? '<div class="notice ok small"><svg><use href="#i-check-circle"/></svg><div>Protected by a PIN</div></div>'
       : '<div class="notice warn small"><svg><use href="#i-alert"/></svg><div>No PIN set — anyone on this network can scan</div></div>';

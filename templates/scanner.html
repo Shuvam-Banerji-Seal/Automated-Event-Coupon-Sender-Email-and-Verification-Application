@@ -541,10 +541,22 @@ async function submit(payload) {
   try {
     const response = await fetch('/api/scan', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        // zrok shows a one-time interstitial to browsers. The cookie set by
+        // clicking through normally covers this, but if it is lost the reply
+        // would be HTML and the scan would look like a network failure.
+        'skip_zrok_interstitial': 'true',
+      },
       body: JSON.stringify({ payload, scanner: scannerName }),
     });
     if (response.status === 401) { location.href = '/scan/unlock'; return; }
+    const type = response.headers.get('content-type') || '';
+    if (!type.includes('application/json')) {
+      show({ success: false, error_code: 'INTERSTITIAL',
+             error: 'Tap "Visit Share" on the zrok page, then scan again.' });
+      return;
+    }
     const data = await response.json();
     show(data);
   } catch {
@@ -568,6 +580,7 @@ function show(data) {
     UNREADABLE:   ['Not a coupon', 'That QR code is not from this event'],
     RATE_LIMITED: ['Slow down', 'Too many scans in a moment — try again'],
     OFFLINE:      ['No connection', 'Cannot reach the server'],
+    INTERSTITIAL: ['Reload needed', 'Open the link again and tap "Visit Share"'],
   };
   const [title, sub] = ok
     ? ['Welcome in', 'Checked in just now']
@@ -632,7 +645,9 @@ async function undoLast() {
   if (!lastCoupon) return;
   try {
     const r = await fetch('/api/scan/undo', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json',
+                 'skip_zrok_interstitial': 'true' },
       body: JSON.stringify({ coupon_id: lastCoupon, scanner: scannerName }),
     }).then((x) => x.json());
     mini(r.success ? 'Check-in reverted' : (r.error || 'Could not undo'));
@@ -680,7 +695,9 @@ document.getElementById('btn-camera').onclick = () => {
 
 async function refreshCount() {
   try {
-    const d = await fetch('/api/scan/recent').then((r) => r.json());
+    const d = await fetch('/api/scan/recent', {
+      headers: { 'skip_zrok_interstitial': 'true' },
+    }).then((r) => r.json());
     if (d.success) document.getElementById('count-used').textContent = d.stats.used;
   } catch {}
 }

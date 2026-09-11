@@ -29,7 +29,7 @@ import threading
 import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 DEFAULT_DB = "data/coupons.db"
@@ -370,6 +370,28 @@ class CouponStore:
                 );
                 CREATE INDEX IF NOT EXISTS ix_sendlog_time ON send_log(sent_at);
                 CREATE INDEX IF NOT EXISTS ix_sendlog_email ON send_log(email);
+
+                CREATE TABLE IF NOT EXISTS outbox (
+                    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                    to_email      TEXT NOT NULL,
+                    to_name       TEXT DEFAULT '',
+                    subject       TEXT NOT NULL,
+                    html          TEXT NOT NULL,
+                    kind          TEXT DEFAULT 'thank_you',
+                    coupon_id     TEXT,
+                    status        TEXT NOT NULL DEFAULT 'queued',
+                    attempts      INTEGER NOT NULL DEFAULT 0,
+                    last_error    TEXT DEFAULT '',
+                    queued_at     TEXT NOT NULL,
+                    next_try_at   TEXT NOT NULL,
+                    sent_at       TEXT
+                );
+                CREATE INDEX IF NOT EXISTS ix_outbox_pending
+                    ON outbox(status, next_try_at);
+                -- One thank-you per coupon, enforced by the database rather than
+                -- by a check-then-insert that six scanners could race through.
+                CREATE UNIQUE INDEX IF NOT EXISTS ix_outbox_once
+                    ON outbox(coupon_id, kind) WHERE coupon_id IS NOT NULL;
 
                 CREATE TABLE IF NOT EXISTS settings (
                     key   TEXT PRIMARY KEY,
@@ -962,6 +984,132 @@ class CouponStore:
             cur = conn.execute("DELETE FROM templates WHERE name = ?", (name,))
             return cur.rowcount == 1
 
+    # ------------------------------------------------------------------ outbox
+
+    def enqueue_email(
+        self,
+        to_email: str,
+        subject: str,
+        html: str,
+        to_name: str = "",
+        kind: str = "thank_you",
+        coupon_id: Optional[str] = None,
+    ) -> Optional[int]:
+        """Queue a message for the background sender.
+
+        Returns the row id, or None when this coupon already has a message of
+        this kind queued. Sending happens on one worker thread; the scan request
+        only writes a row, so a rush at the door is never waiting on SMTP.
+        """
+        now = utcnow()
+        try:
+            with self.write() as conn:
+                cur = conn.execute(
+                    "INSERT INTO outbox(to_email, to_name, subject, html, kind,"
+                    " coupon_id, queued_at, next_try_at) VALUES(?,?,?,?,?,?,?,?)",
+                    (to_email, to_name, subject, html, kind, coupon_id, now, now),
+                )
+                return cur.lastrowid
+        except sqlite3.IntegrityError:
+            # The unique index fired: this coupon was already queued. Expected
+            # whenever a coupon is un-done and re-scanned.
+            return None
+
+    def claim_emails(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """Atomically take a batch of due messages and mark them sending.
+
+        Claiming inside the transaction that selects them means a second worker
+        (or a restarted one) cannot pick up the same rows.
+        """
+        now = utcnow()
+        with self.write() as conn:
+            rows = conn.execute(
+                "SELECT * FROM outbox WHERE status = 'queued' AND next_try_at <= ?"
+                " ORDER BY id LIMIT ?",
+                (now, limit),
+            ).fetchall()
+            if not rows:
+                return []
+            ids = [r["id"] for r in rows]
+            conn.execute(
+                f"UPDATE outbox SET status = 'sending' WHERE id IN "
+                f"({','.join('?' * len(ids))})",
+                ids,
+            )
+            return [dict(r) for r in rows]
+
+    def finish_email(
+        self, row_id: int, success: bool, error: str = "", retry_in: int = 0
+    ):
+        """Record the outcome of one queued message."""
+        now = utcnow()
+        with self.write() as conn:
+            if success:
+                conn.execute(
+                    "UPDATE outbox SET status = 'sent', sent_at = ?, last_error = ''"
+                    " WHERE id = ?",
+                    (now, row_id),
+                )
+            elif retry_in > 0:
+                nxt = (
+                    datetime.now(timezone.utc) + timedelta(seconds=retry_in)
+                ).isoformat()
+                conn.execute(
+                    "UPDATE outbox SET status = 'queued', attempts = attempts + 1,"
+                    " last_error = ?, next_try_at = ? WHERE id = ?",
+                    (error[:500], nxt, row_id),
+                )
+            else:
+                conn.execute(
+                    "UPDATE outbox SET status = 'failed', attempts = attempts + 1,"
+                    " last_error = ? WHERE id = ?",
+                    (error[:500], row_id),
+                )
+
+    def requeue_stuck_emails(self, older_than_seconds: int = 300) -> int:
+        """Return messages left 'sending' by a crash to the queue."""
+        cutoff = (
+            datetime.now(timezone.utc) - timedelta(seconds=older_than_seconds)
+        ).isoformat()
+        with self.write() as conn:
+            cur = conn.execute(
+                "UPDATE outbox SET status = 'queued' WHERE status = 'sending'"
+                " AND queued_at < ?",
+                (cutoff,),
+            )
+            return cur.rowcount
+
+    def retry_failed_emails(self) -> int:
+        now = utcnow()
+        with self.write() as conn:
+            cur = conn.execute(
+                "UPDATE outbox SET status = 'queued', next_try_at = ?,"
+                " attempts = 0 WHERE status = 'failed'",
+                (now,),
+            )
+            return cur.rowcount
+
+    def outbox_stats(self) -> Dict[str, int]:
+        rows = self.conn.execute(
+            "SELECT status, COUNT(*) c FROM outbox GROUP BY status"
+        ).fetchall()
+        by_status = {r["status"]: r["c"] for r in rows}
+        return {
+            "queued": by_status.get("queued", 0),
+            "sending": by_status.get("sending", 0),
+            "sent": by_status.get("sent", 0),
+            "failed": by_status.get("failed", 0),
+            "total": sum(by_status.values()),
+        }
+
+    def recent_outbox(self, limit: int = 25) -> List[Dict[str, Any]]:
+        rows = self.conn.execute(
+            "SELECT id, to_email, subject, kind, status, attempts, last_error,"
+            " queued_at, sent_at FROM outbox ORDER BY id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
     # ------------------------------------------------------------ import/export
 
     def export_coupons_csv(self, path: str) -> int:
@@ -1050,10 +1198,14 @@ class CouponStore:
                 "coupons": conn.execute("SELECT COUNT(*) c FROM coupons").fetchone()["c"],
                 "scans": conn.execute("SELECT COUNT(*) c FROM scans").fetchone()["c"],
                 "send_log": conn.execute("SELECT COUNT(*) c FROM send_log").fetchone()["c"],
+                "outbox": conn.execute("SELECT COUNT(*) c FROM outbox").fetchone()["c"],
             }
             conn.execute("DELETE FROM coupons")
             conn.execute("DELETE FROM scans")
             conn.execute("DELETE FROM send_log")
+            # Queued mail references coupons that are about to stop existing;
+            # leaving it would send thank-yous for a finished event.
+            conn.execute("DELETE FROM outbox")
             if not keep_recipients:
                 counts["recipients"] = conn.execute(
                     "SELECT COUNT(*) c FROM recipients"

@@ -14,10 +14,12 @@ control and the send job runner.
 
 from __future__ import annotations
 
+import atexit
 import io
 import logging
 import os
 import secrets
+import signal
 import socket
 import threading
 import time
@@ -40,6 +42,10 @@ from src.issuer import (
     make_qr_png, qr_data_uri,
 )
 from src.mailer import Account, MailerPool, Message, dry_run_enabled
+from src.outbox import OutboxWorker
+from src.tunnel import (
+    ZrokTunnel, find_free_port, is_public_host, port_is_free, port_owner,
+)
 from src.store import (
     Coupon, CouponStore, Recipient, food_colour, normalise_food, parse_scan,
 )
@@ -78,6 +84,10 @@ os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 store = CouponStore(os.getenv("DATABASE_PATH", "data/coupons.db"))
 issuer = CouponIssuer(store)
 mailer = MailerPool()
+outbox = OutboxWorker(store, mailer, throttle=float(os.getenv("OUTBOX_THROTTLE", "0.5")))
+tunnel = ZrokTunnel()
+# Close any share left running by a previous crash before doing anything else.
+tunnel.reap_orphan()
 
 # --------------------------------------------------------------------- config
 
@@ -90,6 +100,10 @@ DEFAULT_SETTINGS = {
     "organizer_institution": os.getenv("ORGANIZER_INSTITUTION", "IISER Kolkata"),
     "reply_to": os.getenv("REPLY_TO", ""),
 }
+
+APP_PORT = int(os.getenv("PORT", "5000"))
+# Which stored template is sent on check-in. Blank disables thank-you mail.
+THANK_YOU_TEMPLATE = os.getenv("THANK_YOU_TEMPLATE", "thank_you").strip()
 
 
 def event_settings() -> Dict[str, str]:
@@ -136,9 +150,48 @@ def client_ip() -> str:
     return request.remote_addr or "unknown"
 
 
+# Paths reachable through the public tunnel. Everything else is refused, so
+# opening a share exposes the scanner without exposing the console with it.
+PUBLIC_PREFIXES = (
+    "/scan", "/api/scan", "/static/", "/favicon.ico", "/api/health",
+)
+
+
+@app.before_request
+def block_console_over_tunnel():
+    """Refuse non-scanner paths arriving through the public share.
+
+    The tunnel address is on the open internet. Without this, opening a share so
+    volunteers can scan would also publish the recipient list, the template
+    editor and the send controls to anyone who guessed the URL.
+
+    Host is client-supplied, but this rule only ever *removes* access: forging
+    the header locks you out of the console, it cannot let you in.
+    """
+    if not is_public_host(request.host):
+        return None
+    if any(request.path.startswith(p) for p in PUBLIC_PREFIXES):
+        return None
+    logger.warning("Blocked %s over the public tunnel", request.path)
+    if request.path.startswith("/api/"):
+        return jsonify({
+            "success": False,
+            "error": "Only the scanner is available on the public address.",
+        }), 403
+    return redirect(url_for("scanner_page"))
+
+
 def admin_only(view):
     @wraps(view)
     def wrapper(*args, **kwargs):
+        # Through the tunnel every request appears to come from localhost,
+        # because zrok connects to the app locally. IP allow-listing is
+        # therefore meaningless there and the host check must win.
+        if is_public_host(request.host):
+            return jsonify({
+                "success": False,
+                "error": "The console is not available on the public address.",
+            }), 403
         if OPEN_ADMIN or client_ip() in ADMIN_IPS:
             return view(*args, **kwargs)
         logger.warning("Console access denied for %s on %s", client_ip(), request.path)
@@ -154,9 +207,42 @@ def admin_only(view):
 def scanner_access(view):
     @wraps(view)
     def wrapper(*args, **kwargs):
-        if not SCANNER_PIN or session.get("scanner_ok"):
+        public = is_public_host(request.host)
+
+        if session.get("scanner_ok"):
             return view(*args, **kwargs)
-        if OPEN_ADMIN or client_ip() in ADMIN_IPS:
+
+        # On the public address the PIN is mandatory, with no way around it.
+        # The convenience bypasses below are both useless and dangerous here:
+        # zrok connects to the application from localhost, so every visitor
+        # from the internet appears to come from 127.0.0.1 — an address that is
+        # in ADMIN_IPS. Without this branch, publishing the scanner would hand
+        # an unauthenticated redemption endpoint to anyone who found the URL.
+        if public:
+            if not SCANNER_PIN:
+                logger.error(
+                    "Public scanner request refused: SCANNER_PIN is not set."
+                )
+                if request.path.startswith("/api/"):
+                    return jsonify({
+                        "success": False,
+                        "error": "Scanner is not configured for public access.",
+                        "error_code": "LOCKED",
+                    }), 401
+                return render_template(
+                    "error.html", code=503,
+                    message="This scanner is not set up for public access yet.",
+                ), 503
+            if request.path.startswith("/api/"):
+                return jsonify({
+                    "success": False, "error": "Scanner locked.",
+                    "error_code": "LOCKED",
+                }), 401
+            return redirect(url_for("scanner_unlock"))
+
+        # On the local network, an unset PIN means open, and the host machine
+        # and admin addresses skip it.
+        if not SCANNER_PIN or OPEN_ADMIN or client_ip() in ADMIN_IPS:
             return view(*args, **kwargs)
         if request.path.startswith("/api/"):
             return jsonify({
@@ -170,17 +256,28 @@ def scanner_access(view):
 
 _rate_buckets: Dict[str, deque] = defaultdict(deque)
 _rate_lock = threading.Lock()
-RATE_MAX = int(os.getenv("RATE_LIMIT_MAX", "600"))
-RATE_WINDOW = int(os.getenv("RATE_LIMIT_WINDOW", "60"))
+
+# Rate limiting for the scanner is about stopping somebody guessing six-digit
+# codes, and nothing else. It must never throttle a real queue.
+#
+# The obvious design — N requests per IP per minute — is actively wrong here.
+# Behind the public tunnel zrok connects to the application from localhost, so
+# every scanner in the building shares one source address. A per-IP limit
+# therefore throttles the whole door at once: a burst test with ten scanners had
+# 296 of 448 legitimate scans rejected.
+#
+# Brute force is characterised by *failures*, so that is what is counted. A
+# volunteer admitting a hundred guests never trips it; somebody trying random
+# codes trips it within seconds. A very high global ceiling remains as a
+# backstop against a flood.
+SCAN_FAIL_MAX = int(os.getenv("SCAN_FAIL_MAX", "20"))
+SCAN_FAIL_WINDOW = int(os.getenv("SCAN_FAIL_WINDOW", "300"))
+SCAN_GLOBAL_MAX = int(os.getenv("SCAN_GLOBAL_MAX", "3000"))
+SCAN_GLOBAL_WINDOW = int(os.getenv("SCAN_GLOBAL_WINDOW", "60"))
 
 
-def rate_ok(key: str, limit: int = RATE_MAX, window: int = RATE_WINDOW) -> bool:
-    """Sliding-window limiter.
-
-    Behind the tunnel every scanner shares one source address, so the limit is
-    deliberately generous — it exists to blunt code-guessing, not to police
-    volunteers during a rush at the door.
-    """
+def _window_ok(key: str, limit: int, window: int, record: bool = True) -> bool:
+    """Sliding-window check. ``record`` false only tests, without consuming."""
     now = time.monotonic()
     with _rate_lock:
         bucket = _rate_buckets[key]
@@ -188,8 +285,25 @@ def rate_ok(key: str, limit: int = RATE_MAX, window: int = RATE_WINDOW) -> bool:
             bucket.popleft()
         if len(bucket) >= limit:
             return False
-        bucket.append(now)
+        if record:
+            bucket.append(now)
         return True
+
+
+def rate_ok(key: str, limit: int = SCAN_GLOBAL_MAX,
+            window: int = SCAN_GLOBAL_WINDOW) -> bool:
+    return _window_ok(key, limit, window)
+
+
+def scan_allowed(device: str) -> bool:
+    """Whether this device has failed too often to be given another try."""
+    return _window_ok(f"fail:{device}", SCAN_FAIL_MAX, SCAN_FAIL_WINDOW,
+                      record=False)
+
+
+def record_scan_failure(device: str):
+    """Count a lookup that matched nothing. Only these count toward the limit."""
+    _window_ok(f"fail:{device}", SCAN_FAIL_MAX, SCAN_FAIL_WINDOW, record=True)
 
 
 # --------------------------------------------------------------------- pages
@@ -272,9 +386,15 @@ def api_overview():
         "recent_scans": store.recent_scans(limit=12),
         "send_summary": store.send_summary(),
         "templates": store.list_templates(),
-        "scanner_url": f"http://{SERVER_IP}:{os.getenv('PORT', '5000')}/scan",
+        "scanner_url": (
+            f"{tunnel.state().url}/scan" if tunnel.state().running and tunnel.state().url
+            else f"{'https' if os.getenv('SSL_ENABLED','').lower() in ('1','true','yes') else 'http'}"
+                 f"://{SERVER_IP}:{APP_PORT}/scan"
+        ),
         "scanner_locked": bool(SCANNER_PIN),
         "dry_run": dry_run_enabled(),
+        "tunnel": tunnel.state().as_dict(),
+        "outbox": outbox.status(),
     })
 
 
@@ -453,7 +573,12 @@ def api_scanner_qr():
     network is often captive or offline, and the attendee-facing address of
     this machine is not something to hand to an external server.
     """
-    url = f"http://{SERVER_IP}:{os.getenv('PORT', '5000')}/scan"
+    state = tunnel.state()
+    if state.running and state.url:
+        url = f"{state.url}/scan"
+    else:
+        scheme = "https" if os.getenv("SSL_ENABLED", "").lower() in ("1", "true", "yes") else "http"
+        url = f"{scheme}://{SERVER_IP}:{APP_PORT}/scan"
     return send_file(io.BytesIO(make_link_qr(url)), mimetype="image/png")
 
 
@@ -869,16 +994,31 @@ def api_upload_attachment():
 def api_scan():
     """Redeem a coupon. The one endpoint that must never be wrong."""
     ip = client_ip()
-    if not rate_ok(f"scan:{ip}"):
-        return jsonify({"success": False, "error": "Too many scans, slow down.",
-                        "error_code": "RATE_LIMITED"}), 429
-
     body = request.get_json(silent=True) or {}
     raw = (body.get("payload") or body.get("code") or "").strip()
     scanner_name = (body.get("scanner") or "").strip()[:40]
 
+    # Each phone names itself, so a single misbehaving device is isolated
+    # rather than the whole door being throttled with it.
+    device = scanner_name or ip
+
+    if not rate_ok(f"global:{ip}"):
+        logger.warning("Global scan ceiling hit from %s", ip)
+        return jsonify({"success": False, "error": "Too many scans, slow down.",
+                        "error_code": "RATE_LIMITED"}), 429
+
+    if not scan_allowed(device):
+        logger.warning("Device %s blocked after repeated failed lookups", device)
+        return jsonify({
+            "success": False,
+            "error": "Too many codes that did not match. Wait a few minutes, or "
+                     "check with the organisers.",
+            "error_code": "RATE_LIMITED",
+        }), 429
+
     parsed = parse_scan(raw)
     if not parsed["token"] and not parsed["code"]:
+        record_scan_failure(device)
         return jsonify({"success": False, "error": "That is not a valid coupon code.",
                         "error_code": "UNREADABLE"}), 400
 
@@ -886,6 +1026,11 @@ def api_scan():
         verification_code=parsed["code"], qr_token=parsed["token"],
         email=parsed["email"], scanner=scanner_name, client_ip=ip,
     )
+
+    # Only a lookup that matched nothing looks like guessing. An already-used
+    # coupon is a real coupon, so it must not count against the door.
+    if result.get("error_code") == "NOT_FOUND":
+        record_scan_failure(device)
 
     coupon = result.get("coupon")
     payload: Dict[str, Any] = {
@@ -905,7 +1050,43 @@ def api_scan():
     if result["valid"]:
         stats = store.stats()
         payload["progress"] = {"used": stats["used"], "total": stats["total"]}
+        _queue_thank_you(coupon)
     return jsonify(payload)
+
+
+def _queue_thank_you(coupon: Coupon):
+    """Add a thank-you message to the outbox.
+
+    Rendering happens here, on the request thread, because it is fast and
+    predictable; delivery happens on the worker, because it is neither. Any
+    failure is swallowed — a template mistake must never stop somebody getting
+    through the door.
+    """
+    if not THANK_YOU_TEMPLATE:
+        return
+    template = store.get_template(THANK_YOU_TEMPLATE)
+    if template is None:
+        return
+    try:
+        context = templating.build_context(
+            name=coupon.name, email=coupon.email,
+            food_preference=coupon.food_preference, include_qr=False,
+            verification_code=coupon.verification_code,
+            coupon_id=coupon.coupon_id, qr_code_src="",
+            extra=coupon.extra, settings=event_settings(),
+        )
+        html = templating.render(template["html"], context)
+        subject = templating.render_subject(
+            template["subject"] or "Thank you for coming", context
+        )
+        queued = store.enqueue_email(
+            to_email=coupon.email, to_name=coupon.name, subject=subject,
+            html=html, kind="thank_you", coupon_id=coupon.coupon_id,
+        )
+        if queued is not None:
+            outbox.nudge()
+    except Exception:  # noqa: BLE001 - never block a check-in
+        logger.exception("Could not queue a thank-you for %s", coupon.email)
 
 
 @app.post("/api/scan/undo")
@@ -1013,6 +1194,93 @@ def api_smtp_test():
     return jsonify(mailer.test_account(account))
 
 
+# --------------------------------------------------------------------- tunnel
+
+
+@app.get("/api/tunnel")
+@admin_only
+def api_tunnel_status():
+    return jsonify({
+        "success": True,
+        "tunnel": tunnel.state().as_dict(),
+        "environment": tunnel.environment(),
+        "port": APP_PORT,
+        "scanner_pin_set": bool(SCANNER_PIN),
+    })
+
+
+@app.post("/api/tunnel/start")
+@admin_only
+def api_tunnel_start():
+    """Open the public share.
+
+    Refused without a scanner PIN: the share address is on the public internet,
+    and an unprotected scanner there is one guessed URL away from someone
+    burning every coupon at the event.
+    """
+    if not SCANNER_PIN:
+        return jsonify({
+            "success": False,
+            "error": "Set SCANNER_PIN in your .env and restart before going "
+                     "public. Without it, anyone who finds the address can "
+                     "redeem coupons.",
+            "error_code": "NO_PIN",
+        }), 400
+
+    body = request.get_json(silent=True) or {}
+    result = tunnel.start(APP_PORT, basic_auth=body.get("basic_auth") or None)
+    if result.get("success"):
+        store.set_setting("last_tunnel_url", result.get("url") or "")
+    return jsonify(result), (200 if result.get("success") else 500)
+
+
+@app.post("/api/tunnel/stop")
+@admin_only
+def api_tunnel_stop():
+    return jsonify(tunnel.stop())
+
+
+@app.get("/api/ports")
+@admin_only
+def api_ports():
+    """Port availability around the configured one, for the settings screen."""
+    rows = []
+    for port in range(APP_PORT, APP_PORT + 6):
+        free = port_is_free(port)
+        rows.append({
+            "port": port,
+            "free": free,
+            "in_use_by": None if free else
+                         ("this application" if port == APP_PORT else port_owner(port)),
+            "current": port == APP_PORT,
+        })
+    return jsonify({
+        "success": True, "current": APP_PORT, "ports": rows,
+        "suggestion": find_free_port(APP_PORT + 1),
+    })
+
+
+# --------------------------------------------------------------------- outbox
+
+
+@app.get("/api/outbox")
+@admin_only
+def api_outbox():
+    return jsonify({
+        "success": True,
+        "worker": outbox.status(),
+        "recent": store.recent_outbox(limit=25),
+    })
+
+
+@app.post("/api/outbox/retry")
+@admin_only
+def api_outbox_retry():
+    count = store.retry_failed_emails()
+    outbox.nudge()
+    return jsonify({"success": True, "requeued": count})
+
+
 # -------------------------------------------------------------------- exports
 
 
@@ -1103,6 +1371,51 @@ def _seed_templates():
 
 
 _seed_templates()
+
+# The worker runs for the life of the process; it is a daemon thread, so it does
+# not hold the interpreter open at shutdown.
+outbox.start()
+
+
+def _shutdown(*_args):
+    """Close the public share before exiting.
+
+    The zrok process is deliberately started in its own session so that
+    stopping a share never signals the application. The cost is that it
+    outlives us unless we say otherwise: a killed server would leave a share
+    advertising a dead port, and no way to close it from a console that is no
+    longer running.
+    """
+    try:
+        if tunnel.state().running:
+            logger.info("Closing the public share")
+            tunnel.stop()
+    except Exception:  # noqa: BLE001 - best effort during shutdown
+        pass
+
+
+atexit.register(_shutdown)
+
+
+def _install_signal_handlers():
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        previous = signal.getsignal(sig)
+
+        def handler(signum, frame, previous=previous):
+            _shutdown()
+            if callable(previous):
+                previous(signum, frame)
+            else:
+                raise SystemExit(0)
+
+        try:
+            signal.signal(sig, handler)
+        except ValueError:
+            # Not the main thread (a test runner or WSGI worker); atexit covers it.
+            pass
+
+
+_install_signal_handlers()
 
 
 if __name__ == "__main__":

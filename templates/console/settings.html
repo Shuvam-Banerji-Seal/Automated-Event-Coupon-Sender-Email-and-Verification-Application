@@ -34,7 +34,7 @@
         </div>
         <div class="field-row">
           <div class="field">
-            <label for="organizer_batch">Organising group <code class="muted">{% raw %}{{ organizer_batch }}{% endraw %}</code></label>
+            <label for="organizer_batch">Organising group<br><code class="muted small">{% raw %}{{ organizer_batch }}{% endraw %}</code></label>
             <input type="text" id="organizer_batch" value="{{ settings.organizer_batch }}">
           </div>
           <div class="field">
@@ -95,6 +95,56 @@
   </div>
 
   <div>
+    <div class="card">
+      <div class="card-head">
+        <h2>Public address</h2>
+        <span class="sub">zrok</span>
+        <span class="spacer"></span>
+        <span id="tunnel-badge"></span>
+      </div>
+      <div class="card-body">
+        <p class="small muted">
+          Publishes the scanner on the internet with a real certificate, so
+          volunteers' phones get a working camera without joining the venue wifi
+          or accepting a security warning. <strong>Only the scanner is
+          published</strong> — this console stays on this machine.
+        </p>
+        <div id="tunnel-env"></div>
+        <div id="tunnel-body"></div>
+      </div>
+      <div class="card-foot">
+        <button class="btn primary" id="tunnel-start">
+          <svg><use href="#i-scan"/></svg> Go live
+        </button>
+        <button class="btn danger hidden" id="tunnel-stop">
+          <svg><use href="#i-stop"/></svg> Take offline
+        </button>
+        <span class="spacer"></span>
+        <span class="muted small" id="tunnel-uptime"></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Port</h2>
+        <span class="sub">Change in .env, then restart</span></div>
+      <div class="card-body" id="ports"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Thank-you mail</h2>
+        <span class="spacer"></span>
+        <button class="btn sm ghost" id="outbox-refresh">
+          <svg><use href="#i-refresh"/></svg>
+        </button>
+      </div>
+      <div class="card-body" id="outbox"></div>
+      <div class="card-foot">
+        <button class="btn sm" id="outbox-retry">Retry failed</button>
+        <span class="muted small">Sent automatically when a guest checks in.</span>
+      </div>
+    </div>
+
     <div class="card">
       <div class="card-head">
         <h2>Mail accounts</h2>
@@ -260,6 +310,143 @@ document.getElementById('reset-event').onclick = async () => {
   } catch (e) { toast(e.message, 'error'); }
 };
 
+/* ------------------------------------------------------------------ tunnel */
+
+async function loadTunnel() {
+  const d = await api('/api/tunnel');
+  const t = d.tunnel, env = d.environment;
+
+  document.getElementById('tunnel-badge').innerHTML =
+    t.running ? '<span class="badge ok"><span class="dot"></span>Live</span>'
+              : '<span class="badge">Offline</span>';
+
+  document.getElementById('tunnel-env').innerHTML = env.installed && env.enabled
+    ? ''
+    : `<div class="notice warn mb-2"><svg><use href="#i-alert"/></svg>
+         <div><strong>${env.installed ? 'zrok is not enabled' : 'zrok is not installed'}</strong>
+         <span class="small">${escapeHtml(env.hint || '')}</span></div></div>`;
+
+  if (t.running && t.url) {
+    document.getElementById('tunnel-body').innerHTML = `
+      <div class="notice ok mb-2"><svg><use href="#i-check-circle"/></svg>
+        <div><strong>Scanner is live on the internet</strong>
+        <span class="small">Anyone with this address and the PIN can check guests in.</span></div></div>
+      <div class="notice mb-2"><svg><use href="#i-info"/></svg>
+        <div><strong>Tell your volunteers two things</strong><span class="small">
+          zrok shows a warning page the first time; they tap &ldquo;Visit
+          Share&rdquo; once per phone. Then they enter the PIN, also once.
+          Scans take roughly half a second over the internet against about ten
+          milliseconds on the local network &mdash; still fine for a
+          door.</span></div></div>
+      <div class="field">
+        <label>Scanner address</label>
+        <div class="row">
+          <input type="text" readonly class="mono small" id="tunnel-url" value="${escapeHtml(t.scanner_url)}">
+          <button class="btn sm" id="tunnel-copy" aria-label="Copy"><svg><use href="#i-copy"/></svg></button>
+        </div>
+      </div>
+      <div style="text-align:center;padding:8px 0">
+        <img src="/api/qr/scanner.png?v=${Date.now()}" width="170" height="170"
+             alt="QR code for the public scanner address"
+             style="border-radius:8px;background:#fff;padding:8px">
+        <div class="small muted mt-1">Volunteers scan this to open it</div>
+      </div>`;
+    document.getElementById('tunnel-copy').onclick =
+      () => copyText(document.getElementById('tunnel-url').value);
+  } else {
+    document.getElementById('tunnel-body').innerHTML = t.error
+      ? `<div class="notice danger"><svg><use href="#i-alert"/></svg>
+           <div><strong>Could not go live</strong><span class="small">${escapeHtml(t.error)}</span></div></div>
+         ${(t.log_tail || []).length ? `<details class="mt-2"><summary class="small muted" style="cursor:pointer">zrok log</summary>
+           <pre class="small mono" style="white-space:pre-wrap;background:var(--surface-2);padding:10px;border-radius:8px;margin-top:8px">${escapeHtml((t.log_tail || []).join('\n'))}</pre></details>` : ''}`
+      : '<p class="small muted mb-0">Not published. The scanner is only reachable on this network.</p>';
+  }
+
+  document.getElementById('tunnel-start').classList.toggle('hidden', t.running);
+  document.getElementById('tunnel-stop').classList.toggle('hidden', !t.running);
+  document.getElementById('tunnel-start').disabled = !(env.installed && env.enabled);
+  document.getElementById('tunnel-uptime').textContent =
+    t.running ? `up ${fmtDuration(t.uptime_seconds)} · port ${t.port}` : '';
+}
+
+document.getElementById('tunnel-start').onclick = async (e) => {
+  setBusy(e.currentTarget, true, 'Opening…');
+  try {
+    await api('/api/tunnel/start', { method: 'POST', body: {} });
+    toast('Scanner is live');
+    loadTunnel();
+  } catch (err) {
+    toast(err.message, 'error', 12000);
+    loadTunnel();
+  } finally { setBusy(e.currentTarget, false); }
+};
+
+document.getElementById('tunnel-stop').onclick = async (e) => {
+  setBusy(e.currentTarget, true, 'Stopping…');
+  try {
+    await api('/api/tunnel/stop', { method: 'POST' });
+    toast('Public address closed');
+    loadTunnel();
+  } finally { setBusy(e.currentTarget, false); }
+};
+
+/* ------------------------------------------------------------------- ports */
+
+async function loadPorts() {
+  const d = await api('/api/ports');
+  document.getElementById('ports').innerHTML = `
+    <table class="data"><tbody>
+      ${d.ports.map((p) => `<tr>
+        <td class="mono">${p.port}${p.current ? ' <span class="badge accent">in use</span>' : ''}</td>
+        <td>${p.free
+          ? '<span class="badge ok">free</span>'
+          : `<span class="badge warn">busy</span> <span class="small muted">${escapeHtml(p.in_use_by || '')}</span>`}</td>
+      </tr>`).join('')}
+    </tbody></table>
+    <p class="small muted mt-2 mb-0">
+      Running on <strong>${d.current}</strong>. To change it, set
+      <code>PORT</code> in <code>.env</code> and restart.
+      ${d.suggestion ? `Port <strong>${d.suggestion}</strong> is free.` : ''}
+    </p>`;
+}
+
+/* ------------------------------------------------------------------ outbox */
+
+async function loadOutbox() {
+  const d = await api('/api/outbox');
+  const w = d.worker;
+  document.getElementById('outbox').innerHTML = `
+    <div class="grid cols-2 mb-2">
+      <div><div class="stat-label">Waiting</div>
+        <div class="tnum" style="font-size:1.4rem">${fmtNumber(w.queued + w.sending)}</div></div>
+      <div><div class="stat-label">Delivered</div>
+        <div class="tnum" style="font-size:1.4rem;color:var(--ok)">${fmtNumber(w.sent)}</div></div>
+    </div>
+    ${w.failed ? `<div class="notice warn mb-2"><svg><use href="#i-alert"/></svg>
+      <div><strong>${fmtNumber(w.failed)} could not be delivered</strong>
+      <span class="small">${escapeHtml(w.last_error || '')}</span></div></div>` : ''}
+    ${!w.running ? '<div class="notice danger"><svg><use href="#i-alert"/></svg><div>The sender is not running — restart the application.</div></div>' : ''}
+    ${d.recent.length ? `<div class="table-wrap" style="max-height:190px;overflow-y:auto">
+      <table class="data"><tbody>
+        ${d.recent.slice(0, 12).map((r) => `<tr>
+          <td class="small truncate" style="max-width:170px">${escapeHtml(r.to_email)}</td>
+          <td><span class="badge ${r.status === 'sent' ? 'ok' : r.status === 'failed' ? 'danger' : ''}">${escapeHtml(r.status)}</span></td>
+          <td class="small muted nowrap">${escapeHtml(fmtRelative(r.sent_at || r.queued_at))}</td>
+        </tr>`).join('')}
+      </tbody></table></div>` : '<p class="small muted mb-0">Nothing sent yet.</p>'}`;
+}
+
+document.getElementById('outbox-refresh').onclick = loadOutbox;
+document.getElementById('outbox-retry').onclick = async () => {
+  const d = await api('/api/outbox/retry', { method: 'POST' });
+  toast(d.requeued ? `${d.requeued} messages queued again` : 'Nothing to retry');
+  loadOutbox();
+};
+
 loadAccounts();
+loadTunnel();
+loadPorts();
+loadOutbox();
+setInterval(() => { loadTunnel().catch(() => {}); loadOutbox().catch(() => {}); }, 10000);
 </script>
 {% endblock %}

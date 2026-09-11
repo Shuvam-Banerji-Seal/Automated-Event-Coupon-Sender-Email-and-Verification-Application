@@ -106,6 +106,73 @@ token instead. `make_qr_png()` refuses anything past QR version 2, so an
 accidental change fails loudly during development rather than quietly at the
 door.
 
+### Publishing the scanner (zrok)
+
+The scanner can be put on a public address instead of the local network. In
+Settings, **Go live** starts a zrok share and gives you a `*.shares.zrok.io`
+URL with a real, publicly trusted certificate. That solves the https problem
+outright — no certificate warning on any phone — and volunteers no longer need
+to be on the venue wifi.
+
+One-time setup on the machine:
+
+```bash
+zrok enable <your-account-token>
+```
+
+**Only scanner routes are served publicly.** Every console path is refused over
+that address, including the recipient list and the send controls, and the PIN
+is mandatory there with no IP-based bypass. This matters more than it looks:
+zrok connects to the application from localhost, so every visitor from the
+internet arrives looking like `127.0.0.1`.
+
+Two things to tell volunteers:
+
+* zrok shows a warning page the first time — they tap **Visit Share**, once
+  per phone.
+* Then they enter the PIN, also once per phone.
+
+Scans take roughly half a second over the internet against about ten
+milliseconds on the local network. Both are fine for a door; pick the public
+address when getting everyone onto one wifi is the harder problem.
+
+If the application is killed while a share is open, the next start closes the
+orphan automatically.
+
+### Running several scanners at once
+
+Measured with six scanners against 400 guests, with 12% of guests presented
+twice to exercise the race:
+
+| | local network | public tunnel |
+|---|---|---|
+| p50 latency | 5 ms | 417 ms |
+| p95 latency | 9 ms | 556 ms |
+| sustained | 349 scans/sec | — |
+
+Every guest was admitted exactly once and every repeat presentation refused.
+
+Rate limiting counts only lookups that match *nothing*, so a volunteer working
+a long queue is never throttled while someone guessing codes is stopped within
+about twenty attempts. The first version limited requests per IP, which was
+actively wrong: behind the tunnel every scanner shares one source address, and
+a burst test had 296 of 448 legitimate scans rejected.
+
+### Thank-you emails
+
+When a guest checks in, a thank-you is queued and sent by a background worker —
+never in the scan request, which would put one to three seconds of SMTP latency
+in front of a volunteer at a door. The queue is a database table, so a crash
+mid-event loses nothing, and it retries transient failures with backoff while
+giving up immediately on bad addresses.
+
+Exactly one thank-you is queued per coupon, enforced by a unique index rather
+than a check-then-insert that several scanners could race through.
+
+**Budget for two messages per guest.** An invitation plus a thank-you means 400
+guests need about 800 sends, and a single Gmail account tops out near 500 a day.
+The overview warns when capacity looks short; add a second account in Settings.
+
 ### Set a scanner PIN
 
 Without `SCANNER_PIN`, anyone who can reach the machine on the network can open
@@ -134,13 +201,15 @@ src/
   csv_mapper.py           Column-role detection
   templating.py           Sandboxed rendering, variables, email linting
   mailer.py               SMTP pool, connection reuse, rotation
+  outbox.py               Background queue for thank-you mail
+  tunnel.py               zrok public share, port checks
   encryption.py           Coupon payload encryption
 templates/
   console/                Operator pages
   scanner.html            Check-in interface
   seed/                   Starter email templates
 static/                   Styles, scripts, icons, vendored jsQR
-tests/                    181 tests
+tests/                    242 tests
 archive/                  Past events and superseded code (gitignored)
 ```
 
@@ -171,6 +240,8 @@ ones that matter most:
 | `SCANNER_PIN` | Without it the scanner is open to the network. |
 | `SSL_ENABLED` | Without it phone cameras do not work. |
 | `MAIL_DRY_RUN` | Suppresses delivery. Use while testing. |
+| `THANK_YOU_TEMPLATE` | Template sent on check-in. Blank disables it. |
+| `SCAN_FAIL_MAX` | Failed lookups per device before it is blocked (default 20). |
 | `DATABASE_PATH` | Defaults to `data/coupons.db`. |
 
 **Never commit** `.env`, `smtp_configs.json` (plaintext app passwords),
