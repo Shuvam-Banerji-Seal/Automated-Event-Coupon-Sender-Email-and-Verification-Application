@@ -128,6 +128,33 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 .notice-pane svg { width: 42px; height: 42px; color: var(--warn); }
 .notice-pane h2 { margin: 0; font-size: 1.05rem; }
 .notice-pane p { margin: 0; color: var(--text-2); font-size: .88rem; max-width: 34ch; }
+.big-tap {
+  width: 116px; height: 116px; border-radius: 50%;
+  background: var(--accent); color: #0b0e14;
+  display: grid; place-items: center; margin-bottom: 4px;
+  box-shadow: 0 10px 40px rgb(107 134 255 / .35);
+  transition: transform .12s;
+}
+.big-tap:active { transform: scale(.94); }
+/* .notice-pane svg paints icons amber; this one sits on the accent
+   circle and needs the dark foreground instead. */
+.big-tap svg { width: 46px; height: 46px; color: #0b0e14; }
+
+.notice-pane .tech {
+  font: 400 .72rem/1.5 ui-monospace, monospace; color: #6f7a88;
+  word-break: break-word; max-width: 36ch;
+}
+.link-btn {
+  color: var(--accent); font-size: .84rem; text-decoration: underline;
+  padding: 10px; min-height: 44px;
+}
+.diag {
+  font: 400 .68rem/1.45 ui-monospace, monospace; color: #8b95a3;
+  background: var(--panel-2); border-radius: 10px; padding: 10px 12px;
+  max-width: 90vw; max-height: 30vh; overflow: auto; text-align: left;
+  white-space: pre-wrap; word-break: break-word; margin: 0;
+}
+
 .notice-pane code {
   background: var(--panel-2); padding: 2px 6px; border-radius: 5px;
   font-size: .82em; word-break: break-all;
@@ -291,6 +318,18 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
     <p><strong>Typing codes by hand still works.</strong></p>
   </div>
 
+  <div class="notice-pane" id="pane-start">
+    <button id="start-tap" class="big-tap" aria-label="Turn on the camera">
+      <svg><use href="#i-camera"/></svg>
+    </button>
+    <h2 id="start-title">Tap to turn on the camera</h2>
+    <p id="start-detail">Your phone needs you to tap once before it will allow
+       the camera.</p>
+    <p class="tech" id="start-tech" style="display:none"></p>
+    <button class="link-btn" id="start-why">Why isn't it working?</button>
+    <pre class="diag" id="start-diag" hidden></pre>
+  </div>
+
   <div class="result" id="result" role="status" aria-live="assertive"></div>
 </div>
 
@@ -384,23 +423,61 @@ function beep(ok) {
 
 /* ---------------------------------------------------------------- camera */
 
-async function startCamera() {
-  if (!window.isSecureContext && location.hostname !== 'localhost'
-      && location.hostname !== '127.0.0.1') {
+let cameraBusy = false;
+
+/* Why this is not started automatically without a fallback:
+   iOS Safari rejects getUserMedia called on page load, before the user has
+   touched anything, with NotAllowedError — the permission sheet never appears.
+   The previous version reported that as "permission was refused", which is both
+   wrong and unactionable: nothing was refused, the browser wanted a gesture.
+   Autostart is still attempted, because on Android it just works and one less
+   tap at a door matters; when it fails for any reason we show a large tap
+   target and the real error rather than a guess. */
+
+function cameraError(title, detail, technical) {
+  document.getElementById('start-title').textContent = title;
+  document.getElementById('start-detail').innerHTML = detail;
+  const tech = document.getElementById('start-tech');
+  tech.textContent = technical || '';
+  tech.style.display = technical ? '' : 'none';
+  document.getElementById('pane-start').classList.add('show');
+}
+
+function describe(err) {
+  const name = err && err.name ? err.name : 'Error';
+  const msg = err && err.message ? err.message : String(err);
+  return `${name}: ${msg}`;
+}
+
+async function startCamera(userInitiated = false) {
+  if (cameraBusy) return;
+  cameraBusy = true;
+  try {
+    await openCamera(userInitiated);
+  } finally {
+    cameraBusy = false;
+  }
+}
+
+async function openCamera(userInitiated) {
+  const local = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+  if (!window.isSecureContext && !local) {
     document.getElementById('https-url').textContent =
       location.href.replace(/^http:/, 'https:');
     document.getElementById('pane-insecure').classList.add('show');
     return;
   }
   if (!navigator.mediaDevices?.getUserMedia) {
-    document.getElementById('denied-detail').textContent =
-      'This browser does not support camera access. Try Chrome or Safari.';
-    document.getElementById('pane-denied').classList.add('show');
+    cameraError('Camera not available in this browser',
+      'If you opened this from inside another app (WhatsApp, Instagram, a mail '
+      + 'client), tap the &ldquo;open in browser&rdquo; option and try again. '
+      + 'Otherwise use Safari or Chrome.',
+      'navigator.mediaDevices.getUserMedia is undefined');
     return;
   }
 
-  // Ask for the rear camera at a resolution high enough to resolve small
-  // modules, but let the browser fall back rather than fail outright.
+  // Rear camera first, then progressively looser constraints. An exact
+  // facingMode throws OverconstrainedError on devices with only a front camera.
   const attempts = [
     { video: { facingMode: { exact: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } },
     { video: { facingMode: 'environment', width: { ideal: 1280 } } },
@@ -408,28 +485,68 @@ async function startCamera() {
     { video: true },
   ];
 
+  let lastError = null;
   for (const constraints of attempts) {
     try {
       stream = await navigator.mediaDevices.getUserMedia(constraints);
+      lastError = null;
       break;
     } catch (err) {
-      if (err.name === 'NotAllowedError' || err.name === 'SecurityError') {
-        document.getElementById('pane-denied').classList.add('show');
-        return;
-      }
+      lastError = err;
+      // A refusal will not be reversed by looser constraints, so stop asking.
+      if (err.name === 'NotAllowedError' || err.name === 'SecurityError') break;
     }
   }
+
   if (!stream) {
-    document.getElementById('denied-detail').textContent =
-      'No camera could be opened. Another app may be using it.';
-    document.getElementById('pane-denied').classList.add('show');
+    const name = lastError && lastError.name;
+    if (name === 'NotAllowedError' || name === 'SecurityError') {
+      if (!userInitiated) {
+        // Almost certainly the missing-gesture case rather than a real refusal.
+        cameraError('Tap to turn on the camera',
+          'Your phone needs you to tap once before it will allow the camera.',
+          null);
+      } else {
+        cameraError('Camera permission is blocked',
+          'Allow camera access for this site, then tap again.<br>'
+          + '<b>iPhone:</b> the <b>aA</b> button in the address bar &rarr; '
+          + 'Website Settings &rarr; Camera &rarr; Allow.<br>'
+          + '<b>Android:</b> the padlock in the address bar &rarr; '
+          + 'Permissions &rarr; Camera.',
+          describe(lastError));
+      }
+    } else if (name === 'NotReadableError' || name === 'TrackStartError') {
+      cameraError('The camera is in use',
+        'Close any other app using the camera, then tap to try again.',
+        describe(lastError));
+    } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
+      cameraError('No usable camera found',
+        'This device did not offer a camera we can use. You can still type '
+        + 'codes by hand.',
+        describe(lastError));
+    } else {
+      cameraError('Could not start the camera',
+        'Tap to try again. Typing codes by hand always works.',
+        lastError ? describe(lastError) : 'no camera matched any constraint');
+    }
     return;
   }
 
   video.srcObject = stream;
-  await video.play().catch(() => {});
+  try {
+    await video.play();
+  } catch (err) {
+    // iOS can hand back a live stream and still refuse to play it without a
+    // gesture; the preview stays black while everything looks fine.
+    stopTracks();
+    cameraError('Tap to start the preview',
+      'Your phone will not show the camera until you tap.', describe(err));
+    return;
+  }
+
   document.getElementById('pane-insecure').classList.remove('show');
   document.getElementById('pane-denied').classList.remove('show');
+  document.getElementById('pane-start').classList.remove('show');
   document.getElementById('btn-camera').innerHTML =
     '<svg><use href="#i-x"/></svg> Stop camera';
 
@@ -450,12 +567,33 @@ async function startCamera() {
   tick();
 }
 
-function stopCamera() {
-  scanning = false;
-  cancelAnimationFrame(rafId);
+function stopTracks() {
   stream?.getTracks().forEach((t) => t.stop());
   stream = null;
   video.srcObject = null;
+}
+
+async function cameraDiagnostics() {
+  const bits = [];
+  bits.push(`page: ${location.protocol}//${location.host}`);
+  bits.push(`secure context: ${window.isSecureContext}`);
+  bits.push(`getUserMedia: ${!!navigator.mediaDevices?.getUserMedia}`);
+  try {
+    const status = await navigator.permissions?.query({ name: 'camera' });
+    if (status) bits.push(`permission: ${status.state}`);
+  } catch { bits.push('permission: not reportable'); }
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    bits.push(`cameras seen: ${devices.filter((d) => d.kind === 'videoinput').length}`);
+  } catch { bits.push('cameras seen: unknown'); }
+  bits.push(`ua: ${navigator.userAgent.slice(0, 90)}`);
+  return bits.join('\n');
+}
+
+function stopCamera() {
+  scanning = false;
+  cancelAnimationFrame(rafId);
+  stopTracks();
   document.getElementById('torch').hidden = true;
   document.getElementById('btn-camera').innerHTML =
     '<svg><use href="#i-camera"/></svg> Start camera';
@@ -689,8 +827,20 @@ function submitManual() {
   submit(code);
 }
 
+document.getElementById('start-tap').onclick = () => {
+  document.getElementById('pane-start').classList.remove('show');
+  startCamera(true);
+};
+
+document.getElementById('start-why').onclick = async () => {
+  const box = document.getElementById('start-diag');
+  if (!box.hidden) { box.hidden = true; return; }
+  box.textContent = await cameraDiagnostics();
+  box.hidden = false;
+};
+
 document.getElementById('btn-camera').onclick = () => {
-  if (stream) stopCamera(); else startCamera();
+  if (stream) stopCamera(); else startCamera(true);
 };
 
 async function refreshCount() {
@@ -709,7 +859,7 @@ setInterval(refreshCount, 30000);
 // more useful than a permission prompt that is going to fail.
 if (window.isSecureContext || location.hostname === 'localhost'
     || location.hostname === '127.0.0.1') {
-  startCamera();
+  startCamera(false);
 } else {
   document.getElementById('https-url').textContent =
     location.href.replace(/^http:/, 'https:');
