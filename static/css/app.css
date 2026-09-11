@@ -178,13 +178,16 @@ code, kbd, pre { font-family: var(--mono); font-size: .86em; }
 }
 .topbar-spacer { flex: 1; }
 
-.shell { flex: 1; display: flex; align-items: flex-start; }
+.shell { flex: 1; display: flex; align-items: stretch; }
 
 .sidebar {
   width: var(--sidebar-w); flex: none;
   padding: 16px 12px;
   position: sticky; top: var(--header-h);
-  height: calc(100vh - var(--header-h));
+  /* min-height keeps the panel reaching the bottom on short pages; max-height
+     keeps it scrollable on long ones. */
+  min-height: calc(100vh - var(--header-h));
+  max-height: calc(100vh - var(--header-h));
   overflow-y: auto;
   border-right: 1px solid var(--border);
   background: var(--surface);
@@ -584,7 +587,10 @@ dialog .card-foot { justify-content: flex-end; }
   :root { --sidebar-w: 100%; }
   .shell { flex-direction: column; }
   .sidebar {
-    position: static; height: auto; width: 100%;
+    /* Becomes a horizontal strip above the content, so the desktop sizing
+       must be unset explicitly or it keeps a full viewport of height. */
+    position: static; width: 100%;
+    min-height: 0; max-height: none; height: auto;
     border-right: none; border-bottom: 1px solid var(--border);
     padding: 8px;
   }

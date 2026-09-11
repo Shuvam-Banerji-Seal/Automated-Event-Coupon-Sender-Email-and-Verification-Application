@@ -66,7 +66,9 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 .counter span { font-size: .68rem; color: var(--text-2); display: block; }
 
 .icon-btn {
-  width: 40px; height: 40px; border-radius: 11px; flex: none;
+  /* 44px is the minimum reliable tap target on both iOS and Android; this is
+     pressed one-handed, in the dark, by someone also holding a guest list. */
+  width: 44px; height: 44px; border-radius: 12px; flex: none;
   display: grid; place-items: center; background: var(--panel-2);
   color: var(--text-2); transition: background .15s, color .15s;
 }
@@ -134,11 +136,15 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 /* ------------------------------------------------------------------ result */
 
 .result {
-  position: absolute; left: 0; right: 0; bottom: 0;
+  position: fixed; left: 0; right: 0; bottom: 0;
   transform: translateY(101%); transition: transform .26s cubic-bezier(.2,.9,.3,1);
-  padding: 20px 20px calc(var(--safe-bottom) + 22px);
-  border-radius: 22px 22px 0 0; z-index: 20;
-  max-height: 85%; overflow-y: auto;
+  padding: 20px 20px calc(var(--safe-bottom) + 20px);
+  border-radius: 22px 22px 0 0;
+  /* Above the dock: the panel owns the screen while a result is up, so the
+     meal badge is never clipped by the buttons underneath. */
+  z-index: 50;
+  max-height: calc(100vh - 56px); overflow-y: auto;
+  box-shadow: 0 -12px 40px rgb(0 0 0 / .55);
 }
 .result.show { transform: translateY(0); }
 .result.ok  { background: linear-gradient(180deg, var(--ok-dark), #052e16); }

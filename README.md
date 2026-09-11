@@ -1,352 +1,184 @@
-# Automated Coupon System
+# Event Coupon System
 
-This is a web-based application designed to automate the process of generating, distributing, and verifying event coupons. The system allows an event organizer to upload a list of attendees, send them unique QR code coupons via email, and then verify those coupons in real-time at the event using a web-based scanner.
+Issue a scannable entry pass to every guest, email it to them, and check them in
+at the door from a phone.
 
-The application is built with Flask and uses Google OAuth for secure authentication, allowing the organizer to send emails directly from their own Gmail account.
+Built for events at IISER Kolkata — a farewell for ~460 people, a freshers'
+welcome for ~480 — where the practical problems are always the same ones:
+the guest list arrives as somebody's spreadsheet with unpredictable columns, a
+few hundred emails have to go out without tripping Gmail's limits, and on the
+night a volunteer needs to know in under a second whether this person gets in
+and whether they eat meat.
 
-## Features
+---
 
-- **Secure User Authentication**: Users log in securely with their Google account using OAuth 2.0.
-- **Bulk Email Distribution**: Upload a CSV file of recipient emails and send customized coupon emails to everyone in a single batch.
-- **Unique QR Code Generation**: For each recipient, a unique, encrypted QR code is generated.
-- **Real-time Coupon Verification**: A web-based scanner interface allows staff to verify coupons instantly using a smartphone or any device with a camera.
-- **Status Tracking**: The system tracks the status of each coupon (generated, sent, used).
-- **Thank You Emails**: Automatically sends a "Thank You" email to an attendee upon successful verification.
-- **Error Logging**: Automatically logs any emails that fail to send for later review.
-- **Easy Deployment with Ngrok**: Includes helper scripts to easily expose the local server to the internet for testing and live use.
+## What it does
 
-## How It Works
+**Reads your guest list as it actually is.** Upload the CSV and the system
+proposes which column is the email, the name, the meal preference, and who gets
+a pass, judging by both the column headings and the values inside them. You
+confirm or correct the guesses. Columns it does not recognise are kept and
+become variables you can use in the email, so a "Roll No" column nobody mapped
+is still available as `{{ roll_no }}`.
 
-1.  **Login**: The event organizer logs into the system using their Google account.
-2.  **Upload Recipients**: The organizer uploads a CSV file containing the email addresses of all event attendees.
-3.  **Send Coupons**: The organizer initiates the email campaign. The system generates a unique coupon and QR code for each recipient and sends it to them using the organizer's authenticated Gmail account.
-4.  **Event Day Verification**: At the event, staff can access the `/scanner` URL from their mobile devices.
-5.  **Scan & Verify**: When an attendee presents their QR code, the staff member scans it. The system validates the coupon in real-time and marks it as "used" to prevent re-use.
-6.  **Post-Verification**: Upon successful verification, the system automatically sends a thank-you email to the attendee.
+**Lets you write the email in the browser.** A variable palette lists everything
+available — system fields plus whatever your CSV contained — and clicking one
+inserts it. Live preview at desktop and phone widths, for vegetarian and
+non-vegetarian. A checker flags the things that break in real mail clients
+before you send to three hundred people.
 
-## Getting Started
+**Sends without falling over.** Several sending accounts with automatic
+rotation when one hits its daily limit, one connection held open across the
+whole run, live progress with a rate and an ETA, and a stop button. Re-running
+a send never issues a second coupon to someone who already has one, so codes
+already sitting in inboxes stay valid.
 
-### Prerequisites
+**Checks people in from a phone.** Full-screen camera, one-handed layout, and
+the meal preference shown as the largest thing on the screen, because that is
+what the volunteer acts on. A coupon can be redeemed exactly once — enforced by
+the database, not by application logic — with an undo for mis-scans and typed
+codes as a fallback when a camera will not cooperate.
 
-- Python 3.8+
-- `pip` for installing dependencies
-- `ngrok` for exposing the local server (for Google OAuth and mobile testing)
+---
 
-### Installation
+## Getting started
 
-1.  **Clone the repository:**
-    ```bash
-    git clone <repository-url>
-    cd automated_coupon_system
-    ```
+```bash
+git clone <this repo> && cd Automated-Event-Coupon-Sender-Email-and-Verification-Application
+pip install -r requirements.txt
 
-2.  **Create a virtual environment and activate it:**
-    ```bash
-    python3 -m venv .venv
-    source .venv/bin/activate
-    ```
+cp .env.example .env
+python -c "import secrets; print('SECRET_KEY=' + secrets.token_hex(32))"
+python -c "import secrets; print('COUPON_SECRET_KEY=' + secrets.token_hex(32))"
+# paste both into .env, then:
 
-3.  **Install the required dependencies:**
-    ```bash
-    pip install -r requirements.txt
-    ```
+./start_server.sh
+```
 
-### Configuration
+The console opens at `https://127.0.0.1:5000/` and the scanner at
+`https://<your-lan-ip>:5000/scan`.
 
-1.  **Set up Google OAuth Credentials:**
-    - Go to the [Google Cloud Console](https://console.cloud.google.com/).
-    - Create a new project.
-    - Navigate to "APIs & Services" > "Credentials".
-    - Create an "OAuth client ID" for a "Web application".
-    - Add `http://localhost:5000` to the "Authorized JavaScript origins".
-    - Add `http://localhost:5000/auth/callback` to the "Authorized redirect URIs". You will update this later with your `ngrok` URL.
-    - Download the client secret JSON file.
+### Running an event
 
-2.  **Create the `.env` file:**
-    Create a file named `.env` in the root of the project. This file will hold all your secret keys and environment-specific settings.
+1. **Settings** — event name, date, time, venue, and at least one mail account.
+   Gmail needs an [App Password](https://myaccount.google.com/apppasswords), not
+   your normal password.
+2. **Recipients** — upload the guest CSV, check the detected columns, import.
+3. **Compose** — write the invitation, preview it, send yourself a test.
+4. **Send** — pick the template and start. Watch it go.
+5. **Scanner** — open the QR on the overview page from each volunteer's phone.
 
-    Below is the structure of the `.env` file. Fill in the values based on your setup.
+> **Try it with `MAIL_DRY_RUN=true` in `.env` first.** Everything works
+> normally — coupons are issued, templates render, progress reports — but no
+> message is delivered. Turn it off when you are ready for the real run.
 
-    ```env
-    # Flask Settings
-    # ----------------
-    # Set to True for development to enable debug mode, or False for production.
-    FLASK_DEBUG=True
-    # A long, random string used to secure sessions.
-    SECRET_KEY=a-very-secret-key-that-you-should-change
+---
 
-    # Google OAuth Credentials
-    # ------------------------
-    # Get these from the Google Cloud Console after creating your OAuth client ID.
-    GOOGLE_CLIENT_ID="YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com"
-    GOOGLE_CLIENT_SECRET="YOUR_GOOGLE_CLIENT_SECRET"
-    # The initial redirect URI. The start_with_ngrok.sh script will update this automatically.
-    GOOGLE_REDIRECT_URI="http://localhost:5000/auth/callback"
+## Things worth knowing
 
-    # Encryption Key for Coupons
-    # --------------------------
-    # A 32-byte (64 hex characters) key for encrypting coupon data.
-    # Generate a secure key and keep it safe.
-    ENCRYPTION_KEY=your-32-byte-encryption-key-keep-safe
-    ```
+### The scanner needs HTTPS
 
-    **How to Generate Secure Keys:**
+Browsers refuse camera access on a plain-http origin that is not `localhost`.
+A phone opening `http://192.168.1.5:5000/scan` gets no camera, and no amount of
+permission-granting changes that. `start_server.sh` generates a self-signed
+certificate when `SSL_ENABLED=true`; each phone shows a warning once, which the
+volunteer accepts, and the camera then works. The scanner detects the problem
+and explains it rather than silently failing, and typed codes work either way.
 
-    -   **`SECRET_KEY`**: You can generate a suitable key in your terminal with:
-        ```bash
-        python -c 'import secrets; print(secrets.token_hex(24))'
-        ```
-    -   **`ENCRYPTION_KEY`**: This key **must** be 32 bytes long. Generate it with:
-        ```bash
-        python -c 'import secrets; print(secrets.token_hex(32))'
-        ```
+### The QR code is deliberately tiny
 
+It encodes `EC1:` plus a twelve-character token — sixteen bytes, QR version 1,
+21×21 modules. Nothing else. Not the email address, not the name, not the meal.
 
-### Running the Application
+This is the difference between a code that scans and one that does not. QR
+version is driven entirely by payload length, and more modules in the same
+printed area means smaller modules. At 300 px wide, this payload gives 10.3
+pixels per module. The previous format embedded the email address, which cost
+45–69 bytes and forced version 4–5 — around 7 px per module, and weaker error
+correction. That margin is what lets a cracked phone screen, held at an angle
+in a dim hall, still decode.
 
-1.  **Start `ngrok`:**
-    To allow Google to redirect back to your local machine and to test on mobile, you need a public URL. This project is set up to work with `ngrok`.
+Verified: the generated codes decode with the scanner's own library down to
+90×90 px.
 
-    The included script simplifies this process. Run:
-    ```bash
-    ./start_with_ngrok.sh
-    ```
-    This will start an `ngrok` tunnel and display a public HTTPS URL (e.g., `https://<random-string>.ngrok.io`).
+**Do not add fields to the QR payload.** Look them up server-side from the
+token instead. `make_qr_png()` refuses anything past QR version 2, so an
+accidental change fails loudly during development rather than quietly at the
+door.
 
-2.  **Update Google Cloud Console:**
-    - Go back to your Google Cloud project credentials.
-    - Add the `ngrok` URL to your "Authorized redirect URIs". It should look like this: `https://<random-string>.ngrok.io/auth/callback`.
+### Set a scanner PIN
 
-3.  **Start the Flask Application:**
-    In a new terminal (while `ngrok` is still running), make sure your virtual environment is activated and run:
-    ```bash
-    python app.py
-    ```
+Without `SCANNER_PIN`, anyone who can reach the machine on the network can open
+the scanner and start redeeming coupons. With it, volunteers type it once per
+phone. The console itself is restricted to the host machine regardless.
 
-4.  **Access the Application:**
-    Open your browser and navigate to the `ngrok` URL provided. You can now log in and start using the application.
+### Data lives in SQLite
 
-## Project Structure
+`data/coupons.db`. CSV is import and export only. Redemption is a single
+conditional `UPDATE`, so two volunteers scanning the same code at the same
+instant cannot both admit the person — the database decides, and the loser is
+told it is already used.
+
+Every scan attempt, successful or not, is recorded. Export both from the
+overview page.
+
+---
+
+## Project layout
 
 ```
-/
-├── app.py # Main Flask application
-├── coupon_manager.py # Handles coupon generation and validation
-├── csv_manager.py # Manages data storage in CSV files
-├── google_auth_service.py # Handles Google OAuth and Gmail API
-├── encryption_service.py # Encrypts and decrypts coupon data
-├── requirements.txt # Python dependencies
-├── start_with_ngrok.sh # Script to start ngrok tunnel
-├── templates/
-│ ├── login.html
-│ ├── sender.html # Main dashboard for sending coupons
-│ └── scanner.html # QR code scanner interface
-└── static/ # CSS and JavaScript files
+app.py                    Flask routes, access control, send jobs
+src/
+  store.py                SQLite: coupons, recipients, scans, templates
+  issuer.py               Coupon creation and QR rendering
+  csv_mapper.py           Column-role detection
+  templating.py           Sandboxed rendering, variables, email linting
+  mailer.py               SMTP pool, connection reuse, rotation
+  encryption.py           Coupon payload encryption
+templates/
+  console/                Operator pages
+  scanner.html            Check-in interface
+  seed/                   Starter email templates
+static/                   Styles, scripts, icons, vendored jsQR
+tests/                    181 tests
+archive/                  Past events and superseded code (gitignored)
 ```
 
 ---
 
-## 21MS Farewell Party Branch (`21ms_farewell`)
-
-This specialized branch is designed for the **21MS Farewell Party** at IISER Kolkata, organized by the **22MS Batch**. It replaces the Gmail API-based email sending with direct SMTP, features beautifully designed handwriting-style invitation emails, and includes comprehensive dashboard analytics.
-
-### Key Differences from Main Branch
-
-| Feature | Main Branch | 21ms_farewell Branch |
-|---------|------------|---------------------|
-| **Email Backend** | Gmail API (OAuth required) | SMTP (direct `.env` credentials) |
-| **OAuth Requirement** | Required for sending | Optional (for login only) |
-| **Email Templates** | Standard design | Handwriting-style (Caveat, Satisfy, Kalam fonts) |
-| **Decorations** | Basic | SVG ornamental elements, Unicode characters |
-| **Attachments** | Not supported | PDF attachment support |
-| **Thank You Emails** | Gmail API async | SMTP async (no OAuth needed) |
-| **Dashboard** | Basic stats | Detailed coupon table with codes & timestamps |
-
-### 21ms_farewell Features
-
-- **SMTP-Based Email Sending**: No Google OAuth required for sending invitations. Uses Gmail SMTP with App Passwords.
-- **Beautiful Invitation Design**: Handwriting-font-styled emails with SVG decorative elements (stars, ornamental borders, corner flourishes) and Unicode characters. No emojis.
-- **PDF Attachment Support**: Attach event schedules, brochures, or other PDFs to invitation emails.
-- **Detailed Dashboard**: View all coupons with email addresses, verification codes, coupon IDs, statuses, sent timestamps, and used timestamps.
-- **Automatic Thank You Emails**: Sends a warm thank-you email via SMTP when a QR code is scanned and verified at the event entrance.
-- **CSV Integration**: Upload attendee lists via CSV, track status updates in real-time.
-- **3 Test Email Support**: Built-in test script for verifying SMTP delivery to multiple test addresses.
-
-### 21ms_farewell Setup
-
-#### Step 1: Install dependencies
-
-This branch uses `uv` with a global Python environment. Install all dependencies:
+## Development
 
 ```bash
-uv pip install --python /home/shuvam/.global-pymaster -r requirements_21ms.txt
+python -m pytest tests/ -q
 ```
 
-#### Step 2: Set up Gmail SMTP (App Password)
+Tests never send email and never touch anything outside a temp directory.
+This matters: the previous suite did both — running it delivered mail and wiped
+the production database, because the data layer hardcoded its filename. Keep
+paths injectable.
 
-**IMPORTANT:** You cannot use your regular Gmail password. You must create an **App Password**.
+---
 
-1. **Enable 2-Step Verification on your Google Account:**
-   - Go to https://myaccount.google.com/security
-   - Under "Signing in to Google", click **2-Step Verification**
-   - Follow the prompts to enable it (requires a phone number)
+## Configuration
 
-2. **Generate an App Password:**
-   - Go to https://myaccount.google.com/security
-   - Under "Signing in to Google", click **App passwords**
-   - You may need to sign in again
-   - At the bottom, click **Select app** > choose **Mail**
-   - Click **Select device** > choose **Other (Custom name)**
-   - Type: `21MS Farewell Mailer`
-   - Click **Generate**
-   - Google will show a 16-character password like `abcd efgh ijkl mnop`
-   - **Copy this password immediately** — you cannot view it again
+Everything is in `.env`; see `.env.example` for the full annotated list. The
+ones that matter most:
 
-3. **Troubleshooting SMTP:**
-   - If you get "Username and Password not accepted", you are using your regular password instead of the App Password
-   - If 2-Step Verification is disabled, App Passwords option will not appear
-   - If you recently changed your Google password, old App Passwords may stop working — generate a new one
+| Variable | Why it matters |
+|---|---|
+| `SECRET_KEY` | Signs sessions. Required. |
+| `COUPON_SECRET_KEY` | Encrypts coupon payloads. Changing it after issuing breaks them. |
+| `SCANNER_PIN` | Without it the scanner is open to the network. |
+| `SSL_ENABLED` | Without it phone cameras do not work. |
+| `MAIL_DRY_RUN` | Suppresses delivery. Use while testing. |
+| `DATABASE_PATH` | Defaults to `data/coupons.db`. |
 
-#### Step 3: Configure the `.env` file
+**Never commit** `.env`, `smtp_configs.json` (plaintext app passwords),
+`*.pem`, or anything under `data/`, `archive/`, `exports/` or `uploads/` — they
+hold credentials and attendee personal data. All are gitignored.
 
-```bash
-cp .env.example .env
-# Now edit .env with your details
-```
+---
 
-**Fill in these required values in `.env`:**
+## Licence
 
-```env
-# Flask Configuration
-SECRET_KEY=your-super-secret-key-minimum-32-characters-long
-FLASK_DEBUG=True
-PORT=5000
-
-# Coupon Encryption Key — generate with:
-# /home/shuvam/.global-pymaster/bin/python -c "import secrets; print(secrets.token_hex(32))"
-COUPON_SECRET_KEY=PASTE_YOUR_GENERATED_KEY_HERE
-
-# SMTP Configuration — use your Gmail and the 16-char App Password
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USE_TLS=True
-SMTP_USERNAME=your-email@gmail.com
-SMTP_PASSWORD=xxxx xxxx xxxx xxxx    # <-- 16-char App Password (spaces optional)
-SMTP_SENDER_NAME=22MS Batch, IISER Kolkata
-SMTP_SENDER_EMAIL=your-email@gmail.com
-
-# Event Details
-EVENT_NAME=21MS Farewell Party
-EVENT_DATE=To Be Announced
-EVENT_VENUE=IISER Kolkata Campus
-EVENT_TIME=To Be Announced
-
-# Test Email Addresses (for testing before bulk send)
-TEST_EMAIL_1=first-test-email@example.com
-TEST_EMAIL_2=second-test-email@example.com
-TEST_EMAIL_3=third-test-email@example.com
-
-# Google OAuth (optional — only if you want organizer login)
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
-GOOGLE_REDIRECT_URI=http://localhost:5000/auth/callback
-```
-
-**NEVER commit the `.env` file.** It is already in `.gitignore`.
-
-#### Step 4: Test SMTP before sending
-
-Run the test script to verify your SMTP credentials work and that emails actually deliver:
-
-```bash
-/home/shuvam/.global-pymaster/bin/python scripts/send_test_emails.py
-```
-
-Expected output if successful:
-```
-=================================================================
-21MS Farewell Party - SMTP Test & Invitation Sender
-=================================================================
-[+] Test attachment found: test_schedule.pdf
-
-[1] Testing SMTP connection...
-[+] SMTP connection successful: Connected to smtp.gmail.com:587
-
-[1] Preparing invitation for first-test-email@example.com...
-    [+] Coupon generated: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-    [+] Verification code: 123456
-    [+] SENT SUCCESSFULLY to first-test-email@example.com
-    [+] Attachment included: test_schedule.pdf
-...
-```
-
-**Check the inboxes of your test emails.** If emails land in spam:
-- Add the sender email to contacts
-- The subject line "You're Invited! 21MS Farewell Party" should not trigger spam filters
-
-#### Step 5: Start the server
-
-```bash
-/home/shuvam/.global-pymaster/bin/python app.py
-```
-
-The server will start on `http://localhost:5000`
-
-#### Step 6: Use the web dashboard
-
-1. **Open the Event Manager:** `http://localhost:5000/sender`
-2. **Upload your attendee CSV:** Click "Upload Attendee List" and select a CSV file with at minimum an `email` column. Optional: add a `name` column.
-3. **Send invitations:** Enter the event name, optionally attach a PDF schedule, then click "Send Farewell Invitations"
-4. **Track progress:** The dashboard shows a detailed table with all coupons, verification codes, sent timestamps, and used timestamps
-
-**CSV format example:**
-```csv
-email,name
-21ms001@iiserkol.ac.in,Rahul Sharma
-21ms002@iiserkol.ac.in,Priya Das
-```
-
-#### Step 7: Event day — QR scanning
-
-1. Open `http://localhost:5000/scanner` on a mobile device or laptop with camera
-2. Scan attendee QR codes at the entrance
-3. The system validates the coupon, marks it as "used", and automatically sends a thank-you email
-4. If camera doesn't work, use the manual "6-Digit Code Verification" section at the bottom of the scanner page
-
-#### Step 8: Stop the server
-
-Press `Ctrl+C` in the terminal running the Flask app.
-
-### API Endpoints (21ms_farewell)
-
-| Endpoint | Method | Auth | Description |
-|----------|--------|------|-------------|
-| `/send-farewell-emails` | POST | None | Send invitations via SMTP |
-| `/farewell-stats` | GET | None | Get event statistics |
-| `/farewell-recipients` | GET | None | Get detailed recipient list |
-| `/farewell-coupons` | GET | None | Get all coupon details |
-| `/verify-coupon` | POST | None | Verify QR/code & send thank-you email |
-| `/scanner` | GET | None | QR scanner interface |
-
-### Email Template Design
-
-The invitation email uses a nostalgic, warm aesthetic:
-- **Fonts**: Caveat (headings), Satisfy (hero text), Kalam (body copy)
-- **Colors**: Midnight navy (#1a1a2e), gold/amber (#d4af37), warm cream (#fef9f0)
-- **Decorations**: SVG stars, ornamental lines, corner flourishes, scissors icon for ticket section
-- **QR Code**: Centered in a decorative frame with verification code prominently displayed
-- **No emojis**: All decorations use SVG or Unicode characters for maximum email client compatibility
-
-### File Structure (21ms_farewell additions)
-
-```
-├── src/smtp_mailer.py              # SMTP email service
-├── templates/farewell/
-│   ├── invitation.html             # Handwriting-style invitation
-│   └── thank_you.html              # Post-verification thank you
-├── scripts/send_test_emails.py     # Test email sender (3 addresses + attachment)
-├── tests/test_smtp_connection.py   # SMTP unit tests
-├── tests/test_invitation_render.py # Template rendering tests
-├── requirements_21ms.txt           # Branch dependencies
-└── FAREWELL_BRANCH_DOCUMENTATION.md # Detailed branch docs
-```
+MIT — see [LICENSE](LICENSE).

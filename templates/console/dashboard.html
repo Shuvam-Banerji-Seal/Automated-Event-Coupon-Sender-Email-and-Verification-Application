@@ -153,8 +153,11 @@ function renderStats(d) {
   const s = d.stats;
   document.getElementById('s-recipients').textContent = fmtNumber(s.recipients);
   document.getElementById('s-issued').textContent = fmtNumber(s.total);
+  // A checked-in coupon was emailed too, so "emailed" is sent + used —
+  // reporting only `sent` made the three numbers look like they did not add up.
   document.getElementById('s-issued-meta').textContent =
-    `${fmtNumber(s.sent)} emailed · ${fmtNumber(s.generated)} not yet sent`;
+    `${fmtNumber(s.sent + s.used)} emailed` +
+    (s.generated ? ` · ${fmtNumber(s.generated)} still to send` : '');
   document.getElementById('s-used').textContent = fmtNumber(s.used);
   const pct = s.total ? (s.used / s.total * 100) : 0;
   document.getElementById('s-used-bar').style.width = `${pct}%`;
