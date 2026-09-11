@@ -25,14 +25,14 @@ import threading
 import time
 import uuid
 from collections import defaultdict, deque
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from functools import wraps
 from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
 from flask import (
-    Flask, Response, jsonify, redirect, render_template, request, session,
-    send_file, url_for,
+    Flask, jsonify, redirect, render_template, request, session, send_file,
+    url_for,
 )
 from werkzeug.utils import secure_filename
 
@@ -86,8 +86,11 @@ issuer = CouponIssuer(store)
 mailer = MailerPool()
 outbox = OutboxWorker(store, mailer, throttle=float(os.getenv("OUTBOX_THROTTLE", "0.5")))
 tunnel = ZrokTunnel()
-# Close any share left running by a previous crash before doing anything else.
-tunnel.reap_orphan()
+if os.getenv("FLASK_DEBUG", "false").lower() not in ("1", "true", "yes") \
+        or os.environ.get("WERKZEUG_RUN_MAIN") == "true":
+    # Close any share left running by a previous crash. Skipped in the reloader's
+    # watcher process, which would otherwise reap the share its own child opened.
+    tunnel.reap_orphan()
 
 # --------------------------------------------------------------------- config
 
@@ -290,6 +293,28 @@ def _window_ok(key: str, limit: int, window: int, record: bool = True) -> bool:
         return True
 
 
+def as_int(value: Any, default: int, low: int = 0, high: int = 10 ** 9) -> int:
+    """Parse a number from request data without letting it raise.
+
+    Anything the browser sends can be a typo, a stale client or someone poking
+    at the API, and an unguarded int() turns that into a 500. Out-of-range
+    values are clamped rather than rejected: a negative LIMIT is not an error in
+    SQLite, it silently means "no limit", which is worse than being wrong.
+    """
+    try:
+        return max(low, min(high, int(value)))
+    except (TypeError, ValueError):
+        return default
+
+
+def as_float(value: Any, default: float, low: float = 0.0,
+             high: float = 60.0) -> float:
+    try:
+        return max(low, min(high, float(value)))
+    except (TypeError, ValueError):
+        return default
+
+
 def rate_ok(key: str, limit: int = SCAN_GLOBAL_MAX,
             window: int = SCAN_GLOBAL_WINDOW) -> bool:
     return _window_ok(key, limit, window)
@@ -395,6 +420,13 @@ def api_overview():
         "dry_run": dry_run_enabled(),
         "tunnel": tunnel.state().as_dict(),
         "outbox": outbox.status(),
+        "thank_you": {
+            "template": THANK_YOU_TEMPLATE,
+            "enabled": bool(THANK_YOU_TEMPLATE),
+            "template_exists": bool(
+                THANK_YOU_TEMPLATE and store.get_template(THANK_YOU_TEMPLATE)
+            ),
+        },
     })
 
 
@@ -408,6 +440,8 @@ def api_health():
 # Parsed uploads waiting for the operator to confirm a mapping. Held in memory
 # deliberately: the raw sheet is attendee PII and there is no reason to leave a
 # copy on disk once it has been parsed.
+_warned_missing_thank_you = False
+
 _pending_uploads: Dict[str, Dict[str, Any]] = {}
 _uploads_lock = threading.Lock()
 
@@ -538,8 +572,8 @@ def api_clear_recipients():
 def api_coupons():
     status = request.args.get("status", "all")
     search = (request.args.get("search") or "").strip()
-    limit = min(int(request.args.get("limit", 200)), 1000)
-    offset = int(request.args.get("offset", 0))
+    limit = as_int(request.args.get("limit"), 200, low=1, high=1000)
+    offset = as_int(request.args.get("offset"), 0, low=0)
     return jsonify({
         "success": True,
         "coupons": store.list_coupons(status=status, search=search,
@@ -554,7 +588,8 @@ def api_coupon_qr(coupon_id: str):
     coupon = store.find_by_id(coupon_id)
     if coupon is None:
         return jsonify({"success": False, "error": "No such coupon"}), 404
-    png = coupon_qr_png(coupon, box_size=int(request.args.get("size", 10)))
+    png = coupon_qr_png(coupon, box_size=as_int(request.args.get("size"), 10,
+                                                low=2, high=40))
     return send_file(io.BytesIO(png), mimetype="image/png")
 
 
@@ -846,7 +881,7 @@ def api_send_start():
     audience = body.get("audience", "pending")
     selected = [e.lower() for e in body.get("emails", [])]
     attachments = [p for p in body.get("attachments", []) if p]
-    throttle = float(body.get("throttle", 0.8))
+    throttle = as_float(body.get("throttle"), 0.8, low=0.0, high=30.0)
 
     template = store.get_template(template_name)
     if template is None:
@@ -873,6 +908,17 @@ def api_send_start():
         chosen = [r for r in store.recipients() if r.email in selected]
     elif audience == "resend":
         # Everyone who already holds a coupon — used to re-send after a failure.
+        # An empty selection here used to mean "all of them", so a mis-click
+        # emailed the entire event a second time. Re-sending to everybody is a
+        # real need after a partly failed run, so it stays possible, but it has
+        # to be asked for rather than defaulted into.
+        if not selected and not body.get("resend_all"):
+            return jsonify({
+                "success": False,
+                "error": "List the addresses to re-send to, or tick "
+                         "'re-send to everyone' to mail all recipients again.",
+                "error_code": "NO_SELECTION",
+            }), 400
         chosen = []
     else:
         chosen = store.recipients_without_coupons()
@@ -1066,6 +1112,16 @@ def _queue_thank_you(coupon: Coupon):
         return
     template = store.get_template(THANK_YOU_TEMPLATE)
     if template is None:
+        # Warn once rather than on every scan, but do warn: silently skipping
+        # means the operator discovers it after the event, if at all.
+        global _warned_missing_thank_you
+        if not _warned_missing_thank_you:
+            _warned_missing_thank_you = True
+            logger.error(
+                "No template named %r — thank-you emails are NOT being sent. "
+                "Create it in Compose, or clear THANK_YOU_TEMPLATE in .env.",
+                THANK_YOU_TEMPLATE,
+            )
         return
     try:
         context = templating.build_context(
@@ -1166,11 +1222,11 @@ def api_smtp_save():
         accounts.append(Account(
             username=username, password=password,
             host=entry.get("host", "smtp.gmail.com"),
-            port=int(entry.get("port", 587)),
+            port=as_int(entry.get("port"), 587, low=1, high=65535),
             use_tls=bool(entry.get("use_tls", True)),
             sender_name=entry.get("sender_name", ""),
             sender_email=entry.get("sender_email", "") or username,
-            daily_limit=int(entry.get("daily_limit", 450)),
+            daily_limit=as_int(entry.get("daily_limit"), 450, low=1, high=100000),
             enabled=bool(entry.get("enabled", True)),
         ))
     mailer.save_accounts(accounts)
@@ -1188,7 +1244,8 @@ def api_smtp_test():
         password = stored[username].password
     account = Account(
         username=username, password=password,
-        host=body.get("host", "smtp.gmail.com"), port=int(body.get("port", 587)),
+        host=body.get("host", "smtp.gmail.com"),
+        port=as_int(body.get("port"), 587, low=1, high=65535),
         use_tls=bool(body.get("use_tls", True)),
     )
     return jsonify(mailer.test_account(account))
@@ -1372,9 +1429,24 @@ def _seed_templates():
 
 _seed_templates()
 
+
+def _is_reloader_watcher() -> bool:
+    """Whether this process is Flask's file watcher rather than the real server.
+
+    In debug mode Werkzeug runs the module twice: once in a parent that only
+    watches files and restarts the child, and once in the child that actually
+    serves. Module-level side effects therefore happen twice, which was starting
+    two outbox workers against one database — both polling, both sending.
+    Werkzeug marks the real child with WERKZEUG_RUN_MAIN.
+    """
+    debug = os.getenv("FLASK_DEBUG", "false").lower() in ("1", "true", "yes")
+    return debug and os.environ.get("WERKZEUG_RUN_MAIN") != "true"
+
+
 # The worker runs for the life of the process; it is a daemon thread, so it does
 # not hold the interpreter open at shutdown.
-outbox.start()
+if not _is_reloader_watcher():
+    outbox.start()
 
 
 def _shutdown(*_args):
@@ -1435,6 +1507,21 @@ if __name__ == "__main__":
         logger.warning(
             "MAIL_DRY_RUN is on — messages are logged and counted but NOT "
             "delivered. Unset it in .env before a real send."
+        )
+    # Debug mode exposes the Werkzeug debugger, which is an interactive Python
+    # console on any traceback. It is PIN-protected, but the PIN is printed to
+    # this very log. Combined with an open admin check that is remote code
+    # execution for anyone who can reach the machine.
+    if debug and OPEN_ADMIN:
+        logger.error(
+            "FLASK_DEBUG and DISABLE_ADMIN_CHECK are BOTH on. The interactive "
+            "debugger is reachable from every device on this network. Set "
+            "FLASK_DEBUG=false in .env before an event."
+        )
+    elif debug:
+        logger.warning(
+            "FLASK_DEBUG is on — the interactive debugger is active. Turn it "
+            "off before running a real event."
         )
     if not SCANNER_PIN:
         logger.warning(

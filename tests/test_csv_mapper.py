@@ -1,6 +1,5 @@
 """Tests for CSV inspection and column-role detection."""
 
-import pytest
 
 from src import csv_mapper
 

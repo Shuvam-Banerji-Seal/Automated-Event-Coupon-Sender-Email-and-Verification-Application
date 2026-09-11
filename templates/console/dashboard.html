@@ -154,6 +154,14 @@ function renderChecks(d) {
       `leave the thank-yous for the event itself.`,
       '<a class="btn sm" href="/settings">Add an account</a>']);
   }
+  const ty = d.thank_you || {};
+  if (ty.enabled && !ty.template_exists) {
+    checks.push(['warn', 'Thank-you emails are not being sent',
+      `No template named "${ty.template}" exists, so nobody gets a thank-you ` +
+      `when they check in. Create it in Compose, or clear THANK_YOU_TEMPLATE ` +
+      `in your .env if you do not want them.`,
+      '<a class="btn sm" href="/compose">Open compose</a>']);
+  }
   if (d.stats.pending > 0 && d.stats.total > 0) {
     checks.push(['info', `${fmtNumber(d.stats.pending)} recipients have no coupon yet`,
       'They will be issued one when you next send.',

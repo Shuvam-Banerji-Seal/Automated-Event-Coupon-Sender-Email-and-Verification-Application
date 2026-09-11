@@ -828,6 +828,17 @@ class CouponStore:
                 "WHERE status = 'used' GROUP BY food_preference"
             )
         }
+        # Count the recipients who actually lack a coupon, rather than
+        # subtracting coupons from recipients. Those two numbers describe
+        # different sets: replacing the recipient list leaves coupons behind for
+        # people no longer on it, and the subtraction then reports 0 pending
+        # while somebody is still waiting to be sent one.
+        pending = self.conn.execute(
+            "SELECT COUNT(*) c FROM recipients r "
+            "LEFT JOIN coupons c ON lower(c.email) = lower(r.email) "
+            "WHERE c.coupon_id IS NULL"
+        ).fetchone()["c"]
+
         return {
             "total": total,
             "generated": by_status.get(STATUS_GENERATED, 0),
@@ -835,9 +846,7 @@ class CouponStore:
             "used": by_status.get(STATUS_USED, 0),
             "revoked": by_status.get(STATUS_REVOKED, 0),
             "recipients": self.recipient_count(),
-            "pending": max(
-                0, self.recipient_count() - total
-            ),
+            "pending": pending,
             "food": food,
             "food_used": used_food,
             "scan_count": self.conn.execute(

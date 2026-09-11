@@ -354,6 +354,146 @@ class TestThankYouMail:
         assert data["worker"]["total"] >= 1
 
 
+class TestMalformedInput:
+    """User-supplied numbers must not reach int()/float() unguarded.
+
+    Four endpoints returned 500 on a non-numeric query parameter, which is both
+    a bad error and noise that hides real failures in the log.
+    """
+
+    @pytest.mark.parametrize("query", [
+        "limit=abc", "offset=abc", "limit=", "offset=-1",
+        "limit=99999999999999999999", "limit=-5",
+    ])
+    def test_coupon_list_survives_bad_paging(self, client, query):
+        assert client.get(f"/api/coupons?{query}").status_code == 200
+
+    def test_negative_limit_does_not_mean_unlimited(self, client):
+        """SQLite treats LIMIT -1 as no limit, so clamping matters."""
+        load_recipients(client)
+        response = client.get("/api/coupons?limit=-5")
+        assert response.status_code == 200
+
+    def test_send_survives_a_non_numeric_throttle(self, client):
+        load_recipients(client)
+        response = client.post("/api/send/start", json={
+            "template": "invitation", "audience": "pending", "throttle": "fast"})
+        assert response.status_code != 500
+
+    @pytest.mark.parametrize("field,value", [
+        ("port", "abc"), ("daily_limit", "many"), ("port", None),
+    ])
+    def test_smtp_save_survives_bad_numbers(self, client, field, value):
+        response = client.post("/api/smtp", json={
+            "accounts": [{"username": "a@b.com", field: value}]})
+        assert response.status_code == 200
+
+    def test_qr_size_parameter_is_clamped(self, client):
+        store = client.app_module.store
+        load_recipients(client)
+        job = client.post("/api/send/start", json={
+            "template": "invitation", "audience": "pending", "throttle": 0}).get_json()
+        _wait_for_job(client, job["job_id"])
+        coupon = store.find_by_email("ada@iiserkol.ac.in")
+        for size in ("abc", "-1", "99999"):
+            assert client.get(
+                f"/api/coupons/{coupon.coupon_id}/qr.png?size={size}"
+            ).status_code == 200
+
+
+class TestPendingCount:
+    """`pending` must mean "recipients without a coupon", not a subtraction.
+
+    Subtracting coupons from recipients reports 0 pending after the recipient
+    list is replaced, because the leftover coupons belong to people no longer on
+    it — and the send screen then says there is nobody to send to.
+    """
+
+    def test_pending_after_replacing_the_recipient_list(self, client):
+        load_recipients(client)
+        job = client.post("/api/send/start", json={
+            "template": "invitation", "audience": "pending", "throttle": 0}).get_json()
+        _wait_for_job(client, job["job_id"])
+        assert client.get("/api/overview").get_json()["stats"]["pending"] == 0
+
+        # Replace three known recipients with one brand-new person.
+        newcomer = b"Email Address,Your Name\nzara@iiserkol.ac.in,Zara\n"
+        inspection = upload(client, newcomer).get_json()
+        client.post("/api/csv/commit", json={
+            "upload_id": inspection["upload_id"],
+            "mapping": inspection["suggested_mapping"], "mode": "replace"})
+
+        stats = client.get("/api/overview").get_json()["stats"]
+        assert stats["recipients"] == 1
+        assert stats["total"] == 3          # old coupons survive, as intended
+        assert stats["pending"] == 1        # Zara still needs one
+
+    def test_pending_is_never_negative(self, client):
+        load_recipients(client)
+        job = client.post("/api/send/start", json={
+            "template": "invitation", "audience": "pending", "throttle": 0}).get_json()
+        _wait_for_job(client, job["job_id"])
+        client.delete("/api/recipients")
+        assert client.get("/api/overview").get_json()["stats"]["pending"] == 0
+
+
+class TestResendGuard:
+    """Re-sending to everyone must be asked for, not defaulted into."""
+
+    def _issue(self, client):
+        load_recipients(client)
+        job = client.post("/api/send/start", json={
+            "template": "invitation", "audience": "pending", "throttle": 0}).get_json()
+        _wait_for_job(client, job["job_id"])
+
+    def test_resend_with_no_selection_is_refused(self, client):
+        self._issue(client)
+        response = client.post("/api/send/start", json={
+            "template": "invitation", "audience": "resend", "emails": []})
+        assert response.status_code == 400
+        assert response.get_json()["error_code"] == "NO_SELECTION"
+
+    def test_resend_to_everyone_works_when_asked_for(self, client):
+        self._issue(client)
+        response = client.post("/api/send/start", json={
+            "template": "invitation", "audience": "resend", "emails": [],
+            "resend_all": True, "throttle": 0})
+        assert response.status_code == 200
+        assert response.get_json()["total"] == 3
+
+    def test_resend_to_named_addresses_still_works(self, client):
+        self._issue(client)
+        response = client.post("/api/send/start", json={
+            "template": "invitation", "audience": "resend",
+            "emails": ["ada@iiserkol.ac.in"], "throttle": 0})
+        assert response.get_json()["total"] == 1
+
+
+class TestThankYouTemplateMissing:
+    def test_overview_reports_a_missing_thank_you_template(self, client):
+        """Otherwise check-ins silently stop sending thank-yous."""
+        assert client.get("/api/overview").get_json()["thank_you"]["template_exists"] is True
+        client.delete("/api/templates/thank_you")
+        thank_you = client.get("/api/overview").get_json()["thank_you"]
+        assert thank_you["enabled"] is True
+        assert thank_you["template_exists"] is False
+
+    def test_scanning_still_works_without_the_template(self, client):
+        """A template mistake must never stop somebody getting through a door."""
+        store = self._issue(client)
+        client.delete("/api/templates/thank_you")
+        coupon = store.find_by_email("ada@iiserkol.ac.in")
+        assert client.post("/api/scan",
+                           json={"payload": coupon.qr_payload}).get_json()["success"]
+
+    def _issue(self, client):
+        load_recipients(client)
+        job = client.post("/api/send/start", json={
+            "template": "invitation", "audience": "pending", "throttle": 0}).get_json()
+        _wait_for_job(client, job["job_id"])
+        return client.app_module.store
+
+
 class TestExportAndReset:
     def test_export_coupons(self, client):
         load_recipients(client)

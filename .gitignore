@@ -33,8 +33,13 @@ logs/
 Farewell Party*/
 Freshers*/
 
-# Databases
+# Databases. The -wal and -shm sidecars hold recently written rows and do NOT
+# match *.db, so without them attendee data reaches a commit.
+data/
 *.db
+*.db-wal
+*.db-shm
+*.db-journal
 *.sqlite
 *.sqlite3
 *.sql
@@ -72,6 +77,9 @@ Thumbs.db
 .claude/
 
 # ============================================================
+# Runtime
+.server.pid
+
 # Tunnels
 # ============================================================
 ngrok

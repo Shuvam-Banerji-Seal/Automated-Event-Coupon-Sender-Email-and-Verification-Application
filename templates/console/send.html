@@ -47,6 +47,12 @@
         <textarea id="selected-emails" rows="5"
                   placeholder="ada@iiserkol.ac.in&#10;grace@iiserkol.ac.in"></textarea>
         <div class="hint" id="selected-count"></div>
+        <label class="check mt-1 hidden" id="resend-all-wrap">
+          <input type="checkbox" id="resend-all">
+          <span>Re-send to everyone who has a coupon
+            <span class="hint">Leave the box above empty and tick this only if
+              you mean to mail the whole event again</span></span>
+        </label>
       </div>
 
       <div class="field">
@@ -182,10 +188,13 @@ document.querySelectorAll('input[name="audience"]').forEach((radio) => {
   radio.onchange = () => {
     const needsList = radio.value !== 'pending' && radio.checked;
     document.getElementById('selected-field').classList.toggle('hidden', !needsList);
+    document.getElementById('resend-all-wrap').classList.toggle(
+      'hidden', !(radio.value === 'resend' && radio.checked));
     updateSummary();
   };
 });
 
+document.getElementById('resend-all').onchange = updateSummary;
 document.getElementById('selected-emails').oninput = debounce(() => {
   const n = parsedEmails().length;
   document.getElementById('selected-count').textContent =
@@ -203,10 +212,16 @@ function audience() {
   return document.querySelector('input[name="audience"]:checked').value;
 }
 
+function resendAll() {
+  return document.getElementById('resend-all').checked;
+}
+
 function updateSummary() {
   const mode = audience();
   let text = '';
   if (mode === 'pending') text = `${fmtNumber(overview?.stats.pending || 0)} recipients`;
+  else if (mode === 'resend' && resendAll())
+    text = `everyone with a coupon (${fmtNumber(overview?.stats.total || 0)})`;
   else text = `${fmtNumber(parsedEmails().length)} addresses`;
   document.getElementById('start-summary').textContent = text;
 }
@@ -233,7 +248,9 @@ document.getElementById('attachment').onchange = async (e) => {
 
 document.getElementById('start').onclick = async (e) => {
   const mode = audience();
-  const count = mode === 'pending' ? overview.stats.pending : parsedEmails().length;
+  const count = mode === 'pending' ? overview.stats.pending
+    : (mode === 'resend' && resendAll()) ? overview.stats.total
+    : parsedEmails().length;
   if (!count) { toast('Nobody to send to', 'warn'); return; }
 
   const ok = await confirmDialog({
@@ -254,6 +271,7 @@ document.getElementById('start').onclick = async (e) => {
         template: document.getElementById('template').value,
         audience: mode,
         emails: parsedEmails(),
+        resend_all: mode === 'resend' && resendAll(),
         attachments: attachmentPath ? [attachmentPath] : [],
         throttle: Number(document.getElementById('throttle').value),
       },

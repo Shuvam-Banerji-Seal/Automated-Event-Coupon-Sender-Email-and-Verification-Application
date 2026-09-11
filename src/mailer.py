@@ -27,7 +27,6 @@ import time
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from datetime import date
-from email.headerregistry import Address
 from email.message import EmailMessage
 from email.utils import formataddr, make_msgid
 from typing import Any, Callable, Dict, Iterable, List, Optional
