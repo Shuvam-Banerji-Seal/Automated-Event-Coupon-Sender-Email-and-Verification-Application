@@ -95,6 +95,24 @@ def coupon_qr_png(coupon: Coupon, box_size: int = 12) -> bytes:
     return make_qr_png(coupon.qr_payload, box_size=box_size)
 
 
+def make_link_qr(url: str, box_size: int = 8) -> bytes:
+    """Render an arbitrary URL — used for the "open the scanner" QR.
+
+    Deliberately not subject to MAX_QR_VERSION: a URL is far longer than a
+    coupon payload, and this code is scanned once, at leisure, off a laptop
+    screen rather than at a door off a cracked phone.
+    """
+    qr = qrcode.QRCode(
+        version=None, error_correction=ERROR_CORRECT_M,
+        box_size=box_size, border=2,
+    )
+    qr.add_data(url)
+    qr.make(fit=True)
+    buffer = BytesIO()
+    qr.make_image(fill_color="black", back_color="white").save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
 def qr_data_uri(png_bytes: bytes) -> str:
     return "data:image/png;base64," + base64.b64encode(png_bytes).decode()
 

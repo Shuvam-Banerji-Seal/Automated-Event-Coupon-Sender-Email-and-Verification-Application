@@ -1,3071 +1,698 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Event Ticket Scanner - QR Verification</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --bg-primary: #0a0a0a;
-            --bg-secondary: #1a1a1a;
-            --bg-tertiary: #2a2a2a;
-            --accent-primary: #6366f1;
-            --accent-secondary: #8b5cf6;
-            --text-primary: #ffffff;
-            --text-secondary: #a1a1aa;
-            --text-muted: #71717a;
-            --success: #10b981;
-            --warning: #f59e0b;
-            --error: #ef4444;
-            --border: #374151;
-            --shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
-        }
-        
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            min-height: 100vh;
-            padding: 20px;
-            overflow-x: hidden;
-        }
-        
-        /* Animated background */
-        body::before {
-            content: '';
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: 
-                radial-gradient(circle at 20% 80%, rgba(120, 119, 198, 0.3) 0%, transparent 50%),
-                radial-gradient(circle at 80% 20%, rgba(255, 119, 198, 0.3) 0%, transparent 50%),
-                radial-gradient(circle at 40% 40%, rgba(120, 219, 255, 0.2) 0%, transparent 50%);
-            z-index: -1;
-            animation: backgroundShift 20s ease-in-out infinite;
-        }
-        
-        @keyframes backgroundShift {
-            0%, 100% { transform: scale(1) rotate(0deg); }
-            50% { transform: scale(1.1) rotate(1deg); }
-        }
-        
-        .container {
-            max-width: 900px;
-            margin: 0 auto;
-            background: var(--bg-secondary);
-            border-radius: 24px;
-            box-shadow: var(--shadow);
-            overflow: hidden;
-            border: 1px solid var(--border);
-            backdrop-filter: blur(20px);
-            animation: slideUp 0.8s ease-out;
-        }
-        
-        @keyframes slideUp {
-            from { opacity: 0; transform: translateY(30px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        .header {
-            background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
-            color: var(--text-primary);
-            padding: 40px;
-            text-align: center;
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .header::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="50" cy="50" r="1" fill="white" opacity="0.1"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
-            opacity: 0.3;
-        }
-        
-        .header h1 {
-            font-size: 2.5rem;
-            font-weight: 700;
-            margin-bottom: 12px;
-            background: linear-gradient(135deg, #ffffff 0%, #e0e7ff 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            position: relative;
-            z-index: 1;
-        }
-        
-        .header p {
-            font-size: 1.1rem;
-            opacity: 0.9;
-            font-weight: 400;
-            position: relative;
-            z-index: 1;
-            margin-bottom: 16px;
-        }
-        
-        .main-content {
-            padding: 40px;
-        }
-        
-        .nav-links {
-            display: flex;
-            justify-content: center;
-            gap: 32px;
-            margin-bottom: 40px;
-        }
-        
-        .nav-links a {
-            color: var(--text-secondary);
-            padding: 12px 24px;
-            border-radius: 8px;
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border);
-            transition: all 0.3s ease;
-            text-decoration: none;
-            font-weight: 500;
-        }
-        
-        .nav-links a:hover {
-            color: var(--text-primary);
-            border-color: var(--accent-primary);
-            transform: translateY(-1px);
-        }
-        
-        .nav-links a[href="/scanner"] {
-            color: var(--accent-primary);
-            background: rgba(99, 102, 241, 0.1);
-            border-color: rgba(99, 102, 241, 0.3);
-        }
-        
-        .scanner-section {
-            text-align: center;
-            margin-bottom: 40px;
-        }
-        
-        .camera-container {
-            position: relative;
-            max-width: 400px;
-            margin: 0 auto 20px;
-            border-radius: 15px;
-            overflow: hidden;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-        }
-        
-        #video {
-            width: 100%;
-            height: auto;
-            display: block;
-        }
-        
-        .scanner-overlay {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 200px;
-            height: 200px;
-            border: 3px solid #fff;
-            border-radius: 15px;
-            box-shadow: 0 0 0 9999px rgba(0,0,0,0.3);
-        }
-        
-        .scanner-corners {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 220px;
-            height: 220px;
-        }
-        
-        .corner {
-            position: absolute;
-            width: 30px;
-            height: 30px;
-            border: 4px solid #00ff00;
-        }
-        
-        .corner.top-left {
-            top: 0;
-            left: 0;
-            border-right: none;
-            border-bottom: none;
-        }
-        
-        .corner.top-right {
-            top: 0;
-            right: 0;
-            border-left: none;
-            border-bottom: none;
-        }
-        
-        .corner.bottom-left {
-            bottom: 0;
-            left: 0;
-            border-right: none;
-            border-top: none;
-        }
-        
-        .corner.bottom-right {
-            bottom: 0;
-            right: 0;
-            border-left: none;
-            border-top: none;
-        }
-        
-        .btn {
-            padding: 16px 32px;
-            border: none;
-            border-radius: 12px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            margin: 8px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            font-family: inherit;
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .btn::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-            transition: left 0.5s;
-        }
-        
-        .btn:hover::before {
-            left: 100%;
-        }
-        
-        .btn-primary {
-            background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
-            color: var(--text-primary);
-            border: 1px solid transparent;
-        }
-        
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(99, 102, 241, 0.4);
-            border-color: rgba(255,255,255,0.2);
-        }
-        
-        .btn-secondary {
-            background: var(--bg-tertiary);
-            color: var(--text-secondary);
-            border: 1px solid var(--border);
-        }
-        
-        .btn-secondary:hover {
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            border-color: var(--accent-primary);
-            transform: translateY(-1px);
-        }
-        
-        .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none !important;
-            background: var(--bg-tertiary) !important;
-            color: var(--text-muted) !important;
-        }
-        
-        .result-section {
-            margin-top: 32px;
-            padding: 24px;
-            border-radius: 16px;
-            display: none;
-            border: 1px solid;
-            backdrop-filter: blur(10px);
-            animation: slideIn 0.3s ease-out;
-        }
-        
-        @keyframes slideIn {
-            from { opacity: 0; transform: translateY(-10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        .result-success {
-            background: rgba(16, 185, 129, 0.1);
-            color: var(--success);
-            border-color: rgba(16, 185, 129, 0.3);
-        }
-        
-        .result-error {
-            background: rgba(239, 68, 68, 0.1);
-            color: var(--error);
-            border-color: rgba(239, 68, 68, 0.3);
-        }
-        
-        .result-info {
-            background: rgba(99, 102, 241, 0.1);
-            color: var(--accent-primary);
-            border-color: rgba(99, 102, 241, 0.3);
-        }
-        
-        .coupon-details {
-            margin-top: 15px;
-            text-align: left;
-        }
-        
-        .coupon-details h3 {
-            margin-bottom: 10px;
-        }
-        
-        .detail-item {
-            margin: 8px 0;
-            padding: 8px;
-            background: rgba(255,255,255,0.3);
-            border-radius: 5px;
-        }
-        
-        .manual-entry {
-            margin-top: 40px;
-            padding: 32px;
-            background: var(--bg-tertiary);
-            border-radius: 16px;
-            border: 1px solid var(--border);
-            backdrop-filter: blur(10px);
-        }
-        
-        .manual-entry h3 {
-            color: var(--text-primary);
-            margin-bottom: 16px;
-            font-size: 1.25rem;
-            font-weight: 600;
-        }
-        
-        .manual-entry p {
-            color: var(--text-secondary);
-            margin-bottom: 24px;
-            line-height: 1.6;
-        }
-        
-        .form-group {
-            margin-bottom: 24px;
-        }
-        
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 500;
-            color: var(--text-primary);
-            font-size: 0.95rem;
-        }
-        
-        .form-group input {
-            width: 100%;
-            padding: 16px;
-            border: 2px solid var(--border);
-            border-radius: 12px;
-            font-size: 16px;
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            transition: all 0.3s ease;
-            font-family: inherit;
-        }
-        
-        .form-group input:focus {
-            outline: none;
-            border-color: var(--accent-primary);
-            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
-            transform: translateY(-1px);
-        }
-        
-        .form-group input::placeholder {
-            color: var(--text-muted);
-        }
-        
-        .form-group small {
-            color: var(--text-muted);
-            font-size: 0.85rem;
-            margin-top: 8px;
-            display: block;
-            line-height: 1.4;
-        }
-        
-        .form-group textarea {
-            width: 100%;
-            padding: 16px;
-            border: 2px solid var(--border);
-            border-radius: 12px;
-            font-size: 14px;
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            transition: all 0.3s ease;
-            font-family: inherit;
-            resize: vertical;
-            min-height: 80px;
-        }
-        
-        .form-group textarea:focus {
-            outline: none;
-            border-color: var(--accent-primary);
-            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
-            transform: translateY(-1px);
-        }
-        
-        /* Special styling for verification code input */
-        #verificationCode {
-            font-family: 'Courier New', monospace !important;
-            font-size: 20px !important;
-            text-align: center !important;
-            letter-spacing: 3px !important;
-            font-weight: bold;
-        }
-        
-        #verificationCode:focus {
-            border-color: #3b82f6 !important;
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2) !important;
-        }
-        
-        /* Button styling variants */
-        .btn-secondary {
-            background: var(--text-secondary);
-            color: var(--bg-primary);
-        }
-        
-        .btn-secondary:hover {
-            background: var(--text-primary);
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-        }
-        
-        .status-indicator {
-            display: inline-block;
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            margin-right: 8px;
-        }
-        
-        .status-scanning {
-            background: #ffc107;
-            animation: pulse 1.5s infinite;
-        }
-        
-        .status-success {
-            background: #28a745;
-        }
-        
-        .status-error {
-            background: #dc3545;
-        }
-        
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.5; }
-            100% { opacity: 1; }
-        }
-        
-        @keyframes bounce {
-            0%, 20%, 53%, 80%, 100% {
-                animation-timing-function: cubic-bezier(0.215, 0.610, 0.355, 1.000);
-                transform: translate3d(0,0,0);
-            }
-            40%, 43% {
-                animation-timing-function: cubic-bezier(0.755, 0.050, 0.855, 0.060);
-                transform: translate3d(0, -30px, 0);
-            }
-            70% {
-                animation-timing-function: cubic-bezier(0.755, 0.050, 0.855, 0.060);
-                transform: translate3d(0, -15px, 0);
-            }
-            90% {
-                transform: translate3d(0,-4px,0);
-            }
-        }
-        
-        @keyframes shake {
-            0%, 100% {
-                transform: translate3d(0, 0, 0);
-            }
-            10%, 30%, 50%, 70%, 90% {
-                transform: translate3d(-10px, 0, 0);
-            }
-            20%, 40%, 60%, 80% {
-                transform: translate3d(10px, 0, 0);
-            }
-        }
-        
-        .hidden {
-            display: none !important;
-        }
-        
-        @media (max-width: 768px) {
-            body { padding: 8px; }
-            .main-content { padding: 12px; }
-            .container { border-radius: 16px; }
-            .header { padding: 20px; }
-            .header h1 { font-size: 20px; }
-            .camera-container { max-width: 100%; }
-            .scanner-overlay { width: 140px; height: 140px; }
-            .scanner-corners { width: 160px; height: 160px; }
-            .btn { padding: 14px 18px; font-size: 15px; width: 100%; margin: 4px 0; }
-            .form-group input, .form-group select { padding: 14px; font-size: 16px; }
-            .stats-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
-            .stat-card { padding: 16px; }
-            .stat-number { font-size: 1.5rem; }
-            [class*="modal-"] { width: 95% !important; padding: 20px !important; }
-            .camera-buttons { flex-direction: column; }
-            .manual-section input[type="text"] { font-size: 24px; padding: 16px; }
-            #verificationModal > div { margin: 20px auto; }
-        }
-    </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0b0e13">
+<title>Scanner · {{ settings.event_name }}</title>
+<link rel="icon" href="{{ url_for('static', filename='icons/favicon.svg') }}">
+<style>
+/* The scanner is a single-purpose, one-handed tool used standing up in a queue.
+   It carries its own styles rather than the console's design system: it is
+   always dark, always full-bleed, and every target is thumb-sized. */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+:root {
+  --bg: #0b0e13;
+  --panel: #161b24;
+  --panel-2: #1f2632;
+  --line: #2b3340;
+  --text: #eef1f5;
+  --text-2: #9aa4b2;
+  --ok: #22c55e;
+  --ok-dark: #0d7a3a;
+  --bad: #ef4444;
+  --bad-dark: #991b1b;
+  --warn: #f59e0b;
+  --accent: #6b86ff;
+  --veg: #22c55e;
+  --nonveg: #f43f5e;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+html, body {
+  margin: 0; height: 100%; overscroll-behavior: none;
+  background: var(--bg); color: var(--text);
+  font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+body { display: flex; flex-direction: column; overflow: hidden; }
+
+button { font: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+
+/* ------------------------------------------------------------------ header */
+
+.bar {
+  display: flex; align-items: center; gap: 10px;
+  padding: calc(var(--safe-top) + 10px) 14px 10px;
+  background: var(--panel); border-bottom: 1px solid var(--line);
+  flex: none; z-index: 10;
+}
+.bar h1 { margin: 0; font-size: .95rem; font-weight: 620; letter-spacing: -.01em; }
+.bar .sub { font-size: .72rem; color: var(--text-2); }
+.bar .spacer { flex: 1; }
+
+.counter {
+  text-align: right; font-variant-numeric: tabular-nums; line-height: 1.15;
+}
+.counter b { font-size: 1.15rem; font-weight: 680; }
+.counter span { font-size: .68rem; color: var(--text-2); display: block; }
+
+.icon-btn {
+  width: 40px; height: 40px; border-radius: 11px; flex: none;
+  display: grid; place-items: center; background: var(--panel-2);
+  color: var(--text-2); transition: background .15s, color .15s;
+}
+.icon-btn:active { background: var(--line); }
+.icon-btn.on { background: var(--warn); color: #1a1206; }
+.icon-btn svg { width: 19px; height: 19px; }
+
+/* ------------------------------------------------------------------ camera */
+
+.stage {
+  position: relative; flex: 1; min-height: 0;
+  background: #000; overflow: hidden;
+}
+#video {
+  width: 100%; height: 100%; object-fit: cover; display: block;
+  background: #000;
+}
+
+.reticle {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  pointer-events: none;
+}
+.reticle .frame {
+  width: min(66vw, 260px); aspect-ratio: 1; position: relative;
+  border-radius: 22px;
+  box-shadow: 0 0 0 100vmax rgb(0 0 0 / .5);
+}
+.reticle .frame::before, .reticle .frame::after,
+.reticle .frame i::before, .reticle .frame i::after {
+  content: ''; position: absolute; width: 32px; height: 32px;
+  border: 3px solid var(--text); border-radius: 4px;
+}
+.reticle .frame::before { top: -2px; left: -2px; border-right: none; border-bottom: none; border-top-left-radius: 18px; }
+.reticle .frame::after  { top: -2px; right: -2px; border-left: none; border-bottom: none; border-top-right-radius: 18px; }
+.reticle .frame i::before { bottom: -2px; left: -2px; border-right: none; border-top: none; border-bottom-left-radius: 18px; }
+.reticle .frame i::after  { bottom: -2px; right: -2px; border-left: none; border-top: none; border-bottom-right-radius: 18px; }
+
+.reticle.busy .frame::before, .reticle.busy .frame::after,
+.reticle.busy .frame i::before, .reticle.busy .frame i::after {
+  border-color: var(--accent);
+}
+
+.hint-line {
+  position: absolute; left: 0; right: 0; bottom: 18px;
+  text-align: center; font-size: .82rem; color: var(--text-2);
+  text-shadow: 0 1px 6px rgb(0 0 0 / .9); padding: 0 20px;
+}
+
+/* --------------------------------------------------------------- fallbacks */
+
+.notice-pane {
+  position: absolute; inset: 0; display: none;
+  flex-direction: column; justify-content: center; align-items: center;
+  padding: 28px 22px; text-align: center; background: var(--bg); gap: 12px;
+}
+.notice-pane.show { display: flex; }
+.notice-pane svg { width: 42px; height: 42px; color: var(--warn); }
+.notice-pane h2 { margin: 0; font-size: 1.05rem; }
+.notice-pane p { margin: 0; color: var(--text-2); font-size: .88rem; max-width: 34ch; }
+.notice-pane code {
+  background: var(--panel-2); padding: 2px 6px; border-radius: 5px;
+  font-size: .82em; word-break: break-all;
+}
+
+/* ------------------------------------------------------------------ result */
+
+.result {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  transform: translateY(101%); transition: transform .26s cubic-bezier(.2,.9,.3,1);
+  padding: 20px 20px calc(var(--safe-bottom) + 22px);
+  border-radius: 22px 22px 0 0; z-index: 20;
+  max-height: 85%; overflow-y: auto;
+}
+.result.show { transform: translateY(0); }
+.result.ok  { background: linear-gradient(180deg, var(--ok-dark), #052e16); }
+.result.bad { background: linear-gradient(180deg, var(--bad-dark), #2d0a0a); }
+
+.result-head { display: flex; align-items: center; gap: 13px; }
+.result-mark {
+  width: 52px; height: 52px; border-radius: 50%; flex: none;
+  display: grid; place-items: center; background: rgb(255 255 255 / .18);
+}
+.result-mark svg { width: 30px; height: 30px; }
+.result-title { font-size: 1.3rem; font-weight: 700; letter-spacing: -.02em; }
+.result-sub { font-size: .85rem; opacity: .8; }
+
+.guest {
+  margin-top: 16px; padding: 15px 16px; border-radius: 14px;
+  background: rgb(0 0 0 / .28);
+}
+.guest-name {
+  font-size: 1.28rem; font-weight: 680; letter-spacing: -.02em;
+  word-break: break-word; line-height: 1.25;
+}
+.guest-email { font-size: .8rem; opacity: .68; word-break: break-all; margin-top: 2px; }
+
+/* The meal badge is the single thing a volunteer acts on, so it is the
+   largest, highest-contrast element on the screen. */
+.meal {
+  margin-top: 13px; padding: 15px; border-radius: 13px;
+  text-align: center; font-weight: 800; font-size: 1.5rem;
+  letter-spacing: .04em; text-transform: uppercase; color: #fff;
+  line-height: 1.2;
+}
+.meal.veg    { background: var(--veg); color: #04220f; }
+.meal.nonveg { background: var(--nonveg); }
+
+.result-actions { display: flex; gap: 10px; margin-top: 16px; }
+.result-actions button {
+  flex: 1; padding: 15px; border-radius: 13px; font-weight: 640; font-size: .95rem;
+  background: rgb(255 255 255 / .16); color: #fff;
+}
+.result-actions button:active { background: rgb(255 255 255 / .28); }
+.result-actions .primary { background: #fff; color: #11161d; }
+
+/* ------------------------------------------------------------------ manual */
+
+.sheet {
+  position: fixed; inset: 0; background: rgb(0 0 0 / .72); z-index: 40;
+  display: none; align-items: flex-end; backdrop-filter: blur(3px);
+}
+.sheet.show { display: flex; }
+.sheet-inner {
+  background: var(--panel); width: 100%; border-radius: 22px 22px 0 0;
+  padding: 22px 20px calc(var(--safe-bottom) + 22px);
+  animation: rise .24s cubic-bezier(.2,.9,.3,1);
+}
+@keyframes rise { from { transform: translateY(24px); opacity: .5; } }
+.sheet h2 { margin: 0 0 4px; font-size: 1.05rem; }
+.sheet p { margin: 0 0 16px; color: var(--text-2); font-size: .85rem; }
+
+#code-input {
+  width: 100%; padding: 18px; border-radius: 14px; text-align: center;
+  background: var(--panel-2); border: 2px solid var(--line); color: var(--text);
+  font: 700 2rem/1 ui-monospace, monospace; letter-spacing: .32em; text-indent: .32em;
+}
+#code-input:focus { outline: none; border-color: var(--accent); }
+
+.sheet-actions { display: flex; gap: 10px; margin-top: 16px; }
+.sheet-actions button {
+  flex: 1; padding: 15px; border-radius: 13px; font-weight: 640;
+  background: var(--panel-2); color: var(--text);
+}
+.sheet-actions .primary { background: var(--accent); color: #0b0e14; }
+.sheet-actions button:disabled { opacity: .5; }
+
+/* ------------------------------------------------------------------ footer */
+
+.dock {
+  display: flex; gap: 10px; padding: 12px 14px calc(var(--safe-bottom) + 12px);
+  background: var(--panel); border-top: 1px solid var(--line); flex: none;
+}
+.dock button {
+  flex: 1; padding: 15px 10px; border-radius: 14px; background: var(--panel-2);
+  font-weight: 600; font-size: .88rem;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.dock button:active { background: var(--line); }
+.dock button svg { width: 18px; height: 18px; }
+.dock .primary { background: var(--accent); color: #0b0e14; }
+
+.toast-mini {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(var(--safe-bottom) + 92px); z-index: 60;
+  background: var(--panel-2); border: 1px solid var(--line);
+  padding: 10px 16px; border-radius: 999px; font-size: .85rem;
+  box-shadow: 0 8px 30px rgb(0 0 0 / .6); opacity: 0;
+  transition: opacity .2s; pointer-events: none; max-width: 90vw; text-align: center;
+}
+.toast-mini.show { opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+</style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>🎫 Event Ticket Scanner</h1>
-            <p>Scan event tickets to verify and admit attendees</p>
-            <div style="background: rgba(255,255,255,0.15); padding: 16px; border-radius: 12px; margin-top: 20px; font-size: 14px; border: 1px solid rgba(255,255,255,0.2); position: relative; z-index: 1;">
-                ⚡ <strong>Lightning Fast:</strong> New tickets include attendee info automatically - instant verification!
-            </div>
-        </div>
-        
-        <div class="main-content">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px">
-                <div style="font-size:1.1rem;font-weight:600;color:var(--text-primary)">QR Scanner</div>
-                <a href="/sender" style="color:var(--text-secondary);font-size:.85rem;text-decoration:none">Settings &larr;</a>
-            </div>
-            
-            <!-- Device Registration Modal -->
-            <div id="deviceRegistrationModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; backdrop-filter: blur(10px);">
-                <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--bg-secondary); padding: 40px; border-radius: 16px; border: 1px solid var(--border); max-width: 500px; width: 90%;">
-                    <h3 style="color: var(--accent-primary); margin-bottom: 20px; text-align: center;">📱 Device Registration</h3>
-                    <p style="color: var(--text-secondary); margin-bottom: 30px; text-align: center;">To use the scanner, please register this device with your staff information.</p>
-                    
-                    <div style="margin-bottom: 20px;">
-                        <label style="display: block; color: var(--text-primary); margin-bottom: 8px; font-weight: 500;">Staff Email Address</label>
-                        <input type="email" id="staffEmail" placeholder="your.email@example.com" style="width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-tertiary); color: var(--text-primary); font-size: 16px;">
-                    </div>
-                    
-                    <div style="margin-bottom: 20px;">
-                        <label style="display: block; color: var(--text-primary); margin-bottom: 8px; font-weight: 500;">Device Name</label>
-                        <input type="text" id="deviceName" placeholder="Scanner-Mobile-1" style="width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-tertiary); color: var(--text-primary); font-size: 16px;">
-                    </div>
-                    
-                    <div style="margin-bottom: 30px;">
-                        <label style="display: block; color: var(--text-primary); margin-bottom: 8px; font-weight: 500;">Event Name</label>
-                        <input type="text" id="eventName" placeholder="My Event 2025" style="width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-tertiary); color: var(--text-primary); font-size: 16px;">
-                    </div>
-                    
-                    <div style="text-align: center;">
-                        <button class="btn btn-primary" onclick="registerDevice()" style="margin-right: 10px;">✅ Register Device</button>
-                        <button class="btn btn-secondary" onclick="skipRegistration()">⏭️ Skip (Limited Features)</button>
-                    </div>
-                    
-                    <div style="margin-top: 20px; padding: 15px; background: rgba(99, 102, 241, 0.1); border-radius: 8px; border: 1px solid rgba(99, 102, 241, 0.3);">
-                        <p style="color: var(--text-secondary); font-size: 14px; margin: 0;">
-                            <strong>Note:</strong> Registration enables real-time synchronization with other staff devices. You can still scan tickets without registration, but won't see live updates from other scanners.
-                        </p>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Verification Result Modal -->
-            <div id="verificationModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.92); z-index: 2000; overflow-y: auto; padding: 20px; box-sizing: border-box; align-items: flex-start; justify-content: center;">
-                <div style="background: #1a1a1e; padding: 32px; border-radius: 20px; border: 1px solid #374151; max-width: 440px; width: 100%; margin: 40px auto; box-shadow: 0 25px 60px rgba(0,0,0,0.8);">
-                    <div id="verificationContent">
-                        <!-- Content will be populated by JavaScript -->
-                    </div>
-                </div>
-            </div>
-            
-            <div class="scanner-section">
-                <div class="camera-container" id="cameraContainer">
-                    <video id="video" autoplay muted playsinline></video>
-                    <div class="scanner-overlay"></div>
-                    <div class="scanner-corners">
-                        <div class="corner top-left"></div>
-                        <div class="corner top-right"></div>
-                        <div class="corner bottom-left"></div>
-                        <div class="corner bottom-right"></div>
-                    </div>
-                </div>
-                
-                <div>
-                    <span class="status-indicator" id="statusIndicator"></span>
-                    <span id="statusText">Click "Start Scanner" to begin</span>
-                </div>
-                
-                <div style="margin-top: 10px; padding: 12px; background: rgba(99, 102, 241, 0.1); border-radius: 8px; border: 1px solid rgba(99, 102, 241, 0.3); font-size: 14px;">
-                    💡 <strong>Quick Actions:</strong>
-                    <br>• <span style="background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-family: monospace;">Spacebar</span> = Capture & Scan manually
-                    <br>• <span style="background: #f1f5f9; padding: 2px 6px; border-radius: 4px;">Long press video</span> = Capture on mobile  
-                    <br>• Use "📸 Capture & Scan" button if auto-detection isn't working
-                </div>
-                
-                <div style="margin-top: 15px;">
-                    <button class="btn btn-primary" id="startBtn" onclick="startScanner()">
-                        📷 Start Scanner
-                    </button>
-                    <button class="btn btn-secondary" id="stopBtn" onclick="stopScanner()" disabled>
-                        ⏹️ Stop Scanner
-                    </button>
-                    <button class="btn btn-secondary" onclick="trySimpleCamera()" style="margin-left: 10px;">
-                        🎯 Simple Camera Access
-                    </button>
-                    <button class="btn btn-primary" id="captureBtn" onclick="captureAndScan()" disabled style="margin-left: 10px;">
-                        📸 Capture & Scan
-                    </button>
-                </div>
-                
-                <div style="margin-top: 15px;">
-                    <button class="btn btn-secondary" onclick="showCameraHelp()" style="font-size: 14px; padding: 12px 20px; margin-right: 10px;">
-                        📱 Camera Not Working? Get Help
-                    </button>
-                    <button class="btn btn-secondary" onclick="tryBackCamerasFirst()" style="font-size: 14px; padding: 12px 20px;">
-                        🎯 Try Back Cameras First
-                    </button>
-                    <button class="btn btn-secondary" onclick="showDebugInfo()" style="font-size: 14px; padding: 12px 20px; margin-left: 5px;">
-                        🔍 Debug Info
-                    </button>
-                </div>
-            </div>
-            
-            <div class="result-section" id="resultSection">
-                <div id="resultContent"></div>
-            </div>
-            
-            <div class="manual-entry">
-                <h3>🔍 Manual Verification</h3>
-                <p>If the scanner isn't working, you can manually verify coupons using either method:</p>
-                
-                <!-- 6-Digit Code Method (Primary) -->
-                <div style="background: rgba(59, 130, 246, 0.05); padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid rgba(59, 130, 246, 0.2);">
-                    <h4 style="color: #3b82f6; margin-bottom: 10px;">🔢 6-Digit Code Verification (Recommended)</h4>
-                    <p style="font-size: 14px; color: #666; margin-bottom: 15px;">For new coupons with 6-digit verification codes:</p>
-                    
-                    <div class="form-group">
-                        <label for="verificationCode">6-Digit Verification Code</label>
-                        <input type="text" id="verificationCode" placeholder="123456" maxlength="6" pattern="[0-9]{6}" 
-                               style="font-family: monospace; font-size: 18px; text-align: center; letter-spacing: 2px;">
-                        <small style="color: #666; font-size: 12px;">Enter the 6-digit code from the coupon</small>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="codeEmail">Recipient Email</label>
-                        <input type="email" id="codeEmail" placeholder="recipient@example.com">
-                        <small style="color: #666; font-size: 12px;">Email address of the coupon recipient</small>
-                    </div>
-                    
-                    <button class="btn btn-primary" onclick="verifyByCodeManual()" style="background: #3b82f6;">
-                        ✅ Verify with Code
-                    </button>
-                </div>
-                
-                <!-- QR Data Method (Legacy) -->
-                <div style="background: rgba(107, 114, 128, 0.05); padding: 15px; border-radius: 8px; border: 1px solid rgba(107, 114, 128, 0.2);">
-                    <h4 style="color: #6b7280; margin-bottom: 10px;">📱 QR Code Data Verification (Legacy)</h4>
-                    <p style="font-size: 14px; color: #666; margin-bottom: 15px;">For older coupons or when you have the full QR code data:</p>
-                    
-                    <div class="form-group">
-                        <label for="manualData">Complete QR Code Data</label>
-                        <textarea id="manualData" placeholder="Paste the complete QR code data here" rows="3" 
-                                style="font-family: monospace; font-size: 12px;"></textarea>
-                        <small style="color: #666; font-size: 12px;">For new coupons, this contains all needed information. For old coupons, you'll need the email below.</small>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="manualEmail">Email Address (if needed)</label>
-                        <input type="email" id="manualEmail" placeholder="Enter recipient email (only for old format coupons)">
-                        <small style="color: #666; font-size: 12px;">Only required for older coupon formats. New coupons include the email automatically.</small>
-                    </div>
-                    
-                    <button class="btn btn-secondary" onclick="verifyManual()">
-                        ✅ Verify with QR Data
-                    </button>
-                </div>
-            </div>
-        </div>
+{% include '_icons.html' %}
+
+<header class="bar">
+  <div>
+    <h1>Entry scanner</h1>
+    <div class="sub">{{ settings.event_name }}</div>
+  </div>
+  <div class="spacer"></div>
+  <div class="counter"><b id="count-used">—</b><span>checked in</span></div>
+  <button class="icon-btn" id="torch" hidden aria-label="Toggle torch">
+    <svg><use href="#i-torch"/></svg>
+  </button>
+</header>
+
+<div class="stage">
+  <video id="video" playsinline muted autoplay></video>
+  <canvas id="canvas" hidden></canvas>
+
+  <div class="reticle" id="reticle">
+    <div class="frame"><i></i></div>
+  </div>
+  <div class="hint-line" id="hint">Point the camera at the QR code</div>
+
+  <div class="notice-pane" id="pane-insecure">
+    <svg><use href="#i-alert"/></svg>
+    <h2>Camera needs a secure connection</h2>
+    <p>Browsers only allow camera access over <strong>https</strong>. This page
+       was opened over plain http, so scanning is unavailable.</p>
+    <p>Ask the organiser to start the server with <code>SSL_ENABLED=true</code>,
+       then open <code id="https-url"></code> and accept the certificate warning.</p>
+    <p><strong>Typing codes by hand still works.</strong></p>
+  </div>
+
+  <div class="notice-pane" id="pane-denied">
+    <svg><use href="#i-alert"/></svg>
+    <h2>Camera blocked</h2>
+    <p id="denied-detail">Permission was refused. Allow camera access for this
+       site in your browser settings, then reload.</p>
+    <p><strong>Typing codes by hand still works.</strong></p>
+  </div>
+
+  <div class="result" id="result" role="status" aria-live="assertive"></div>
+</div>
+
+<nav class="dock">
+  <button id="btn-manual"><svg><use href="#i-keyboard"/></svg> Enter code</button>
+  <button id="btn-camera" class="primary"><svg><use href="#i-camera"/></svg> Start camera</button>
+</nav>
+
+<div class="sheet" id="sheet">
+  <div class="sheet-inner">
+    <h2>Enter the code</h2>
+    <p>The six digits printed in their invitation email.</p>
+    <input id="code-input" type="text" inputmode="numeric" pattern="[0-9]*"
+           maxlength="6" autocomplete="off" placeholder="000000"
+           aria-label="Six digit verification code">
+    <div class="sheet-actions">
+      <button id="sheet-cancel">Cancel</button>
+      <button id="sheet-go" class="primary" disabled>Check in</button>
     </div>
-    
-    <!-- Include jsQR library for QR code detection -->
-    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
-    
-    <script>
-        // Global variables
-        let video = null;
-        let canvas = null;
-        let context = null;
-        let scanning = false;
-        let stream = null;
-        let deviceRegistered = false;
-        let deviceInfo = null;
-        
-        // Utility functions
-        function updateStatus(text, type = 'scanning') {
-            const statusIndicator = document.getElementById('statusIndicator');
-            const statusText = document.getElementById('statusText');
-            
-            statusIndicator.className = `status-indicator status-${type}`;
-            statusText.textContent = text;
-        }
-        
-        function showResult(content, type = 'info') {
-            const resultSection = document.getElementById('resultSection');
-            const resultContent = document.getElementById('resultContent');
-            
-            resultSection.className = `result-section result-${type}`;
-            resultSection.style.display = 'block';
-            resultContent.innerHTML = content;
-            
-            // Auto-hide after 10 seconds for success/error messages
-            if (type !== 'info') {
-                setTimeout(() => {
-                    resultSection.style.display = 'none';
-                }, 10000);
-            }
-        }
-        
-        // Debug information function
-        async function showDebugInfo() {
-            try {
-                updateStatus('🔍 Gathering debug information...', 'info');
-                
-                const debugInfo = {
-                    userAgent: navigator.userAgent,
-                    platform: navigator.platform,
-                    cookieEnabled: navigator.cookieEnabled,
-                    onLine: navigator.onLine,
-                    language: navigator.language,
-                    hardwareConcurrency: navigator.hardwareConcurrency,
-                    deviceMemory: navigator.deviceMemory || 'unknown',
-                    connection: navigator.connection ? {
-                        effectiveType: navigator.connection.effectiveType,
-                        downlink: navigator.connection.downlink
-                    } : 'unknown'
-                };
-                
-                // Check media devices support
-                const mediaDevicesSupport = {
-                    supported: !!navigator.mediaDevices,
-                    getUserMedia: !!navigator.mediaDevices?.getUserMedia,
-                    enumerateDevices: !!navigator.mediaDevices?.enumerateDevices
-                };
-                
-                // Get permissions info
-                let permissionsInfo = 'unknown';
-                if (navigator.permissions) {
-                    try {
-                        const permission = await navigator.permissions.query({ name: 'camera' });
-                        permissionsInfo = permission.state;
-                    } catch (e) {
-                        permissionsInfo = 'query failed';
-                    }
-                }
-                
-                // Get device info
-                let deviceInfo = 'Could not enumerate';
-                try {
-                    const devices = await navigator.mediaDevices.enumerateDevices();
-                    const videoDevices = devices.filter(d => d.kind === 'videoinput');
-                    deviceInfo = `${videoDevices.length} video devices found`;
-                } catch (e) {
-                    deviceInfo = `Error: ${e.message}`;
-                }
-                
-                // Check HTTPS
-                const isSecure = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-                
-                // Detect mobile
-                const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-                const isAndroid = /Android/i.test(navigator.userAgent);
-                
-                const debugHTML = `
-                    <div style="background: rgba(99, 102, 241, 0.1); padding: 20px; border-radius: 12px; border: 1px solid rgba(99, 102, 241, 0.3);">
-                        <h3 style="color: var(--accent-primary); margin-bottom: 15px;">🔍 Debug Information</h3>
-                        
-                        <div style="text-align: left; font-family: monospace; font-size: 12px; line-height: 1.4;">
-                            <strong>Environment:</strong><br>
-                            • HTTPS: ${isSecure ? '✅' : '❌'}<br>
-                            • Mobile: ${isMobile ? '✅' : '❌'}<br>
-                            • iOS: ${isIOS ? '✅' : '❌'}<br>
-                            • Android: ${isAndroid ? '✅' : '❌'}<br>
-                            • Online: ${debugInfo.onLine ? '✅' : '❌'}<br><br>
-                            
-                            <strong>Media Support:</strong><br>
-                            • MediaDevices: ${mediaDevicesSupport.supported ? '✅' : '❌'}<br>
-                            • getUserMedia: ${mediaDevicesSupport.getUserMedia ? '✅' : '❌'}<br>
-                            • enumerateDevices: ${mediaDevicesSupport.enumerateDevices ? '✅' : '❌'}<br><br>
-                            
-                            <strong>Camera:</strong><br>
-                            • Devices: ${deviceInfo}<br>
-                            • Permission: ${permissionsInfo}<br><br>
-                            
-                            <strong>Browser:</strong><br>
-                            • ${navigator.userAgent.split(' ').slice(-3).join(' ')}<br>
-                            • Platform: ${debugInfo.platform}<br>
-                            • Language: ${debugInfo.language}<br><br>
-                            
-                            <strong>Connection:</strong><br>
-                            • Type: ${debugInfo.connection.effectiveType || 'unknown'}<br>
-                            • Speed: ${debugInfo.connection.downlink || 'unknown'} Mbps<br>
-                        </div>
-                        
-                        <div style="text-align: center; margin-top: 20px;">
-                            <button onclick="copyDebugInfo()" class="btn btn-secondary" style="margin-right: 10px;">
-                                📋 Copy Debug Info
-                            </button>
-                            <button onclick="trySimpleCamera()" class="btn btn-primary">
-                                🎯 Try Simple Camera
-                            </button>
-                        </div>
-                    </div>
-                `;
-                
-                showResult(debugHTML, 'info');
-                
-                // Store debug info globally for copying
-                window.debugInfo = {
-                    environment: { isSecure, isMobile, isIOS, isAndroid, online: debugInfo.onLine },
-                    mediaSupport: mediaDevicesSupport,
-                    camera: { devices: deviceInfo, permission: permissionsInfo },
-                    browser: debugInfo.userAgent,
-                    platform: debugInfo.platform,
-                    connection: debugInfo.connection
-                };
-                
-            } catch (error) {
-                console.error('Debug info gathering failed:', error);
-                showResult('❌ Could not gather debug information', 'error');
-            }
-        }
-        
-        // Copy debug info to clipboard
-        function copyDebugInfo() {
-            if (window.debugInfo) {
-                const text = JSON.stringify(window.debugInfo, null, 2);
-                navigator.clipboard?.writeText(text).then(() => {
-                    showResult('📋 Debug info copied to clipboard!', 'success');
-                }).catch(() => {
-                    console.log('Debug info:', text);
-                    showResult('Debug info logged to console (clipboard not available)', 'info');
-                });
-            }
-        }
-        
-        // Simple camera access directly based on the Medium article approach
-        async function trySimpleCamera() {
-            try {
-                updateStatus('🎯 Trying simple camera access...', 'info');
-                console.log('Starting simple camera access...');
-                
-                // Use the exact approach from the article
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: 'environment' }
-                });
-                
-                console.log('Simple camera access successful!', stream);
-                
-                const video = document.getElementById('video');
-                
-                // Set essential attributes for mobile
-                video.setAttribute('playsinline', 'true');
-                video.setAttribute('autoplay', 'true');
-                video.setAttribute('muted', 'true');
-                
-                video.srcObject = stream;
-                
-                // Wait for video to load
-                video.addEventListener('loadedmetadata', () => {
-                    console.log('Video metadata loaded, starting scan...');
-                    video.play().then(() => {
-                        console.log('Video is playing');
-                        
-                        // Set global variables
-                        window.stream = stream;
-                        
-                        updateStatus('✅ Simple camera connected!', 'success');
-                        showResult(`
-                            <div style="background: rgba(16, 185, 129, 0.1); padding: 20px; border-radius: 12px;">
-                                <h3 style="color: #10b981;">✅ Simple Camera Access Successful!</h3>
-                                <p>Using direct camera access method.</p>
-                                <p><strong>Video dimensions:</strong> ${video.videoWidth}x${video.videoHeight}</p>
-                                <p>Ready to scan QR codes!</p>
-                            </div>
-                        `, 'success');
-                        
-                        // Start scanning with simple approach
-                        startSimpleScanning(stream);
-                        
-                    }).catch(err => {
-                        console.error('Video play failed:', err);
-                        showResult('Video failed to play. Try allowing autoplay in browser settings.', 'error');
-                    });
-                });
-                
-            } catch (error) {
-                console.error('Simple camera access failed:', error);
-                updateStatus('❌ Simple camera access failed', 'error');
-                
-                let errorMsg = '❌ Simple Camera Access Failed<br><br>';
-                
-                if (error.name === 'NotAllowedError') {
-                    errorMsg += '<strong>Permission Denied.</strong><br>Please allow camera access and try again.';
-                } else if (error.name === 'NotFoundError') {
-                    errorMsg += '<strong>No Camera Found.</strong><br>No environment camera available.';
-                } else if (error.name === 'NotSupportedError') {
-                    errorMsg += '<strong>Not Supported.</strong><br>Your browser doesn\'t support camera access.';
-                } else {
-                    errorMsg += `<strong>Error:</strong> ${error.message}`;
-                }
-                
-                errorMsg += '<br><br>Try the regular scanner or manual verification.';
-                showResult(errorMsg, 'error');
-            }
-        }
-        
-        // Simple scanning function with improved detection
-        function startSimpleScanning(stream) {
-            const video = document.getElementById('video');
-            canvas = document.createElement('canvas');
-            context = canvas.getContext('2d');
-            
-            scanning = true;
-            document.getElementById('startBtn').disabled = true;
-            document.getElementById('stopBtn').disabled = false;
-            document.getElementById('captureBtn').disabled = false; // Enable capture button
-            
-            // Reset detection state
-            detectionState.processingQR = false;
-            detectionState.lastDetected = null;
-            detectionState.consecutiveDetections = 0;
-            
-            updateStatus('🔍 Scanning for QR codes...', 'scanning');
-            
-            function scan() {
-                if (!scanning || detectionState.processingQR) return;
-                
-                try {
-                    if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                        canvas.width = video.videoWidth;
-                        canvas.height = video.videoHeight;
-                        
-                        context.drawImage(video, 0, 0, canvas.width, canvas.height);
-                        
-                        // Use the same improved detection method
-                        const qrResult = tryQRDetection();
-                        
-                        if (qrResult && qrResult.data && qrResult.data.length > 20) {
-                            handleQRDetection(qrResult.data);
-                        } else {
-                            // No QR detected, reset detection state
-                            if (detectionState.consecutiveDetections > 0) {
-                                detectionState.lastDetected = null;
-                                detectionState.consecutiveDetections = 0;
-                                updateStatus('🔍 Scanning for QR codes...', 'scanning');
-                            }
-                        }
-                    }
-                } catch (error) {
-                    console.error('Simple scanning error:', error);
-                }
-                
-                if (scanning && !detectionState.processingQR) {
-                    requestAnimationFrame(scan);
-                }
-            }
-            
-            // Start scanning when video is ready
-            if (video.readyState >= video.HAVE_ENOUGH_DATA) {
-                scan();
-            } else {
-                video.addEventListener('canplay', scan, { once: true });
-            }
-        }
-        
-        // Quick function to try back cameras first
-        async function tryBackCamerasFirst() {
-            try {
-                updateStatus('🎯 Looking for back cameras...', 'info');
-                
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                const videoDevices = devices.filter(device => device.kind === 'videoinput');
-                
-                // Find back-facing cameras
-                const backCameras = videoDevices.filter(device => 
-                    device.label && (
-                        device.label.toLowerCase().includes('back') ||
-                        device.label.toLowerCase().includes('rear') ||
-                        device.label.toLowerCase().includes('facing back') ||
-                        device.label.toLowerCase().includes('camera 0') || // Often main camera
-                        device.label.toLowerCase().includes('camera 2') ||
-                        device.label.toLowerCase().includes('camera 3')
-                    )
-                );
-                
-                if (backCameras.length === 0) {
-                    showResult('No back cameras identified. Trying standard detection...', 'info');
-                    setTimeout(attemptCameraAccess, 1000);
-                    return;
-                }
-                
-                console.log('Found back cameras:', backCameras);
-                
-                // Try each back camera
-                for (let i = 0; i < backCameras.length; i++) {
-                    const camera = backCameras[i];
-                    updateStatus(`📷 Trying back camera: ${camera.label}`, 'info');
-                    
-                    try {
-                        const constraints = {
-                            video: {
-                                deviceId: { exact: camera.deviceId },
-                                width: { min: 320, ideal: 640, max: 1280 },
-                                height: { min: 240, ideal: 480, max: 720 }
-                            }
-                        };
-                        
-                        const cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
-                        
-                        if (cameraStream && cameraStream.getVideoTracks().length > 0) {
-                            const track = cameraStream.getVideoTracks()[0];
-                            if (track.readyState === 'live') {
-                                console.log('✅ Back camera working:', camera.label);
-                                
-                                // Set up video
-                                const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-                                const video = document.getElementById('video');
-                                
-                                if (isMobile) {
-                                    video.setAttribute('playsinline', 'true');
-                                    video.setAttribute('webkit-playsinline', 'true');
-                                    video.muted = true;
-                                    video.autoplay = true;
-                                }
-                                
-                                video.srcObject = cameraStream;
-                                stream = cameraStream;
-                                
-                                updateStatus('✅ Back camera connected!', 'success');
-                                showResult(`
-                                    <div style="background: rgba(16, 185, 129, 0.1); padding: 20px; border-radius: 12px;">
-                                        <h3 style="color: #10b981;">✅ Back Camera Connected!</h3>
-                                        <p><strong>Using:</strong> ${camera.label}</p>
-                                        <p>Perfect for scanning QR codes!</p>
-                                    </div>
-                                `, 'success');
-                                
-                                startActualScanning(cameraStream);
-                                return;
-                            }
-                        }
-                    } catch (error) {
-                        console.log(`Back camera ${camera.label} failed:`, error.message);
-                        // Continue to next camera
-                    }
-                }
-                
-                // If no back cameras worked, try standard detection
-                showResult('Back cameras not accessible. Trying all available cameras...', 'info');
-                setTimeout(attemptCameraAccess, 1000);
-                
-            } catch (error) {
-                console.error('Error trying back cameras:', error);
-                attemptCameraAccess();
-            }
-        }
-        
-        // Manual camera selector for devices with multiple cameras
-        async function showCameraSelector() {
-            try {
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                const videoDevices = devices.filter(device => device.kind === 'videoinput');
-                
-                let selectorHTML = `
-                    <div style="background: rgba(99, 102, 241, 0.1); padding: 20px; border-radius: 12px; border: 1px solid rgba(99, 102, 241, 0.3);">
-                        <h3 style="color: var(--accent-primary); margin-bottom: 15px;">🎯 Select Camera</h3>
-                        <p>Your device has ${videoDevices.length} cameras. Try selecting a specific camera:</p>
-                        
-                        <div style="margin: 20px 0;">
-                `;
-                
-                videoDevices.forEach((device, index) => {
-                    const isBackCamera = device.label && (
-                        device.label.toLowerCase().includes('back') ||
-                        device.label.toLowerCase().includes('rear') ||
-                        device.label.toLowerCase().includes('facing back') ||
-                        device.label.toLowerCase().includes('camera 0')
-                    );
-                    
-                    const cameraType = isBackCamera ? '📷 (Recommended for QR scanning)' : '🤳';
-                    
-                    selectorHTML += `
-                        <button onclick="trySpecificCamera('${device.deviceId}', '${device.label || `Camera ${index + 1}`}')" 
-                                class="btn btn-secondary" 
-                                style="display: block; width: 100%; margin: 10px 0; text-align: left; padding: 15px;">
-                            ${cameraType} ${device.label || `Camera ${index + 1}`}
-                            <br><small style="opacity: 0.7;">ID: ${device.deviceId.substr(0, 20)}...</small>
-                        </button>
-                    `;
-                });
-                
-                selectorHTML += `
-                        </div>
-                        
-                        <div style="text-align: center; margin-top: 20px;">
-                            <button onclick="attemptCameraAccess()" class="btn btn-primary" style="margin-right: 10px;">
-                                🔄 Try Auto-Detection Again
-                            </button>
-                            <button onclick="document.querySelector('.manual-entry').scrollIntoView({behavior: 'smooth'})" class="btn btn-secondary">
-                                📝 Use Manual Entry
-                            </button>
-                        </div>
-                    </div>
-                `;
-                
-                showResult(selectorHTML, 'info');
-                
-            } catch (error) {
-                console.error('Error showing camera selector:', error);
-                showResult('❌ Error loading camera list. Please try the automatic detection.', 'error');
-            }
-        }
-        
-        // Try a specific camera by device ID
-        async function trySpecificCamera(deviceId, deviceName) {
-            try {
-                updateStatus(`📷 Trying ${deviceName}...`, 'info');
-                
-                const constraints = {
-                    video: {
-                        deviceId: { exact: deviceId }
-                    }
-                };
-                
-                console.log(`Attempting specific camera: ${deviceName} (${deviceId})`);
-                
-                const cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
-                
-                if (cameraStream && cameraStream.getVideoTracks().length > 0) {
-                    const track = cameraStream.getVideoTracks()[0];
-                    console.log('Specific camera access successful:', track.getSettings());
-                    
-                    // Set up video with mobile-specific configuration
-                    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-                    const video = document.getElementById('video');
-                    
-                    if (isMobile) {
-                        video.setAttribute('playsinline', 'true');
-                        video.setAttribute('webkit-playsinline', 'true');
-                        video.muted = true;
-                        video.autoplay = true;
-                    }
-                    
-                    video.srcObject = cameraStream;
-                    stream = cameraStream;
-                    
-                    // Wait for video to load
-                    await new Promise((resolve, reject) => {
-                        const timeout = setTimeout(() => {
-                            reject(new Error('Video load timeout'));
-                        }, 10000);
-                        
-                        video.onloadedmetadata = () => {
-                            clearTimeout(timeout);
-                            video.play()
-                                .then(() => {
-                                    console.log('Video playing successfully');
-                                    resolve();
-                                })
-                                .catch(err => {
-                                    console.error('Video play failed:', err);
-                                    resolve(); // Continue anyway
-                                });
-                        };
-                        
-                        setTimeout(() => {
-                            if (video.readyState >= 2) {
-                                clearTimeout(timeout);
-                                resolve();
-                            }
-                        }, 2000);
-                    });
-                    
-                    const settings = track.getSettings();
-                    
-                    updateStatus('✅ Camera connected successfully!', 'success');
-                    showResult(`
-                        <div style="background: rgba(16, 185, 129, 0.1); padding: 20px; border-radius: 12px; border: 1px solid rgba(16, 185, 129, 0.3);">
-                            <h3 style="color: #10b981; margin-bottom: 15px;">✅ Camera "${deviceName}" Connected!</h3>
-                            <div style="text-align: left;">
-                                <strong>Camera Details:</strong><br>
-                                • Device: ${deviceName}<br>
-                                • Resolution: ${settings.width || 'auto'}x${settings.height || 'auto'}<br>
-                                • Frame Rate: ${settings.frameRate || 'auto'} fps<br>
-                                • Facing Mode: ${settings.facingMode || 'unknown'}<br><br>
-                                
-                                <strong>Ready to scan QR codes!</strong><br>
-                                Position a QR code in the camera view to verify tickets.
-                            </div>
-                        </div>
-                    `, 'success');
-                    
-                    startActualScanning(cameraStream);
-                }
-                
-            } catch (error) {
-                console.error(`Error accessing camera ${deviceName}:`, error);
-                updateStatus(`❌ Failed to access ${deviceName}`, 'error');
-                
-                let errorMsg = `❌ Failed to access "${deviceName}"<br><br>`;
-                
-                if (error.name === 'NotAllowedError') {
-                    errorMsg += 'Permission denied. Please allow camera access and try again.';
-                } else if (error.name === 'NotReadableError') {
-                    errorMsg += 'Camera is busy or being used by another application.';
-                } else {
-                    errorMsg += `Error: ${error.message}`;
-                }
-                
-                showResult(errorMsg + '<br><br>Try selecting a different camera or use the manual entry option.', 'error');
-            }
-        }
-        
-        // Enhanced camera detection and debugging
-        async function debugCameraDevices() {
-            updateStatus('🔍 Detecting cameras...', 'info');
-            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-            
-            if (!isMobile) return true;
-            
-            try {
-                // Try to enumerate devices first
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                const videoDevices = devices.filter(device => device.kind === 'videoinput');
-                
-                if (videoDevices.length === 0) {
-                    return false;
-                }
-                
-                // Check if we can access camera permissions
-                if (navigator.permissions && navigator.permissions.query) {
-                    try {
-                        const permission = await navigator.permissions.query({ name: 'camera' });
-                        console.log('Camera permission state:', permission.state);
-                        return permission.state !== 'denied';
-                    } catch (e) {
-                        // Permissions API not supported, assume we can try
-                        return true;
-                    }
-                }
-                
-                return true;
-            } catch (error) {
-                console.error('Mobile permission check failed:', error);
-                return true; // Assume we can try
-            }
-        }
-        
-        // Camera detection and debugging
-        async function debugCameraDevices() {
-            updateStatus('🔍 Detecting cameras...', 'info');
-            
-            // Check mobile permissions first
-            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-            
-            if (isMobile) {
-                const hasPermissions = await checkMobilePermissions();
-                if (!hasPermissions) {
-                    showResult(`
-                        <div style="background: rgba(239, 68, 68, 0.1); padding: 20px; border-radius: 12px; border: 1px solid rgba(239, 68, 68, 0.3);">
-                            <h3 style="color: #ef4444; margin-bottom: 15px;">📱 Mobile Permission Issue</h3>
-                            <p>Camera permissions may be blocked on your mobile device.</p>
-                            
-                            <div style="text-align: left; margin: 15px 0;">
-                                <strong>Steps to enable camera:</strong><br>
-                                1. Look for camera/permission icon in your browser's address bar<br>
-                                2. Tap it and allow camera access<br>
-                                3. Refresh this page<br><br>
-                                
-                                <strong>If no icon appears:</strong><br>
-                                • Clear browser cache and reload<br>
-                                • Try using Chrome or Safari<br>
-                                • Check your device's camera app works first
-                            </div>
-                            
-                            <div style="text-align: center; margin-top: 20px;">
-                                <button onclick="location.reload()" class="btn btn-primary" style="margin-right: 10px;">
-                                    🔄 Reload & Try Again
-                                </button>
-                                <button onclick="document.querySelector('.manual-entry').scrollIntoView({behavior: 'smooth'})" class="btn btn-secondary">
-                                    📝 Use Manual Entry
-                                </button>
-                            </div>
-                        </div>
-                    `, 'error');
-                    return;
-                }
-            }
-            
-            try {
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                const videoDevices = devices.filter(device => device.kind === 'videoinput');
-                
-                console.log('All devices:', devices);
-                console.log('Video devices:', videoDevices);
-                
-                let debugInfo = `
-                    <div style="background: rgba(99, 102, 241, 0.1); padding: 20px; border-radius: 12px; border: 1px solid rgba(99, 102, 241, 0.3);">
-                        <h3 style="color: var(--accent-primary); margin-bottom: 15px;">🔍 Camera Detection Results</h3>
-                        
-                        <div style="text-align: left; margin: 15px 0;">
-                            <strong>Total Devices Found:</strong> ${devices.length}<br>
-                            <strong>Video Devices Found:</strong> ${videoDevices.length}<br><br>
-                            
-                            <strong>Device Details:</strong><br>
-                `;
-                
-                if (videoDevices.length === 0) {
-                    debugInfo += `
-                        <span style="color: #ef4444;">❌ No video devices detected</span><br><br>
-                        
-                        <strong>Possible Causes:</strong><br>
-                        • Camera is being used by another app<br>
-                        • Camera drivers not installed<br>
-                        • Hardware camera disabled<br>
-                        • Browser security restrictions<br><br>
-                        
-                        <strong>Solutions to Try:</strong><br>
-                        1. Close all other apps that might use camera<br>
-                        2. Restart your browser completely<br>
-                        3. Try a different browser (Chrome, Firefox, Safari)<br>
-                        4. Check if camera works in other apps<br>
-                        5. Restart your device<br>
-                    `;
-                } else {
-                    videoDevices.forEach((device, index) => {
-                        debugInfo += `
-                            ${index + 1}. <strong>${device.label || 'Camera ' + (index + 1)}</strong><br>
-                            &nbsp;&nbsp;&nbsp;ID: ${device.deviceId}<br>
-                            &nbsp;&nbsp;&nbsp;Group: ${device.groupId}<br><br>
-                        `;
-                    });
-                    
-                    debugInfo += `
-                        <div style="margin-top: 15px; padding: 15px; background: rgba(16, 185, 129, 0.1); border-radius: 8px; border: 1px solid rgba(16, 185, 129, 0.3);">
-                            <strong>✅ Cameras detected! Attempting automatic access...</strong>
-                        </div>
-                    `;
-                    
-                    // For devices with many cameras, show manual selection option
-                    if (videoDevices.length > 4) {
-                        debugInfo += `
-                            <div style="margin-top: 15px; padding: 15px; background: rgba(255, 193, 7, 0.1); border-radius: 8px; border: 1px solid rgba(255, 193, 7, 0.3);">
-                                <strong>⚠️ Multiple Cameras Detected (${videoDevices.length})</strong><br>
-                                If automatic selection fails, you can try specific cameras below.
-                            </div>
-                        `;
-                    }
-                }
-                
-                debugInfo += `
-                        </div>
-                        
-                        <div style="text-align: center; margin-top: 20px;">
-                            <button onclick="attemptCameraAccess()" class="btn btn-primary" style="margin-right: 10px;">
-                                📷 Try Camera Access
-                            </button>`;
-                
-                // Add manual camera selection for devices with many cameras
-                if (videoDevices.length > 4) {
-                    debugInfo += `
-                            <button onclick="showCameraSelector()" class="btn btn-secondary" style="margin-right: 10px;">
-                                🎯 Select Specific Camera
-                            </button>`;
-                }
-                
-                debugInfo += `
-                            <button onclick="document.querySelector('.manual-entry').scrollIntoView({behavior: 'smooth'})" class="btn btn-secondary">
-                                📝 Use Manual Entry
-                            </button>
-                        </div>
-                    </div>
-                `;
-                
-                showResult(debugInfo, 'info');
-                
-                // If cameras found, try to access them
-                if (videoDevices.length > 0) {
-                    setTimeout(() => attemptCameraAccess(), 2000);
-                }
-                
-            } catch (error) {
-                console.error('Device enumeration failed:', error);
-                showResult(`
-                    <div style="background: rgba(239, 68, 68, 0.1); padding: 20px; border-radius: 12px; border: 1px solid rgba(239, 68, 68, 0.3);">
-                        <h3 style="color: #ef4444; margin-bottom: 15px;">❌ Camera Detection Failed</h3>
-                        <p><strong>Error:</strong> ${error.message}</p>
-                        <p style="margin-top: 15px;"><strong>This usually means:</strong></p>
-                        <ul style="text-align: left; margin: 10px 0;">
-                            <li>Browser doesn't support camera access</li>
-                            <li>Device has no camera hardware</li>
-                            <li>Severe permission restrictions</li>
-                        </ul>
-                        <div style="text-align: center; margin-top: 20px;">
-                            <button onclick="document.querySelector('.manual-entry').scrollIntoView({behavior: 'smooth'})" class="btn btn-primary">
-                                📝 Use Manual Verification
-                            </button>
-                        </div>
-                    </div>
-                `, 'error');
-            }
-        }
-        
-        // Simplified mobile-first camera access based on best practices
-        async function attemptCameraAccess() {
-            try {
-                updateStatus('🔐 Requesting camera permission...', 'info');
-                
-                // Detect mobile devices
-                const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-                
-                console.log('Device detection:', { isMobile, isIOS });
-                
-                // Progressive constraint options - start with the most basic working options
-                const constraintOptions = [
-                    // Option 1: Simplest environment camera (as recommended in the article)
-                    {
-                        video: { facingMode: 'environment' }
-                    },
-                    // Option 2: Even simpler - just any camera
-                    {
-                        video: true
-                    },
-                    // Option 3: Explicit back camera with basic constraints
-                    {
-                        video: {
-                            facingMode: { ideal: 'environment' },
-                            width: { ideal: 640 },
-                            height: { ideal: 480 }
-                        }
-                    },
-                    // Option 4: Front camera fallback
-                    {
-                        video: { facingMode: 'user' }
-                    }
-                ];
-                
-                // For devices with many cameras, add specific device attempts
-                try {
-                    const devices = await navigator.mediaDevices.enumerateDevices();
-                    const videoDevices = devices.filter(device => device.kind === 'videoinput');
-                    
-                    console.log('Found video devices:', videoDevices.length);
-                    
-                    if (videoDevices.length > 4) {
-                        // Add specific device constraints for first few cameras
-                        for (let i = 0; i < Math.min(3, videoDevices.length); i++) {
-                            constraintOptions.unshift({
-                                video: { deviceId: videoDevices[i].deviceId }
-                            });
-                        }
-                    }
-                } catch (e) {
-                    console.log('Could not enumerate devices, using basic constraints');
-                }
-                
-                let cameraStream = null;
-                let workingConstraint = null;
-                
-                // Add delay for iOS devices
-                if (isIOS) {
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                }
-                
-                console.log(`Trying ${constraintOptions.length} camera options...`);
-                
-                for (let i = 0; i < constraintOptions.length; i++) {
-                    try {
-                        updateStatus(`📷 Trying camera ${i + 1}/${constraintOptions.length}...`, 'info');
-                        console.log(`Attempt ${i + 1}:`, constraintOptions[i]);
-                        
-                        // Add delay between attempts for mobile
-                        if (i > 0) {
-                            await new Promise(resolve => setTimeout(resolve, 800));
-                        }
-                        
-                        // Request camera access
-                        cameraStream = await navigator.mediaDevices.getUserMedia(constraintOptions[i]);
-                        
-                        // Verify the stream is working
-                        if (cameraStream && cameraStream.getVideoTracks().length > 0) {
-                            const track = cameraStream.getVideoTracks()[0];
-                            console.log('Got video track:', {
-                                readyState: track.readyState,
-                                enabled: track.enabled,
-                                muted: track.muted,
-                                settings: track.getSettings()
-                            });
-                            
-                            if (track.readyState === 'live' && track.enabled) {
-                                workingConstraint = constraintOptions[i];
-                                console.log('✅ Camera stream is working!');
-                                break;
-                            } else {
-                                console.log('Stream not ready, stopping and trying next...');
-                                cameraStream.getTracks().forEach(t => t.stop());
-                                cameraStream = null;
-                            }
-                        }
-                    } catch (error) {
-                        console.log(`Option ${i + 1} failed:`, {
-                            name: error.name,
-                            message: error.message,
-                            constraint: constraintOptions[i]
-                        });
-                        
-                        // Special handling for different errors
-                        if (error.name === 'NotAllowedError') {
-                            // Permission denied - might be final
-                            if (i === constraintOptions.length - 1) {
-                                throw error;
-                            }
-                        } else if (error.name === 'OverconstrainedError') {
-                            // This constraint doesn't work, try next
-                            continue;
-                        } else if (error.name === 'NotFoundError' || error.name === 'NotReadableError') {
-                            // Device issues - try simpler constraints
-                            continue;
-                        } else if (i === constraintOptions.length - 1) {
-                            // Last option failed
-                            throw error;
-                        }
-                    }
-                }
-                
-                if (cameraStream && workingConstraint) {
-                    console.log('Setting up video element...');
-                    const video = document.getElementById('video');
-                    
-                    // Enhanced mobile video setup
-                    video.setAttribute('playsinline', 'true');
-                    video.setAttribute('webkit-playsinline', 'true');
-                    video.setAttribute('autoplay', 'true');
-                    video.setAttribute('muted', 'true');
-                    video.style.width = '100%';
-                    video.style.height = 'auto';
-                    
-                    // Set video source
-                    video.srcObject = cameraStream;
-                    stream = cameraStream;
-                    
-                    // Wait for video to be ready
-                    await new Promise((resolve, reject) => {
-                        const timeout = setTimeout(() => {
-                            console.log('Video setup timeout, continuing anyway...');
-                            resolve();
-                        }, 5000);
-                        
-                        const onReady = () => {
-                            clearTimeout(timeout);
-                            console.log('Video is ready:', {
-                                readyState: video.readyState,
-                                videoWidth: video.videoWidth,
-                                videoHeight: video.videoHeight
-                            });
-                            resolve();
-                        };
-                        
-                        if (video.readyState >= 2) {
-                            onReady();
-                        } else {
-                            video.addEventListener('loadedmetadata', onReady, { once: true });
-                            video.addEventListener('canplay', onReady, { once: true });
-                        }
-                    });
-                    
-                    // Force play for mobile
-                    try {
-                        await video.play();
-                        console.log('Video is playing');
-                    } catch (playError) {
-                        console.log('Video play failed, but continuing:', playError);
-                    }
-                    
-                    const track = cameraStream.getVideoTracks()[0];
-                    const settings = track.getSettings();
-                    
-                    updateStatus('✅ Camera connected successfully!', 'success');
-                    showResult(`
-                        <div style="background: rgba(16, 185, 129, 0.1); padding: 20px; border-radius: 12px; border: 1px solid rgba(16, 185, 129, 0.3);">
-                            <h3 style="color: #10b981; margin-bottom: 15px;">✅ Camera Connected Successfully!</h3>
-                            <div style="text-align: left;">
-                                <strong>Camera Details:</strong><br>
-                                • Device: ${track.label || 'Camera'}<br>
-                                • Resolution: ${settings.width || video.videoWidth || 'auto'}x${settings.height || video.videoHeight || 'auto'}<br>
-                                • Facing: ${settings.facingMode || 'unknown'}<br>
-                                • Working Constraint: ${JSON.stringify(workingConstraint).replace(/"/g, '')}<br><br>
-                                
-                                <strong>🎯 Ready to scan QR codes!</strong><br>
-                                Position a QR code clearly in the camera view.
-                            </div>
-                        </div>
-                    `, 'success');
-                    
-                    // Start scanning
-                    startActualScanning(cameraStream);
-                    
-                } else {
-                    throw new Error('No camera stream available after all attempts');
-                }
-                
-            } catch (error) {
-                console.error('All camera access attempts failed:', error);
-                handleCameraError(error);
-            }
-        }
-        
-        // Enhanced camera error handling with mobile-specific solutions
-        async function handleCameraError(error) {
-            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-            const isAndroid = /Android/i.test(navigator.userAgent);
-            
-            let errorMessage = '❌ Camera Access Failed<br><br>';
-            let troubleshooting = '';
-            
-            if (error.name === 'NotAllowedError') {
-                errorMessage += '<strong>Permission Denied:</strong> Camera access was blocked.<br><br>';
-                
-                if (isMobile) {
-                    troubleshooting = `
-                        <strong>📱 Mobile Solutions:</strong><br><br>
-                        
-                        <strong>For Chrome Mobile:</strong><br>
-                        1. Look for camera icon (📷) or lock icon (�) in address bar<br>
-                        2. Tap it and select "Allow" for camera<br>
-                        3. Refresh this page<br><br>
-                        
-                        <strong>For Brave Browser:</strong><br>
-                        1. Look for shield icon (�️) in address bar<br>
-                        2. Tap it and enable "Camera"<br>
-                        3. Refresh this page<br><br>
-                        
-                        <strong>For Safari (iOS):</strong><br>
-                        1. When prompted, tap "Allow"<br>
-                        2. If no prompt: Settings > Safari > Camera > Allow<br>
-                        3. Return and refresh this page<br><br>
-                        
-                        <strong>For Firefox Mobile:</strong><br>
-                        1. Tap the shield or lock icon in address bar<br>
-                        2. Enable camera permissions<br>
-                        3. Reload the page<br><br>
-                    `;
-                } else {
-                    troubleshooting = `
-                        <strong>Desktop Solutions:</strong><br>
-                        1. Click camera icon in address bar and allow access<br>
-                        2. Check browser settings > Privacy > Camera<br>
-                        3. Ensure no other app is using the camera<br><br>
-                    `;
-                }
-            } else if (error.name === 'NotFoundError') {
-                errorMessage += '<strong>No Camera Found:</strong> No camera detected on this device.<br><br>';
-                troubleshooting = `
-                    <strong>Possible Solutions:</strong><br>
-                    1. Check if another app is using the camera<br>
-                    2. Close all camera apps and try again<br>
-                    3. Restart your browser${isMobile ? ' completely' : ''}<br>
-                    4. Restart your device<br>
-                    ${isMobile ? '5. Try using a different browser (Chrome recommended)<br>' : ''}
-                    ${isAndroid ? '6. Check if camera works in your device\'s camera app<br>' : ''}
-                `;
-            } else if (error.name === 'NotSupportedError' || error.name === 'TypeError') {
-                errorMessage += '<strong>Not Supported:</strong> Camera not supported in this browser or context.<br><br>';
-                troubleshooting = `
-                    <strong>Solutions:</strong><br>
-                    1. Try these browsers: Chrome, Firefox, Safari, Edge<br>
-                    2. Ensure you're using HTTPS (not HTTP)<br>
-                    3. Update your browser to the latest version<br>
-                    ${isMobile ? '4. Clear browser cache and cookies<br>' : ''}
-                    ${isIOS ? '5. For iOS: Use Safari or Chrome, avoid third-party browsers<br>' : ''}
-                `;
-            } else if (error.name === 'NotReadableError') {
-                errorMessage += '<strong>Camera Busy:</strong> Camera is being used by another application.<br><br>';
-                troubleshooting = `
-                    <strong>Solutions:</strong><br>
-                    1. Close all other apps using the camera<br>
-                    2. Close other browser tabs with camera access<br>
-                    3. Force-close your browser and reopen<br>
-                    4. Restart your device if the issue persists<br>
-                    ${isMobile ? '5. Check if camera app is running in background<br>' : ''}
-                `;
-            } else if (error.name === 'OverconstrainedError') {
-                errorMessage += '<strong>Camera Constraints:</strong> Your camera doesn\'t support the required settings.<br><br>';
-                troubleshooting = `
-                    <strong>This is usually resolved automatically, but you can try:</strong><br>
-                    1. Refresh the page to retry with simpler settings<br>
-                    2. Try a different browser<br>
-                    3. Update your device drivers (desktop)<br>
-                    ${isMobile ? '4. Clear browser data and try again<br>' : ''}
-                `;
-            } else {
-                errorMessage += `<strong>Unexpected Error:</strong> ${error.message}<br><br>`;
-                troubleshooting = `
-                    <strong>General Troubleshooting:</strong><br>
-                    1. Refresh the page and try again<br>
-                    2. Clear browser cache and cookies<br>
-                    3. Try a different browser (Chrome recommended)<br>
-                    4. Restart your device<br>
-                    ${isMobile ? '5. Ensure you\'re using the latest browser version<br>' : ''}
-                    ${isIOS ? '6. For iOS: Try using Safari instead of other browsers<br>' : ''}
-                `;
-            }
-            
-            updateStatus('Camera access failed - Use manual verification', 'error');
-            
-            // Special message for devices with many cameras
-            const devices = await navigator.mediaDevices.enumerateDevices().catch(() => []);
-            const videoDevices = devices.filter(device => device.kind === 'videoinput');
-            
-            if (videoDevices.length > 4) {
-                troubleshooting += `
-                    <div style="margin-top: 20px; padding: 15px; background: rgba(255, 193, 7, 0.1); border-radius: 8px; border: 1px solid rgba(255, 193, 7, 0.3);">
-                        <strong>⚠️ Multiple Cameras Detected (${videoDevices.length})</strong><br>
-                        Your device has many cameras. Try these specific solutions:<br>
-                        1. Use the "Try Back Cameras First" button above<br>
-                        2. Try the "Select Specific Camera" option<br>
-                        3. Close any other apps that might be using cameras<br>
-                        4. Restart your browser completely<br>
-                    </div>
-                `;
-            }
-            
-            showResult(`
-                <div style="background: rgba(239, 68, 68, 0.1); padding: 20px; border-radius: 12px; border: 1px solid rgba(239, 68, 68, 0.3);">
-                    <h3 style="color: #ef4444; margin-bottom: 15px;">📷 Camera Issue</h3>
-                    <div style="margin-bottom: 15px;">${errorMessage}</div>
-                    <div style="text-align: left; margin-bottom: 20px;">${troubleshooting}</div>
-                    
-                    <div style="margin-top: 20px; padding: 15px; background: rgba(99, 102, 241, 0.1); border-radius: 8px;">
-                        <strong>💡 Alternative:</strong> Manual verification works perfectly without camera access. Scroll down to use it.
-                    </div>
-                    
-                    <div style="text-align: center; margin-top: 20px;">
-                        <button onclick="location.reload()" class="btn btn-primary" style="margin-right: 10px;">
-                            🔄 Refresh & Try Again
-                        </button>
-                        <button onclick="document.querySelector('.manual-entry').scrollIntoView({behavior: 'smooth'})" class="btn btn-secondary">
-                            📝 Use Manual Entry
-                        </button>
-                    </div>
-                </div>
-            `, 'error');
-            
-            setTimeout(() => {
-                document.querySelector('.manual-entry').scrollIntoView({ 
-                    behavior: 'smooth',
-                    block: 'start'
-                });
-            }, 2000);
-        }
-        
-        // Start actual scanning
-        function startActualScanning(cameraStream) {
-            canvas = document.createElement('canvas');
-            context = canvas.getContext('2d');
-            
-            scanning = true;
-            document.getElementById('startBtn').disabled = true;
-            document.getElementById('stopBtn').disabled = false;
-            document.getElementById('captureBtn').disabled = false; // Enable capture button
-            
-            // Reset detection state
-            detectionState.processingQR = false;
-            detectionState.lastDetected = null;
-            detectionState.consecutiveDetections = 0;
-            
-            updateStatus('📱 Scanner active - Position QR code in the frame', 'scanning');
-            requestAnimationFrame(scanQRCode);
-        }
-        
-        // Enhanced main scanner function with reliable camera initialization
-        async function startScanner() {
-            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-            
-            if (isMobile) {
-                updateStatus('📱 Initializing mobile camera...', 'info');
-            } else {
-                updateStatus('🖥️ Initializing desktop camera...', 'info');
-            }
-            
-            try {
-                // Initialize camera and start scanning immediately
-                await initializeCamera();
-                
-            } catch (error) {
-                console.error('Camera initialization failed:', error);
-                updateStatus('❌ Camera initialization failed', 'error');
-                showResult('❌ Failed to access camera. Please check permissions and try again.', 'error');
-            }
-        }
-        
-        // Initialize camera with proper constraints for reliable operation
-        async function initializeCamera() {
-            try {
-                updateStatus('🔍 Accessing camera...', 'info');
-                
-                // Set the video element from the DOM
-                if (!video) {
-                    video = document.getElementById('video');
-                    if (!video) {
-                        throw new Error('Video element not found in DOM');
-                    }
-                }
-                
-                // Use constraints that work well across devices
-                const constraints = {
-                    video: {
-                        facingMode: 'environment', // Use back camera on mobile
-                        width: { ideal: 1280, max: 1920 },
-                        height: { ideal: 720, max: 1080 },
-                        frameRate: { ideal: 30, max: 60 }
-                    }
-                };
-                
-                // Get media stream
-                stream = await navigator.mediaDevices.getUserMedia(constraints);
-                video.srcObject = stream;
-                
-                // Wait for video to be ready and start scanning immediately
-                return new Promise((resolve, reject) => {
-                    video.onloadedmetadata = () => {
-                        video.play().then(() => {
-                            console.log('✅ Camera initialized and playing');
-                            console.log('Video dimensions:', video.videoWidth, 'x', video.videoHeight);
-                            
-                            // Enable UI controls
-                            document.getElementById('startBtn').disabled = true;
-                            document.getElementById('stopBtn').disabled = false;
-                            document.getElementById('captureBtn').disabled = false;
-                            
-                            // Reset detection state
-                            resetDetectionState();
-                            
-                            // Start scanning immediately
-                            scanning = true;
-                            updateStatus('📱 Camera ready - scanning for QR codes...', 'scanning');
-                            
-                            // Start the scanning loop
-                            requestAnimationFrame(scanQRCode);
-                            
-                            resolve();
-                        }).catch(reject);
-                    };
-                    
-                    video.onerror = reject;
-                    
-                    // Timeout after 10 seconds
-                    setTimeout(() => reject(new Error('Camera initialization timeout')), 10000);
-                });
-                
-            } catch (error) {
-                console.error('Camera access failed:', error);
-                throw error;
-            }
-        }
-        
-        // Reset detection state for fresh scanning
-        function resetDetectionState() {
-            detectionState.processingQR = false;
-            detectionState.lastDetected = null;
-            detectionState.consecutiveDetections = 0;
-            detectionState.lastProcessTime = 0;
-        }
-        
-        // Debug camera status for troubleshooting
-        function debugCameraStatus() {
-            if (!video) {
-                console.log('❌ Video element not found');
-                return false;
-            }
-            
-            console.log('🔍 Camera Debug Info:');
-            console.log('  - Video element exists:', !!video);
-            console.log('  - Video readyState:', video.readyState);
-            console.log('  - Video states:', {
-                HAVE_NOTHING: video.HAVE_NOTHING,
-                HAVE_METADATA: video.HAVE_METADATA, 
-                HAVE_CURRENT_DATA: video.HAVE_CURRENT_DATA,
-                HAVE_FUTURE_DATA: video.HAVE_FUTURE_DATA,
-                HAVE_ENOUGH_DATA: video.HAVE_ENOUGH_DATA
-            });
-            console.log('  - Video dimensions:', video.videoWidth + 'x' + video.videoHeight);
-            console.log('  - Video playing:', !video.paused && !video.ended);
-            console.log('  - Stream active:', video.srcObject && video.srcObject.active);
-            console.log('  - Scanning active:', scanning);
-            
-            return video.readyState >= video.HAVE_CURRENT_DATA && video.videoWidth > 0;
-        }
-        
-        // Enhanced capture function that works reliably and resumes scanning
-        function captureAndScan() {
-            // Debug camera status first
-            const cameraReady = debugCameraStatus();
-            
-            // Check if video element exists and is ready
-            if (!video) {
-                showResult('❌ Camera not initialized. Please start the scanner first.', 'error');
-                return;
-            }
-            
-            // Check video readiness - be more flexible with ready states
-            if (video.readyState < video.HAVE_CURRENT_DATA) {
-                showResult(`❌ Camera not ready. Current state: ${video.readyState}. Please wait for camera to load properly.`, 'error');
-                return;
-            }
-            
-            // Check if video has dimensions
-            if (video.videoWidth === 0 || video.videoHeight === 0) {
-                showResult('❌ Camera feed not available. Please check camera permissions.', 'error');
-                return;
-            }
-            
-            updateStatus('📸 Capturing image...', 'info');
-            
-            try {
-                // Create capture canvas
-                const captureCanvas = document.createElement('canvas');
-                const captureContext = captureCanvas.getContext('2d');
-                
-                // Set canvas size to match video
-                captureCanvas.width = video.videoWidth;
-                captureCanvas.height = video.videoHeight;
-                
-                console.log('Capture canvas size:', captureCanvas.width, 'x', captureCanvas.height);
-                
-                // Draw current video frame
-                captureContext.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
-                
-                // Process the captured image for QR codes immediately
-                updateStatus('🔍 Analyzing captured image...', 'info');
-                
-                // Get image data and try QR detection
-                const imageData = captureContext.getImageData(0, 0, captureCanvas.width, captureCanvas.height);
-                
-                try {
-                    const qrResult = jsQR(imageData.data, imageData.width, imageData.height, {
-                        inversionAttempts: "dontInvert",
-                    });
-                    
-                    if (qrResult && qrResult.data && qrResult.data.length > 20) {
-                        console.log('QR found in captured image:', qrResult.data.substring(0, 50) + '...');
-                        updateStatus('✅ QR code found in capture!', 'success');
-                        
-                        // Process the QR immediately
-                        processConfirmedQR(qrResult.data);
-                        
-                    } else {
-                        updateStatus('❌ No QR code found in capture', 'error');
-                        showResult(`
-                            <div style="background: rgba(239, 68, 68, 0.1); padding: 20px; border-radius: 12px; border: 1px solid rgba(239, 68, 68, 0.3);">
-                                <h3 style="color: #ef4444; margin-bottom: 15px;">📸 No QR Code Found</h3>
-                                <p>The captured image doesn't contain a readable QR code.</p>
-                                
-                                <div style="text-align: left; margin: 15px 0;">
-                                    <strong>Tips for better capture:</strong><br>
-                                    • Ensure QR code is clearly visible and well-lit<br>
-                                    • Hold device steady<br>
-                                    • Make sure QR code fills a good portion of the frame<br>
-                                    • Try different angles or distances<br>
-                                    • Check if QR code is damaged or blurry<br>
-                                </div>
-                                
-                                <div style="text-align: center; margin-top: 20px;">
-                                    <button onclick="captureAndScan()" class="btn btn-primary" style="margin-right: 10px;">
-                                        📸 Try Capture Again
-                                    </button>
-                                    <button onclick="resumeScanning()" class="btn btn-secondary">
-                                        � Resume Auto Scan
-                                    </button>
-                                </div>
-                            </div>
-                        `, 'error');
-                        
-                        // Auto-resume scanning after 3 seconds if no action taken
-                        setTimeout(() => {
-                            if (!detectionState.processingQR) {
-                                resumeScanning();
-                            }
-                        }, 3000);
-                    }
-                } catch (jsQRError) {
-                    console.error('jsQR detection failed:', jsQRError);
-                    updateStatus('❌ QR detection failed', 'error');
-                    showResult('❌ Failed to analyze captured image. Try again or resume auto scanning.', 'error');
-                    
-                    // Resume scanning after error
-                    setTimeout(() => {
-                        resumeScanning();
-                    }, 2000);
-                }
-                
-            } catch (error) {
-                console.error('Error during capture and scan:', error);
-                updateStatus('❌ Capture failed', 'error');
-                showResult('❌ Failed to capture image. Please try again.', 'error');
-                
-                // Resume scanning after error
-                setTimeout(() => {
-                    resumeScanning();
-                }, 2000);
-            }
-        }
-        
-        // Show capture preview (enhanced version)
-        function showCapturePreview(captureCanvas) {
-            try {
-                // Convert canvas to image data URL for preview
-                const imageDataUrl = captureCanvas.toDataURL('image/jpeg', 0.8);
-                
-                // Show immediate visual feedback
-                console.log('📸 Capture successful - analyzing...');
-                
-                // Optional: Show preview in result area temporarily
-                setTimeout(() => {
-                    showResult(`
-                        <div style="background: rgba(99, 102, 241, 0.1); padding: 15px; border-radius: 12px; border: 1px solid rgba(99, 102, 241, 0.3);">
-                            <h3 style="color: var(--accent-primary); margin-bottom: 10px;">📸 Analyzing Capture</h3>
-                            <div style="text-align: center;">
-                                <img src="${imageDataUrl}" style="max-width: 200px; max-height: 200px; border-radius: 8px; border: 1px solid #ccc;" alt="Captured image">
-                            </div>
-                            <p style="text-align: center; margin: 10px 0; font-size: 14px;">
-                                🔍 Scanning for QR codes...
-                            </p>
-                        </div>
-                    `, 'info');
-                }, 100);
-                
-            } catch (error) {
-                console.log('Preview generation failed:', error);
-            }
-        }
-        
-        // Show capture preview
-        function showCapturePreview(captureCanvas) {
-            try {
-                // Convert canvas to image data URL
-                const imageDataUrl = captureCanvas.toDataURL('image/jpeg', 0.8);
-                
-                // Create preview in result area
-                showResult(`
-                    <div style="background: rgba(99, 102, 241, 0.1); padding: 20px; border-radius: 12px; border: 1px solid rgba(99, 102, 241, 0.3);">
-                        <h3 style="color: var(--accent-primary); margin-bottom: 15px;">📸 Image Captured</h3>
-                        
-                        <div style="text-align: center; margin: 15px 0;">
-                            <img src="${imageDataUrl}" style="max-width: 100%; max-height: 300px; border-radius: 8px; border: 1px solid #ccc;" alt="Captured image">
-                        </div>
-                        
-                        <p style="text-align: center; margin: 10px 0;">
-                            <strong>Analyzing for QR codes...</strong>
-                        </p>
-                        
-                        <div style="text-align: center; margin-top: 15px;">
-                            <button onclick="captureAndScan()" class="btn btn-secondary" style="margin-right: 10px;">
-                                📸 Capture Again
-                            </button>
-                            <button onclick="downloadCapture('${imageDataUrl}')" class="btn btn-secondary">
-                                💾 Download Image
-                            </button>
-                        </div>
-                    </div>
-                `, 'info');
-                
-            } catch (error) {
-                console.error('Error showing capture preview:', error);
-            }
-        }
-        
-        // Download captured image
-        function downloadCapture(imageDataUrl) {
-            try {
-                const link = document.createElement('a');
-                link.download = `qr-capture-${new Date().getTime()}.jpg`;
-                link.href = imageDataUrl;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                
-                showResult('📥 Image downloaded successfully!', 'success');
-            } catch (error) {
-                console.error('Error downloading image:', error);
-                showResult('❌ Failed to download image', 'error');
-            }
-        }
-        
-        // Enhanced stop scanner function
-        function stopScanner() {
-            scanning = false;
-            
-            // Reset detection state
-            detectionState.processingQR = false;
-            detectionState.lastDetected = null;
-            detectionState.consecutiveDetections = 0;
-            
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-                stream = null;
-            }
-            
-            if (video) {
-                video.srcObject = null;
-            }
-            
-            document.getElementById('startBtn').disabled = false;
-            document.getElementById('stopBtn').disabled = true;
-            document.getElementById('captureBtn').disabled = true;
-            
-            updateStatus('Scanner stopped', 'info');
-            document.getElementById('resultSection').style.display = 'none';
-        }
-        
-        // Enhanced and more reliable QR code scanning  
-        let detectionState = {
-            lastDetected: null,
-            consecutiveDetections: 0,
-            processingQR: false,
-            requiredDetections: 2, // Reduced for faster detection
-            lastScanTime: 0
-        };
-        
-        function scanQRCode() {
-            if (!scanning || !video || detectionState.processingQR) return;
-            
-            try {
-                // Check multiple video ready states for broader compatibility
-                const isVideoReady = video.readyState >= video.HAVE_CURRENT_DATA && 
-                                   video.videoWidth > 0 && video.videoHeight > 0;
-                
-                if (isVideoReady) {
-                    // Throttle scanning to 10fps for better performance
-                    const now = Date.now();
-                    if (now - detectionState.lastScanTime < 100) {
-                        requestAnimationFrame(scanQRCode);
-                        return;
-                    }
-                    detectionState.lastScanTime = now;
-                    
-                    // Create canvas if needed
-                    if (!canvas) {
-                        canvas = document.createElement('canvas');
-                        context = canvas.getContext('2d');
-                    }
-                    
-                    // Set canvas dimensions to match video
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    
-                    // Draw current video frame
-                    context.drawImage(video, 0, 0, canvas.width, canvas.height);
-                    
-                    // Try QR detection
-                    const qrResult = tryQRDetection();
-                    
-                    if (qrResult && qrResult.data && qrResult.data.length > 20) {
-                        handleQRDetection(qrResult.data);
-                    } else {
-                        // Reset detection state if no QR found
-                        if (detectionState.consecutiveDetections > 0) {
-                            detectionState.lastDetected = null;
-                            detectionState.consecutiveDetections = 0;
-                        }
-                    }
-                }
-            } catch (error) {
-                console.error('Error during QR scanning:', error);
-            }
-            
-            // Continue scanning if still active and not processing
-            if (scanning && !detectionState.processingQR) {
-                requestAnimationFrame(scanQRCode);
-            }
-        }
-        
-        // Handle QR detection with improved reliability
-        function handleQRDetection(qrData) {
-            // Check if this is the same QR as last detected
-            if (detectionState.lastDetected === qrData) {
-                detectionState.consecutiveDetections++;
-            } else {
-                detectionState.lastDetected = qrData;
-                detectionState.consecutiveDetections = 1;
-            }
-            
-            // Process QR if we have enough consecutive detections
-            if (detectionState.consecutiveDetections >= detectionState.requiredDetections) {
-                console.log('✅ QR code confirmed after', detectionState.consecutiveDetections, 'detections');
-                updateStatus('✅ QR Code detected - Processing...', 'success');
-                
-                // Stop further detection during processing
-                detectionState.processingQR = true;
-                
-                // Process the QR code
-                processConfirmedQR(qrData);
-            } else {
-                updateStatus(`🔍 QR detected (${detectionState.consecutiveDetections}/${detectionState.requiredDetections})...`, 'scanning');
-            }
-        }
-        
-        // Try multiple QR detection methods
-        function tryQRDetection() {
-            const width = canvas.width;
-            const height = canvas.height;
-            
-            // Method 1: Standard detection with both inversions
-            try {
-                const imageData = context.getImageData(0, 0, width, height);
-                const result = jsQR(imageData.data, imageData.width, imageData.height, {
-                    inversionAttempts: "attemptBoth"
-                });
-                if (result && result.data) return result;
-            } catch (e) {
-                console.log('Standard detection failed:', e);
-            }
-            
-            // Method 2: Center region detection (where QR codes are usually held)
-            try {
-                const centerSize = 0.6; // 60% of the frame
-                const startX = Math.floor(width * (1 - centerSize) / 2);
-                const startY = Math.floor(height * (1 - centerSize) / 2);
-                const regionWidth = Math.floor(width * centerSize);
-                const regionHeight = Math.floor(height * centerSize);
-                
-                if (regionWidth > 150 && regionHeight > 150) {
-                    const imageData = context.getImageData(startX, startY, regionWidth, regionHeight);
-                    const result = jsQR(imageData.data, imageData.width, imageData.height, {
-                        inversionAttempts: "attemptBoth"
-                    });
-                    if (result && result.data) return result;
-                }
-            } catch (e) {
-                console.log('Center region detection failed:', e);
-            }
-            
-            // Method 3: Enhanced contrast detection
-            try {
-                const imageData = context.getImageData(0, 0, width, height);
-                // Simple contrast enhancement
-                const data = imageData.data;
-                for (let i = 0; i < data.length; i += 4) {
-                    const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
-                    const enhanced = avg > 128 ? 255 : 0; // High contrast black/white
-                    data[i] = data[i + 1] = data[i + 2] = enhanced;
-                }
-                
-                const result = jsQR(imageData.data, imageData.width, imageData.height, {
-                    inversionAttempts: "dontInvert"
-                });
-                if (result && result.data) return result;
-            } catch (e) {
-                console.log('Enhanced contrast detection failed:', e);
-            }
-            
-            return null;
-        }
-        
-        // Handle QR code detection with validation
-        function handleQRDetection(qrData) {
-            // Check if this is the same QR as last detection
-            if (detectionState.lastDetected === qrData) {
-                detectionState.consecutiveDetections++;
-                
-                // Show progress
-                updateStatus(
-                    `📱 QR code confirmed ${detectionState.consecutiveDetections}/${detectionState.requiredDetections}`, 
-                    'scanning'
-                );
-                
-                // Process when we have enough confirmations
-                if (detectionState.consecutiveDetections >= detectionState.requiredDetections) {
-                    processConfirmedQR(qrData);
-                }
-            } else {
-                // New QR detected
-                detectionState.lastDetected = qrData;
-                detectionState.consecutiveDetections = 1;
-                updateStatus('📱 New QR detected, confirming...', 'scanning');
-                console.log('New QR detected:', qrData.substring(0, 100) + '...');
-            }
-        }
-        
-        // Process confirmed QR code
-        function processConfirmedQR(qrData) {
-            detectionState.processingQR = true;
-            updateStatus('🔍 Processing QR code...', 'info');
-            
-            console.log('Processing confirmed QR:', qrData);
-            
-            // Reset detection state
-            detectionState.lastDetected = null;
-            detectionState.consecutiveDetections = 0;
-            
-            try {
-                // Try to parse as new simple format (JSON with verification code and email)
-                const parsedData = JSON.parse(qrData);
-                
-                if (parsedData.v && parsedData.e) {
-                    // New simple format: {v: "123456", e: "email@example.com"}
-                    console.log('Simple QR format detected:', parsedData.e, 'code:', parsedData.v);
-                    updateStatus(`📧 Verifying code ${parsedData.v} for ${parsedData.e}`, 'info');
-                    verifyByCode(parsedData.v, parsedData.e);
-                    return;
-                } else if (parsedData.email && parsedData.data) {
-                    // Old complex format: {email: "...", data: "encrypted..."}
-                    console.log('Legacy complex QR detected:', parsedData.email);
-                    updateStatus(`📧 Processing legacy coupon for ${parsedData.email}`, 'info');
-                    verifyCoupon(parsedData.data, parsedData.email);
-                    return;
-                }
-            } catch (e) {
-                console.log('Not JSON format, treating as legacy encrypted data');
-            }
-            
-            // Handle legacy format (just encrypted data)
-            const manualEmail = document.getElementById('manualEmail').value.trim();
-            if (manualEmail) {
-                console.log('Using manual email for legacy QR:', manualEmail);
-                updateStatus(`🔍 Processing with email: ${manualEmail}`, 'info');
-                verifyCoupon(qrData, manualEmail);
-            } else {
-                // Need email for legacy format
-                updateStatus('📧 Email required for this QR code', 'warning');
-                showResult(`
-                    <div style="background: rgba(255, 193, 7, 0.1); padding: 20px; border-radius: 12px; border: 1px solid rgba(255, 193, 7, 0.3);">
-                        <h3 style="color: #f59e0b; margin-bottom: 15px;">⚠️ Email Required</h3>
-                        <p><strong>This QR code requires an email address.</strong></p>
-                        <p>Please enter the recipient's email in the "Manual Verification" section below, then try scanning again.</p>
-                        
-                        <div style="text-align: center; margin-top: 20px;">
-                            <button onclick="resumeScanning()" class="btn btn-primary" style="margin-right: 10px;">
-                                🔄 Resume Scanning
-                            </button>
-                            <button onclick="document.querySelector('#manualEmail').focus(); document.querySelector('.manual-entry').scrollIntoView({behavior: 'smooth'})" class="btn btn-secondary">
-                                📝 Enter Email Below
-                            </button>
-                        </div>
-                    </div>
-                `, 'warning');
-                
-                // Auto-resume scanning after 8 seconds
-                setTimeout(resumeScanning, 8000);
-            }
-        }
-        
-        // Resume scanning after processing - fixed to work reliably
-        function resumeScanning() {
-            console.log('🔄 Resuming scanning...');
-            
-            // Reset all detection state
-            resetDetectionState();
-            
-            // Ensure video is still available and playing
-            if (video && video.srcObject && !video.paused) {
-                scanning = true;
-                updateStatus('📱 Scanning for QR codes...', 'scanning');
-                
-                // Clear any existing result
-                document.getElementById('resultSection').style.display = 'none';
-                
-                // Restart the scanning loop
-                requestAnimationFrame(scanQRCode);
-                
-                console.log('✅ Scanning resumed successfully');
-            } else {
-                console.log('⚠️ Video not available, restarting scanner...');
-                // If video is not available, restart the entire scanner
-                stopScanner();
-                setTimeout(() => {
-                    document.getElementById('startBtn').click();
-                }, 500);
-            }
-        }
-        
-        // Verify using 6-digit code and email
-        function verifyByCode(verificationCode, email) {
-            console.log('Starting code verification for:', email, 'code:', verificationCode);
-            
-            fetch('/verify-coupon', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    verification_code: verificationCode,
-                    email: email
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                detectionState.processingQR = false;
-                
-                if (data.success) {
-                    console.log('Code verification successful:', data);
-                    
-                    updateStatus('VERIFIED', 'success');
-                    showVerificationModal({
-                        success: true,
-                        title: 'VERIFIED',
-                        message: 'Attendee admitted',
-                        details: {
-                            'Email': data.email,
-                            'Event': data.event_name || 'DCS Freshers Welcome 2026',
-                            'Code': verificationCode,
-                            'Verified': new Date().toLocaleString()
-                        },
-                        autoClose: true
-                    });
-                    
-                    // Auto-resume scanning after success (faster for rapid scanning)
-                    setTimeout(() => {
-                        if (!document.hasFocus || document.hasFocus()) {
-                            updateStatus('Ready for next scan...', 'scanning');
-                            resumeScanning();
-                        }
-                    }, 1500);
-                    
-                } else {
-                    console.log('Code verification failed:', data);
-                    updateStatus('FAILED', 'error');
-                    
-                    let errorTitle = 'FAILED';
-                    let errorMsg = data.error || 'Invalid code or email';
-                    if (data.error_code === 'ALREADY_USED') errorTitle = 'ALREADY USED';
-                    else if (data.error_code === 'EXPIRED') errorTitle = 'EXPIRED';
-                    else if (data.error_code === 'NOT_FOUND') errorTitle = 'NOT FOUND';
-                    
-                    showVerificationModal({
-                        success: false,
-                        title: errorTitle,
-                        message: errorMsg,
-                        details: {
-                            'Code Entered': verificationCode,
-                            'Email': email,
-                            'Time': new Date().toLocaleString()
-                        }
-                    });
-                    
-                    // Auto-resume after failure
-                    setTimeout(() => {
-                        updateStatus('Ready for next scan...', 'scanning');
-                        resumeScanning();
-                    }, 4000);
-                }
-            })
-            .catch(error => {
-                detectionState.processingQR = false;
-                console.error('Code verification error:', error);
-                console.error('Error details:', error.message, error.stack);
-                
-                updateStatus('❌ Error during verification', 'error');
-                
-                showResult(`
-                    <div style="background: rgba(239, 68, 68, 0.1); padding: 20px; border-radius: 12px; border: 1px solid rgba(239, 68, 68, 0.3);">
-                        <h3 style="color: #ef4444; margin-bottom: 15px;">❌ Verification Error</h3>
-                        <p><strong>There was an error processing the verification.</strong></p>
-                        <p>Error: ${error.message || 'Unknown error occurred'}</p>
-                        <p>Please try scanning again or use manual verification.</p>
-                        
-                        <div style="text-align: center; margin-top: 20px;">
-                            <button onclick="resumeScanning()" class="btn btn-primary">
-                                🔄 Try Again
-                            </button>
-                        </div>
-                    </div>
-                `, 'error');
-                
-                // Auto-resume scanning after error (give user time to see the error)
-                setTimeout(() => {
-                    updateStatus('🔄 Retrying scanner...', 'scanning');
-                    resumeScanning();
-                }, 4000);
-            });
-        }
-        
-        // Coupon verification with immediate scanning resume
-        async function verifyCoupon(encryptedData, email = null) {
-            try {
-                updateStatus('🔍 Verifying coupon...', 'info');
-                
-                const response = await fetch('/verify-coupon', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        encrypted_data: encryptedData,
-                        email: email
-                    })
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    updateStatus('VERIFIED', 'success');
-                    
-                    const foodPref = result.food_preference || 'Vegetarian';
-                    const foodColor = result.food_color || '#2d8a3e';
-                    const isNonVeg = foodPref.toLowerCase().includes('non');
-                    
-                    showVerificationModal({
-                        success: true,
-                        title: 'VERIFIED',
-                        message: 'Attendee admitted',
-                        foodPreference: foodPref,
-                        foodColor: foodColor,
-                        details: {
-                            'Coupon ID': result.coupon_id ? result.coupon_id.substring(0,8) + '...' : '-',
-                            'Email': result.email,
-                            'Meal': foodPref,
-                            'Event': result.event_name || 'DCS Freshers Welcome 2026',
-                            'Verified': new Date().toLocaleString()
-                        },
-                        autoClose: true
-                    });
-                    
-                    // Resume scanning after short delay
-                    setTimeout(() => {
-                        closeVerificationModal();
-                        resumeScanning();
-                    }, 2000);
-                    
-                } else {
-                    updateStatus('FAILED', 'error');
-                    
-                    let errorTitle = 'FAILED';
-                    let errorMsg = result.error || 'Coupon invalid';
-                    
-                    switch (result.error_code) {
-                        case 'ALREADY_USED':
-                            errorTitle = 'ALREADY USED';
-                            errorMsg = 'This coupon has already been redeemed.';
-                            break;
-                        case 'EXPIRED':
-                            errorTitle = 'EXPIRED';
-                            errorMsg = 'This coupon has expired.';
-                            break;
-                        case 'NOT_FOUND':
-                            errorTitle = 'NOT FOUND';
-                            errorMsg = 'Coupon not found in database.';
-                            break;
-                        case 'RATE_LIMITED':
-                            errorTitle = 'SLOW DOWN';
-                            errorMsg = 'Too many attempts. Please wait a moment.';
-                            break;
-                        default:
-                            errorMsg = result.error;
-                    }
-                    
-                    showVerificationModal({
-                        success: false,
-                        title: errorTitle,
-                        message: errorMsg,
-                        details: {
-                            'Email': result.email || email || 'unknown',
-                            'Error Code': result.error_code || 'UNKNOWN'
-                        }
-                    });
-                    
-                    setTimeout(() => {
-                        resumeScanning();
-                    }, 3000);
-                }
-                
-            } catch (error) {
-                console.error('Error verifying coupon:', error);
-                updateStatus('NETWORK ERROR', 'error');
-                showVerificationModal({
-                    success: false,
-                    title: 'NETWORK ERROR',
-                    message: 'Could not connect to server. Check the connection and try again.',
-                    details: {'Time': new Date().toLocaleString()}
-                });
-                
-                // Resume scanning after brief pause
-                setTimeout(() => {
-                    resumeScanning();
-                }, 1500);
-            }
-        }
-        
-        // Show verification result modal with auto-close option
-        function showVerificationModal(result) {
-            const modal = document.getElementById('verificationModal');
-            const content = document.getElementById('verificationContent');
-            
-            if (result.success) {
-                const fc = result.foodColor || '#10b981';
-                const fp = result.foodPreference || 'Vegetarian';
-                const detailsHtml = result.details ? Object.entries(result.details).map(([key, value]) => 
-                    `<div style="display: flex; justify-content: space-between; margin-bottom: 8px; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.08); font-size: 1rem;">
-                        <span style="color: #a1a1aa;">${key}:</span>
-                        <span style="color: #fff; font-weight: 600;${key === 'Meal' ? ' color:' + fc : ''}">${value}</span>
-                    </div>`
-                ).join('') : '';
+  </div>
+</div>
 
-                content.innerHTML = `
-                    <div style="text-align: center;">
-                        <div style="width: 100px; height: 100px; background: ${fc}22; border-radius: 50%; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center; border: 4px solid ${fc};">
-                            <span style="font-size: 48px; color: ${fc}; font-weight: bold;">&#10003;</span>
-                        </div>
-                        <h2 style="color: ${fc}; margin-bottom: 8px; font-size: 32px; font-weight: 700;">VERIFIED</h2>
-                        <p style="color: #a1a1aa; font-size: 18px; margin-bottom: 6px;">${result.message || 'Attendee admitted'}</p>
-                        <div style="display:inline-block; padding:6px 16px; border-radius:20px; background:${fc}22; border:2px solid ${fc}; margin-bottom:20px;">
-                            <span style="color:${fc}; font-weight:700; font-size:16px;">${fp}</span>
-                        </div>
-                        
-                        <div style="background: ${fc}08; padding: 20px; border-radius: 12px; border: 1px solid ${fc}40; text-align: left; margin-bottom: 20px;">
-                            ${detailsHtml}
-                        </div>
-                        
-                        <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
-                            <button onclick="closeVerificationModal(); resumeScanning();" class="btn btn-primary" style="min-width: 140px; padding: 14px 28px; font-size: 16px; background: ${fc}; border: none; border-radius: 10px; color: #fff; font-weight: 600; cursor: pointer;">
-                                Scan Next &rarr;
-                            </button>
-                        </div>
-                    </div>
-                `;
-                
-                if (result.autoClose) {
-                    setTimeout(() => {
-                        closeVerificationModal();
-                        resumeScanning();
-                    }, 3000);
-                }
-            } else {
-                const detailsHtml = result.details ? Object.entries(result.details).map(([key, value]) => 
-                    `<div style="display: flex; justify-content: space-between; margin-bottom: 8px; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.08); font-size: 1rem;">
-                        <span style="color: #a1a1aa;">${key}:</span>
-                        <span style="color: #fff; font-weight: 600;">${value}</span>
-                    </div>`
-                ).join('') : '';
+<div class="toast-mini" id="mini"></div>
 
-                content.innerHTML = `
-                    <div style="text-align: center;">
-                        <!-- Large red X -->
-                        <div style="width: 100px; height: 100px; background: rgba(239,68,68,0.15); border-radius: 50%; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center; border: 4px solid #ef4444;">
-                            <span style="font-size: 48px; color: #ef4444; font-weight: bold;">&#10007;</span>
-                        </div>
-                        <h2 style="color: #ef4444; margin-bottom: 8px; font-size: 28px; font-weight: 700;">${result.title || 'FAILED'}</h2>
-                        <p style="color: #a1a1aa; font-size: 16px; margin-bottom: 24px;">${result.message || 'Verification failed'}</p>
-                        
-                        <div style="background: rgba(239,68,68,0.08); padding: 20px; border-radius: 12px; border: 1px solid rgba(239,68,68,0.25); text-align: left; margin-bottom: 20px;">
-                            ${detailsHtml}
-                        </div>
-                        
-                        <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
-                            <button onclick="closeVerificationModal(); resumeScanning();" class="btn btn-primary" style="min-width: 140px; padding: 14px 28px; font-size: 16px; background: #ef4444; border: none; border-radius: 10px; color: #fff; font-weight: 600; cursor: pointer;">
-                                Try Again &rarr;
-                            </button>
-                        </div>
-                    </div>
-                `;
-            }
-            
-            modal.style.display = 'flex';
-        }
-        
-        // Close verification modal
-        function closeVerificationModal() {
-            const modal = document.getElementById('verificationModal');
-            modal.style.display = 'none';
-            
-            // Remove keyboard listener
-            document.removeEventListener('keydown', handleVerificationModalKeys);
-        }
-        
-        // Handle keyboard shortcuts in verification modal
-        function handleVerificationModalKeys(event) {
-            if (event.key === 'Enter' || event.key === 'Escape') {
-                closeVerificationModal();
-                if (event.key === 'Enter') {
-                    resumeScanning();
-                }
-            }
-        }
-        
-        // Manual verification using 6-digit code
-        function verifyByCodeManual() {
-            const verificationCode = document.getElementById('verificationCode').value.trim();
-            const email = document.getElementById('codeEmail').value.trim();
-            
-            // Validate inputs
-            if (!verificationCode) {
-                showResult('❌ Please enter the 6-digit verification code.', 'error');
-                document.getElementById('verificationCode').focus();
-                return;
-            }
-            
-            if (!/^\d{6}$/.test(verificationCode)) {
-                showResult('❌ Verification code must be exactly 6 digits.', 'error');
-                document.getElementById('verificationCode').focus();
-                return;
-            }
-            
-            if (!email) {
-                showResult('❌ Please enter the recipient email address.', 'error');
-                document.getElementById('codeEmail').focus();
-                return;
-            }
-            
-            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-                showResult('❌ Please enter a valid email address.', 'error');
-                document.getElementById('codeEmail').focus();
-                return;
-            }
-            
-            // Clear the form for next use
-            document.getElementById('verificationCode').value = '';
-            document.getElementById('codeEmail').value = '';
-            
-            // Use the existing verifyByCode function
-            verifyByCode(verificationCode, email);
-        }
-        
-        // Manual verification
-        async function verifyManual() {
-            const email = document.getElementById('manualEmail').value.trim();
-            const manualData = document.getElementById('manualData').value.trim();
-            
-            if (!manualData) {
-                showResult('❌ Please enter the coupon data.', 'error');
-                return;
-            }
-            
-            try {
-                const couponInfo = JSON.parse(manualData);
-                if (couponInfo.email && couponInfo.data) {
-                    showResult(`📧 Email automatically extracted: ${couponInfo.email}`, 'info');
-                    await verifyCoupon(couponInfo.data, couponInfo.email);
-                    return;
-                }
-            } catch (e) {
-                // Not JSON, continue with old format
-            }
-            
-            if (!email) {
-                showResult('❌ Please enter both email address and encrypted coupon data.', 'error');
-                return;
-            }
-            
-            await verifyCoupon(manualData, email);
-        }
-        
-        // Enhanced camera help function with mobile-specific guidance
-        function showCameraHelp() {
-            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-            const isAndroid = /Android/i.test(navigator.userAgent);
-            
-            let helpContent = `
-                <div style="background: rgba(99, 102, 241, 0.1); padding: 20px; border-radius: 12px; border: 1px solid rgba(99, 102, 241, 0.3); margin: 20px 0;">
-                    <h3 style="color: var(--accent-primary); margin-bottom: 15px;">📱 Camera Permission Help</h3>
-                    
-                    <div style="text-align: left; margin: 15px 0;">
-            `;
-            
-            if (isIOS) {
-                helpContent += `
-                    <strong>🍎 For iPhone/iPad (Safari):</strong><br>
-                    1. When camera permission popup appears, tap "Allow"<br>
-                    2. If no popup appears:<br>
-                    &nbsp;&nbsp;&nbsp;• Settings > Safari > Camera > "Allow"<br>
-                    &nbsp;&nbsp;&nbsp;• Settings > Privacy & Security > Camera > Safari > "Allow"<br>
-                    3. Return to this page and refresh<br><br>
-                    
-                    <strong>🍎 For iPhone/iPad (Chrome):</strong><br>
-                    1. Tap the "aA" icon in the address bar<br>
-                    2. Select "Website Settings"<br>
-                    3. Tap "Camera" and select "Allow"<br>
-                    4. Refresh the page<br><br>
-                `;
-            } else if (isAndroid) {
-                helpContent += `
-                    <strong>🤖 For Android (Chrome):</strong><br>
-                    1. Look for camera icon (📷) in the address bar<br>
-                    2. Tap it and select "Allow"<br>
-                    3. If no icon: Tap the 3 dots menu > Settings > Site settings > Camera > Allow<br>
-                    4. Refresh this page<br><br>
-                    
-                    <strong>🤖 For Android (Firefox):</strong><br>
-                    1. Tap the shield or lock icon in address bar<br>
-                    2. Tap "Permissions" and enable camera<br>
-                    3. Refresh the page<br><br>
-                `;
-            } else if (isMobile) {
-                helpContent += `
-                    <strong>📱 For Mobile Browsers:</strong><br>
-                    1. Look for camera or permission icons in the address bar<br>
-                    2. Tap and allow camera access<br>
-                    3. Refresh this page<br><br>
-                `;
-            }
-            
-            helpContent += `
-                        <strong>🛡️ For Brave Browser:</strong><br>
-                        1. Look for the shield icon (🛡️) in the address bar<br>
-                        2. Tap it and toggle "Camera" to ON<br>
-                        3. Refresh this page<br><br>
-                        
-                        <strong>🔧 If still not working:</strong><br>
-                        1. Clear browser cache and cookies<br>
-                        2. Try using Chrome or Safari browsers<br>
-                        3. Make sure you're using HTTPS (secure connection)<br>
-                        4. Restart your browser completely<br>
-                        5. Check if camera works in your device's camera app<br>
-                        6. Try manual verification below as backup<br><br>
-                        
-                        <strong>⚠️ Common Issues:</strong><br>
-                        • Another app is using the camera<br>
-                        • Browser is outdated<br>
-                        • Device's camera privacy settings are too restrictive<br>
-                        • Using HTTP instead of HTTPS<br>
-                    </div>
-                    
-                    <div style="text-align: center; margin-top: 20px;">
-                        <button onclick="location.reload()" class="btn btn-primary" style="margin-right: 10px;">
-                            🔄 Refresh & Try Again
-                        </button>
-                        <button onclick="document.querySelector('.manual-entry').scrollIntoView({behavior: 'smooth'})" class="btn btn-secondary">
-                            📝 Use Manual Entry
-                        </button>
-                    </div>
-                </div>
-            `;
-            
-            showResult(helpContent, 'info');
-        }
-        
-        // Device registration functions
-        function showDeviceRegistration() {
-            const isPrivateIP = window.location.hostname.match(/^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|127\.0\.0\.1)/);
-            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-            
-            if (isPrivateIP || isMobile) {
-                document.getElementById('deviceRegistrationModal').style.display = 'block';
-                
-                const deviceNameInput = document.getElementById('deviceName');
-                if (isMobile) {
-                    deviceNameInput.value = `Mobile-Scanner-${Math.random().toString(36).substr(2, 4)}`;
-                } else {
-                    deviceNameInput.value = `Scanner-${Math.random().toString(36).substr(2, 4)}`;
-                }
-            }
-        }
-        
-        function registerDevice() {
-            const staffEmail = document.getElementById('staffEmail').value.trim();
-            const deviceName = document.getElementById('deviceName').value.trim();
-            const eventName = document.getElementById('eventName').value.trim();
-            
-            if (!staffEmail || !deviceName || !eventName) {
-                alert('Please fill in all fields to register your device.');
-                return;
-            }
-            
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(staffEmail)) {
-                alert('Please enter a valid email address.');
-                return;
-            }
-            
-            deviceInfo = {
-                staff_email: staffEmail,
-                device_name: deviceName,
-                event_name: eventName
-            };
-            
-            deviceRegistered = true;
-            document.getElementById('deviceRegistrationModal').style.display = 'none';
-            
-            showResult(`✅ Device registered successfully!<br><br>
-                <strong>Staff:</strong> ${staffEmail}<br>
-                <strong>Device:</strong> ${deviceName}<br>
-                <strong>Event:</strong> ${eventName}<br><br>
-                You can now use all scanner features with real-time synchronization.`, 'success');
-        }
-        
-        function skipRegistration() {
-            document.getElementById('deviceRegistrationModal').style.display = 'none';
-            showResult(`⚠️ Device registration skipped.<br><br>
-                You can still scan tickets, but real-time synchronization with other devices will not be available.<br><br>
-                To enable full features, refresh the page and complete registration.`, 'warning');
-        }
-        
-        // Enhanced mobile initialization with keyboard shortcuts
-        window.addEventListener('load', function() {
-            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-            const isSecure = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-            
-            // Check for HTTPS on mobile
-            if (isMobile && !isSecure) {
-                showResult(`
-                    <div style="background: rgba(239, 68, 68, 0.1); padding: 20px; border-radius: 12px; border: 1px solid rgba(239, 68, 68, 0.3);">
-                        <h3 style="color: #ef4444; margin-bottom: 15px;">🔒 HTTPS Required</h3>
-                        <p>Camera access on mobile devices requires a secure (HTTPS) connection.</p>
-                        <p style="margin-top: 15px;"><strong>Please use the HTTPS version of this site to enable camera scanning.</strong></p>
-                        
-                        <div style="text-align: center; margin-top: 20px;">
-                            <button onclick="window.location.href = window.location.href.replace('http:', 'https:')" class="btn btn-primary" style="margin-right: 10px;">
-                                🔒 Switch to HTTPS
-                            </button>
-                            <button onclick="document.querySelector('.manual-entry').scrollIntoView({behavior: 'smooth'})" class="btn btn-secondary">
-                                📝 Use Manual Entry
-                            </button>
-                        </div>
-                    </div>
-                `, 'error');
-                return;
-            }
-            
-            // Add keyboard shortcuts
-            document.addEventListener('keydown', function(event) {
-                // Spacebar for capture (when camera is active)
-                if (event.code === 'Space' && !document.getElementById('captureBtn').disabled) {
-                    event.preventDefault();
-                    captureAndScan();
-                }
-                
-                // Enter key for 6-digit code verification
-                if (event.code === 'Enter' && (
-                    document.activeElement === document.getElementById('verificationCode') ||
-                    document.activeElement === document.getElementById('codeEmail')
-                )) {
-                    event.preventDefault();
-                    verifyByCodeManual();
-                }
-                
-                // Enter key for manual QR data verification
-                if (event.code === 'Enter' && (
-                    document.activeElement === document.getElementById('manualData') ||
-                    document.activeElement === document.getElementById('manualEmail')
-                )) {
-                    event.preventDefault();
-                    verifyManual();
-                }
-                
-                // Auto-format verification code input
-                if (document.activeElement === document.getElementById('verificationCode')) {
-                    // Only allow digits
-                    if (event.key.length === 1 && !/\d/.test(event.key)) {
-                        event.preventDefault();
-                    }
-                }
-            });
-            
-            // Auto-format verification code input and handle auto-advance
-            document.getElementById('verificationCode').addEventListener('input', function(event) {
-                let value = event.target.value.replace(/\D/g, ''); // Remove non-digits
-                
-                // Limit to 6 digits
-                if (value.length > 6) {
-                    value = value.slice(0, 6);
-                }
-                
-                event.target.value = value;
-                
-                // Auto-advance to email field when 6 digits are entered
-                if (value.length === 6) {
-                    setTimeout(() => {
-                        document.getElementById('codeEmail').focus();
-                    }, 100);
-                }
-            });
-            
-            // Auto-submit when both verification code and email are filled
-            document.getElementById('codeEmail').addEventListener('input', function(event) {
-                const code = document.getElementById('verificationCode').value;
-                const email = event.target.value.trim();
-                
-                // Auto-submit if both fields are properly filled
-                if (code.length === 6 && email.includes('@') && email.includes('.')) {
-                    // Small delay to ensure the user finished typing
-                    setTimeout(() => {
-                        const currentCode = document.getElementById('verificationCode').value;
-                        const currentEmail = document.getElementById('codeEmail').value.trim();
-                        
-                        if (currentCode === code && currentEmail === email && currentCode.length === 6) {
-                            verifyByCodeManual();
-                        }
-                    }, 500);
-                }
-            });
-            
-            // Show device registration after a delay
-            setTimeout(showDeviceRegistration, 1000);
-        });
-        
-        // Add mobile-friendly touch events for capture
-        let touchStartTime = 0;
-        
-        document.addEventListener('touchstart', function(event) {
-            // Long press on video area for capture
-            if (event.target.id === 'video' && !document.getElementById('captureBtn').disabled) {
-                touchStartTime = Date.now();
-            }
-        });
-        
-        document.addEventListener('touchend', function(event) {
-            if (event.target.id === 'video' && !document.getElementById('captureBtn').disabled) {
-                const touchDuration = Date.now() - touchStartTime;
-                
-                // If long press (>500ms), trigger capture
-                if (touchDuration > 500) {
-                    event.preventDefault();
-                    captureAndScan();
-                    
-                    // Show feedback
-                    updateStatus('📸 Long press detected - Capturing...', 'info');
-                }
-            }
-            touchStartTime = 0;
-        });
-        
-        // Enhanced camera support check
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            updateStatus('Camera not supported on this device', 'error');
-            document.getElementById('startBtn').disabled = true;
-            
-            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-            const supportMessage = isMobile ? 
-                'Camera access is not supported on this browser. Please try Chrome, Safari, or Firefox.' :
-                'Camera access is not supported on this device.';
-                
-            showResult(`❌ ${supportMessage} Please use the manual verification option below.`, 'error');
-        }
-        
-        // Cleanup on page close
-        window.addEventListener('beforeunload', function() {
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-            }
-        });
-    </script>
+<script src="{{ url_for('static', filename='vendor/jsqr.js') }}"></script>
+<script>
+(() => {
+'use strict';
+
+const video   = document.getElementById('video');
+const canvas  = document.getElementById('canvas');
+const ctx     = canvas.getContext('2d', { willReadFrequently: true });
+const result  = document.getElementById('result');
+const sheet   = document.getElementById('sheet');
+const codeBox = document.getElementById('code-input');
+const reticle = document.getElementById('reticle');
+const hint    = document.getElementById('hint');
+
+let stream = null;
+let scanning = false;
+let busy = false;
+let lastPayload = '';
+let lastPayloadAt = 0;
+let lastCoupon = null;
+let detector = null;
+let wakeLock = null;
+let rafId = null;
+
+const scannerName = (() => {
+  // Names each phone so the scan log shows which gate admitted whom.
+  try {
+    let n = localStorage.getItem('scanner-name');
+    if (!n) { n = 'gate-' + Math.random().toString(36).slice(2, 6); localStorage.setItem('scanner-name', n); }
+    return n;
+  } catch { return 'gate'; }
+})();
+
+/* ------------------------------------------------------------- feedback */
+
+function mini(text, ms = 2200) {
+  const el = document.getElementById('mini');
+  el.textContent = text;
+  el.classList.add('show');
+  clearTimeout(mini._t);
+  mini._t = setTimeout(() => el.classList.remove('show'), ms);
+}
+
+function buzz(pattern) {
+  try { navigator.vibrate?.(pattern); } catch {}
+}
+
+// A short tone, synthesised rather than loaded, so there is no audio file to
+// fetch on a venue network and nothing to fail silently.
+let audioCtx = null;
+function beep(ok) {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.type = 'sine';
+    osc.frequency.value = ok ? 880 : 220;
+    gain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.22, audioCtx.currentTime + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + (ok ? 0.16 : 0.4));
+    osc.start();
+    osc.stop(audioCtx.currentTime + (ok ? 0.18 : 0.42));
+  } catch {}
+}
+
+/* ---------------------------------------------------------------- camera */
+
+async function startCamera() {
+  if (!window.isSecureContext && location.hostname !== 'localhost'
+      && location.hostname !== '127.0.0.1') {
+    document.getElementById('https-url').textContent =
+      location.href.replace(/^http:/, 'https:');
+    document.getElementById('pane-insecure').classList.add('show');
+    return;
+  }
+  if (!navigator.mediaDevices?.getUserMedia) {
+    document.getElementById('denied-detail').textContent =
+      'This browser does not support camera access. Try Chrome or Safari.';
+    document.getElementById('pane-denied').classList.add('show');
+    return;
+  }
+
+  // Ask for the rear camera at a resolution high enough to resolve small
+  // modules, but let the browser fall back rather than fail outright.
+  const attempts = [
+    { video: { facingMode: { exact: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } },
+    { video: { facingMode: 'environment', width: { ideal: 1280 } } },
+    { video: { facingMode: 'environment' } },
+    { video: true },
+  ];
+
+  for (const constraints of attempts) {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia(constraints);
+      break;
+    } catch (err) {
+      if (err.name === 'NotAllowedError' || err.name === 'SecurityError') {
+        document.getElementById('pane-denied').classList.add('show');
+        return;
+      }
+    }
+  }
+  if (!stream) {
+    document.getElementById('denied-detail').textContent =
+      'No camera could be opened. Another app may be using it.';
+    document.getElementById('pane-denied').classList.add('show');
+    return;
+  }
+
+  video.srcObject = stream;
+  await video.play().catch(() => {});
+  document.getElementById('pane-insecure').classList.remove('show');
+  document.getElementById('pane-denied').classList.remove('show');
+  document.getElementById('btn-camera').innerHTML =
+    '<svg><use href="#i-x"/></svg> Stop camera';
+
+  setupTorch();
+  await keepAwake();
+
+  if ('BarcodeDetector' in window) {
+    try {
+      const formats = await window.BarcodeDetector.getSupportedFormats();
+      if (formats.includes('qr_code')) {
+        detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+      }
+    } catch {}
+  }
+
+  scanning = true;
+  hint.textContent = 'Point the camera at the QR code';
+  tick();
+}
+
+function stopCamera() {
+  scanning = false;
+  cancelAnimationFrame(rafId);
+  stream?.getTracks().forEach((t) => t.stop());
+  stream = null;
+  video.srcObject = null;
+  document.getElementById('torch').hidden = true;
+  document.getElementById('btn-camera').innerHTML =
+    '<svg><use href="#i-camera"/></svg> Start camera';
+  releaseWake();
+}
+
+function setupTorch() {
+  const track = stream?.getVideoTracks()[0];
+  const caps = track?.getCapabilities?.();
+  if (!caps || !caps.torch) return;
+  const button = document.getElementById('torch');
+  button.hidden = false;
+  button.onclick = async () => {
+    const on = !button.classList.contains('on');
+    try {
+      await track.applyConstraints({ advanced: [{ torch: on }] });
+      button.classList.toggle('on', on);
+    } catch { mini('Torch not available'); }
+  };
+}
+
+async function keepAwake() {
+  try { wakeLock = await navigator.wakeLock?.request('screen'); } catch {}
+}
+function releaseWake() { try { wakeLock?.release(); } catch {} wakeLock = null; }
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && scanning && !wakeLock) keepAwake();
+});
+
+/* ------------------------------------------------------------- detection */
+
+async function tick() {
+  if (!scanning) return;
+  if (video.readyState === video.HAVE_ENOUGH_DATA && !busy) {
+    let payload = null;
+
+    if (detector) {
+      try {
+        const codes = await detector.detect(video);
+        if (codes.length) payload = codes[0].rawValue;
+      } catch { detector = null; }   // fall through to jsQR for good
+    }
+
+    if (!payload && window.jsQR) {
+      // Downscale before decoding: a 1280x720 frame is far more pixels than
+      // jsQR needs, and the cost is paid on every animation frame.
+      const scale = Math.min(1, 640 / (video.videoWidth || 640));
+      const w = Math.floor((video.videoWidth || 640) * scale);
+      const h = Math.floor((video.videoHeight || 480) * scale);
+      if (w && h) {
+        canvas.width = w; canvas.height = h;
+        ctx.drawImage(video, 0, 0, w, h);
+        const image = ctx.getImageData(0, 0, w, h);
+        const found = window.jsQR(image.data, w, h, { inversionAttempts: 'attemptBoth' });
+        if (found?.data) payload = found.data;
+      }
+    }
+
+    if (payload) handlePayload(payload);
+  }
+  rafId = requestAnimationFrame(tick);
+}
+
+function handlePayload(payload) {
+  const now = Date.now();
+  // The same code stays in frame for many frames after a scan. Ignore repeats
+  // for a few seconds so one person is not submitted a dozen times.
+  if (payload === lastPayload && now - lastPayloadAt < 4000) return;
+  lastPayload = payload;
+  lastPayloadAt = now;
+  submit(payload);
+}
+
+/* ---------------------------------------------------------------- submit */
+
+async function submit(payload) {
+  if (busy) return;
+  busy = true;
+  reticle.classList.add('busy');
+  hint.textContent = 'Checking…';
+
+  try {
+    const response = await fetch('/api/scan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ payload, scanner: scannerName }),
+    });
+    if (response.status === 401) { location.href = '/scan/unlock'; return; }
+    const data = await response.json();
+    show(data);
+  } catch {
+    show({ success: false, error: 'No connection to the server. Check the wifi.',
+           error_code: 'OFFLINE' });
+  } finally {
+    busy = false;
+    reticle.classList.remove('busy');
+    hint.textContent = 'Point the camera at the QR code';
+  }
+}
+
+function show(data) {
+  const ok = data.success;
+  lastCoupon = ok ? data.coupon_id : null;
+
+  const messages = {
+    ALREADY_USED: ['Already used', 'This pass has been scanned before'],
+    NOT_FOUND:    ['Not recognised', 'No coupon matches this code'],
+    REVOKED:      ['Revoked', 'This pass was cancelled'],
+    UNREADABLE:   ['Not a coupon', 'That QR code is not from this event'],
+    RATE_LIMITED: ['Slow down', 'Too many scans in a moment — try again'],
+    OFFLINE:      ['No connection', 'Cannot reach the server'],
+  };
+  const [title, sub] = ok
+    ? ['Welcome in', 'Checked in just now']
+    : (messages[data.error_code] || ['Not valid', data.error || '']);
+
+  const veg = data.food_preference !== 'Non-Vegetarian';
+  const parts = [];
+
+  parts.push(`<div class="result-head">
+    <div class="result-mark"><svg><use href="#i-${ok ? 'check' : 'x'}"/></svg></div>
+    <div><div class="result-title">${esc(title)}</div>
+         <div class="result-sub">${esc(sub)}</div></div>
+  </div>`);
+
+  if (data.name || data.email) {
+    parts.push(`<div class="guest">
+      <div class="guest-name">${esc(data.name || '')}</div>
+      <div class="guest-email">${esc(data.email || '')}</div>
+    </div>`);
+  }
+
+  // Only show the meal badge on a successful entry: showing it on a rejected
+  // scan invites a volunteer to serve someone who has already eaten.
+  if (ok && data.food_preference) {
+    parts.push(`<div class="meal ${veg ? 'veg' : 'nonveg'}">${esc(data.food_preference)}</div>`);
+  }
+
+  if (!ok && data.used_at) {
+    parts.push(`<div class="guest"><div class="result-sub">
+      First scanned ${esc(new Date(data.used_at).toLocaleString())}</div></div>`);
+  }
+
+  parts.push(`<div class="result-actions">
+    ${ok ? '<button id="undo">Undo</button>' : ''}
+    <button class="primary" id="next">Next guest</button>
+  </div>`);
+
+  result.className = `result show ${ok ? 'ok' : 'bad'}`;
+  result.innerHTML = parts.join('');
+
+  document.getElementById('next').onclick = dismiss;
+  const undo = document.getElementById('undo');
+  if (undo) undo.onclick = undoLast;
+
+  beep(ok);
+  buzz(ok ? 40 : [70, 60, 70]);
+  if (ok) document.getElementById('count-used').textContent =
+    data.progress ? data.progress.used : '—';
+
+  clearTimeout(show._t);
+  // Successful scans clear themselves so a queue keeps moving; failures stay
+  // up until dismissed, because somebody has to deal with them.
+  if (ok) show._t = setTimeout(dismiss, 3200);
+}
+
+function dismiss() {
+  result.classList.remove('show');
+  lastPayload = '';
+}
+
+async function undoLast() {
+  if (!lastCoupon) return;
+  try {
+    const r = await fetch('/api/scan/undo', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ coupon_id: lastCoupon, scanner: scannerName }),
+    }).then((x) => x.json());
+    mini(r.success ? 'Check-in reverted' : (r.error || 'Could not undo'));
+    if (r.success) refreshCount();
+  } catch { mini('Could not undo'); }
+  dismiss();
+}
+
+function esc(v) {
+  return String(v ?? '').replace(/[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+/* ----------------------------------------------------------- manual entry */
+
+document.getElementById('btn-manual').onclick = () => {
+  sheet.classList.add('show');
+  codeBox.value = '';
+  document.getElementById('sheet-go').disabled = true;
+  setTimeout(() => codeBox.focus(), 60);
+};
+document.getElementById('sheet-cancel').onclick = () => sheet.classList.remove('show');
+sheet.onclick = (e) => { if (e.target === sheet) sheet.classList.remove('show'); };
+
+codeBox.oninput = () => {
+  codeBox.value = codeBox.value.replace(/\D/g, '').slice(0, 6);
+  const ready = codeBox.value.length === 6;
+  document.getElementById('sheet-go').disabled = !ready;
+  if (ready) submitManual();          // submit as soon as the sixth digit lands
+};
+codeBox.onkeydown = (e) => { if (e.key === 'Enter') submitManual(); };
+document.getElementById('sheet-go').onclick = submitManual;
+
+function submitManual() {
+  const code = codeBox.value.trim();
+  if (code.length !== 6) return;
+  sheet.classList.remove('show');
+  codeBox.blur();
+  submit(code);
+}
+
+document.getElementById('btn-camera').onclick = () => {
+  if (stream) stopCamera(); else startCamera();
+};
+
+async function refreshCount() {
+  try {
+    const d = await fetch('/api/scan/recent').then((r) => r.json());
+    if (d.success) document.getElementById('count-used').textContent = d.stats.used;
+  } catch {}
+}
+
+refreshCount();
+setInterval(refreshCount, 30000);
+
+// Autostart only where it can actually work; elsewhere the explanatory pane is
+// more useful than a permission prompt that is going to fail.
+if (window.isSecureContext || location.hostname === 'localhost'
+    || location.hostname === '127.0.0.1') {
+  startCamera();
+} else {
+  document.getElementById('https-url').textContent =
+    location.href.replace(/^http:/, 'https:');
+  document.getElementById('pane-insecure').classList.add('show');
+}
+})();
+</script>
 </body>
 </html>

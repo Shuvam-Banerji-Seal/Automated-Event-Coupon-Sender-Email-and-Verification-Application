@@ -1,0 +1,265 @@
+{% extends "console/base.html" %}
+{% block title %}Settings{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <h1>Settings</h1>
+  <p>Event details available to every template, and the mail accounts used to
+     send.</p>
+</div>
+
+<div class="grid split">
+  <div>
+    <div class="card">
+      <div class="card-head"><h2>Event</h2>
+        <span class="sub">Available in templates as variables</span></div>
+      <div class="card-body">
+        <div class="field">
+          <label for="event_name">Event name <code class="muted">{% raw %}{{ event_name }}{% endraw %}</code></label>
+          <input type="text" id="event_name" value="{{ settings.event_name }}">
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="event_date">Date <code class="muted">{% raw %}{{ event_date }}{% endraw %}</code></label>
+            <input type="text" id="event_date" value="{{ settings.event_date }}">
+          </div>
+          <div class="field">
+            <label for="event_time">Time <code class="muted">{% raw %}{{ event_time }}{% endraw %}</code></label>
+            <input type="text" id="event_time" value="{{ settings.event_time }}">
+          </div>
+        </div>
+        <div class="field">
+          <label for="event_venue">Venue <code class="muted">{% raw %}{{ event_venue }}{% endraw %}</code></label>
+          <input type="text" id="event_venue" value="{{ settings.event_venue }}">
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="organizer_batch">Organising group <code class="muted">{% raw %}{{ organizer_batch }}{% endraw %}</code></label>
+            <input type="text" id="organizer_batch" value="{{ settings.organizer_batch }}">
+          </div>
+          <div class="field">
+            <label for="organizer_institution">Institution</label>
+            <input type="text" id="organizer_institution" value="{{ settings.organizer_institution }}">
+          </div>
+        </div>
+      </div>
+      <div class="card-foot">
+        <button class="btn primary" id="save-event">
+          <svg><use href="#i-check"/></svg> Save event details
+        </button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Access</h2></div>
+      <div class="card-body stack">
+        <div class="notice info">
+          <svg><use href="#i-info"/></svg>
+          <div><strong>This console</strong><span class="small">
+            Reachable only from this machine ({{ server_ip }}). Other devices on
+            the network are redirected to the scanner.</span></div>
+        </div>
+        {% if scanner_locked %}
+        <div class="notice ok">
+          <svg><use href="#i-check-circle"/></svg>
+          <div><strong>Scanner is PIN protected</strong><span class="small">
+            Volunteers enter the PIN once per device.</span></div>
+        </div>
+        {% else %}
+        <div class="notice warn">
+          <svg><use href="#i-alert"/></svg>
+          <div><strong>Scanner is open</strong><span class="small">
+            Anyone who can reach this machine on the network can redeem coupons.
+            Set <code>SCANNER_PIN</code> in your <code>.env</code> and restart to
+            require a PIN.</span></div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>End of event</h2></div>
+      <div class="card-body">
+        <p class="small muted">Clears coupons, scans and send history so the
+           system is ready for the next event. Everything is exported to CSV
+           first — nothing is lost.</p>
+        <label class="check mb-2">
+          <input type="checkbox" id="keep-recipients">
+          <span>Keep the recipient list<span class="hint">Useful if the same people attend again</span></span>
+        </label>
+        <button class="btn danger" id="reset-event">
+          <svg><use href="#i-trash"/></svg> Archive and reset
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="card">
+      <div class="card-head">
+        <h2>Mail accounts</h2>
+        <span class="spacer"></span>
+        <button class="btn sm" id="add-account"><svg><use href="#i-plus"/></svg> Add</button>
+      </div>
+      <div class="card-body">
+        <div class="notice info mb-2">
+          <svg><use href="#i-info"/></svg>
+          <div><strong>Use an app password</strong><span class="small">
+            Gmail requires one — your normal password will not work. Generate it
+            at myaccount.google.com under App passwords. Accounts are used in
+            order, rotating when one hits its daily limit.</span></div>
+        </div>
+        <div id="accounts" class="stack"></div>
+      </div>
+      <div class="card-foot">
+        <button class="btn primary" id="save-accounts">
+          <svg><use href="#i-check"/></svg> Save accounts
+        </button>
+        <span class="muted small" id="capacity"></span>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let accounts = [];
+
+async function loadAccounts() {
+  const d = await api('/api/smtp');
+  accounts = d.accounts || [];
+  renderAccounts();
+}
+
+function renderAccounts() {
+  const host = document.getElementById('accounts');
+  if (!accounts.length) {
+    host.innerHTML = `<div class="empty" style="padding:28px">
+      <svg><use href="#i-mail"/></svg>
+      <h3>No accounts yet</h3><p>Add one to be able to send.</p></div>`;
+  } else {
+    host.innerHTML = accounts.map((a, i) => `
+      <div class="card" style="box-shadow:none">
+        <div class="card-body">
+          <div class="row between mb-1">
+            <strong class="mono small truncate">${escapeHtml(a.username || 'new account')}</strong>
+            <div class="row">
+              ${a.sent_today != null ? `<span class="badge">${fmtNumber(a.sent_today)}/${fmtNumber(a.daily_limit)} today</span>` : ''}
+              <button class="btn sm ghost" data-test="${i}">Test</button>
+              <button class="btn sm ghost danger" data-remove="${i}" aria-label="Remove">
+                <svg><use href="#i-trash"/></svg></button>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field"><label>Address</label>
+              <input type="email" data-field="username" data-i="${i}" value="${escapeHtml(a.username || '')}"></div>
+            <div class="field"><label>App password</label>
+              <input type="password" data-field="password" data-i="${i}"
+                     value="${a.has_password ? '********' : ''}" placeholder="16 characters"></div>
+          </div>
+          <div class="field-row">
+            <div class="field"><label>Shown as</label>
+              <input type="text" data-field="sender_name" data-i="${i}"
+                     value="${escapeHtml(a.sender_name || '')}" placeholder="Organising Team"></div>
+            <div class="field"><label>Daily limit</label>
+              <input type="number" data-field="daily_limit" data-i="${i}"
+                     value="${a.daily_limit || 450}" min="1" max="2000"></div>
+          </div>
+          <div class="field-row">
+            <div class="field"><label>Server</label>
+              <input type="text" data-field="host" data-i="${i}" value="${escapeHtml(a.host || 'smtp.gmail.com')}"></div>
+            <div class="field"><label>Port</label>
+              <input type="number" data-field="port" data-i="${i}" value="${a.port || 587}"></div>
+          </div>
+          <label class="check">
+            <input type="checkbox" data-field="enabled" data-i="${i}" ${a.enabled !== false ? 'checked' : ''}>
+            <span>Use this account</span>
+          </label>
+        </div>
+      </div>`).join('');
+  }
+
+  host.querySelectorAll('[data-field]').forEach((input) => {
+    input.onchange = () => {
+      const a = accounts[Number(input.dataset.i)];
+      a[input.dataset.field] = input.type === 'checkbox' ? input.checked
+        : input.type === 'number' ? Number(input.value) : input.value;
+    };
+  });
+  host.querySelectorAll('[data-remove]').forEach((b) => {
+    b.onclick = () => { accounts.splice(Number(b.dataset.remove), 1); renderAccounts(); };
+  });
+  host.querySelectorAll('[data-test]').forEach((b) => {
+    b.onclick = async () => {
+      const a = accounts[Number(b.dataset.test)];
+      setBusy(b, true, 'Testing…');
+      try {
+        const r = await api('/api/smtp/test', { method: 'POST', body: a });
+        if (r.success) toast(`${r.message} (${r.elapsed_ms} ms)`);
+        else toast(r.error, 'error', 11000);
+      } catch (e) { toast(e.message, 'error'); }
+      finally { setBusy(b, false); }
+    };
+  });
+
+  const total = accounts.filter((a) => a.enabled !== false)
+    .reduce((n, a) => n + Math.max(0, (a.daily_limit || 0) - (a.sent_today || 0)), 0);
+  document.getElementById('capacity').textContent =
+    accounts.length ? `${fmtNumber(total)} sends available today` : '';
+}
+
+document.getElementById('add-account').onclick = () => {
+  accounts.push({ username: '', password: '', host: 'smtp.gmail.com', port: 587,
+                  use_tls: true, sender_name: '', daily_limit: 450, enabled: true });
+  renderAccounts();
+};
+
+document.getElementById('save-accounts').onclick = async (e) => {
+  setBusy(e.currentTarget, true, 'Saving…');
+  try {
+    await api('/api/smtp', { method: 'POST', body: { accounts } });
+    toast('Mail accounts saved');
+    loadAccounts();
+  } catch (err) { toast(err.message, 'error'); }
+  finally { setBusy(e.currentTarget, false); }
+};
+
+document.getElementById('save-event').onclick = async (e) => {
+  const body = {};
+  ['event_name', 'event_date', 'event_time', 'event_venue',
+   'organizer_batch', 'organizer_institution'].forEach((k) => {
+    body[k] = document.getElementById(k).value;
+  });
+  setBusy(e.currentTarget, true, 'Saving…');
+  try {
+    await api('/api/settings', { method: 'POST', body });
+    toast('Event details saved');
+  } catch (err) { toast(err.message, 'error'); }
+  finally { setBusy(e.currentTarget, false); }
+};
+
+document.getElementById('reset-event').onclick = async () => {
+  const ok = await confirmDialog({
+    title: 'Archive and reset this event?',
+    body: '<p>Coupons, the scan log and send history will be cleared. Everything ' +
+          'is exported to <code>exports/</code> first.</p>' +
+          '<p class="mb-0"><strong>Any coupon already emailed will stop working.</strong> ' +
+          'Only do this once the event is over.</p>',
+    confirmLabel: 'Archive and reset', danger: true,
+  });
+  if (!ok) return;
+  try {
+    const d = await api('/api/event/reset', {
+      method: 'POST',
+      body: { confirm: 'RESET',
+              keep_recipients: document.getElementById('keep-recipients').checked },
+    });
+    toast(`Reset — archived to ${d.archived_to}`, 'ok', 10000);
+    setTimeout(() => location.reload(), 1500);
+  } catch (e) { toast(e.message, 'error'); }
+};
+
+loadAccounts();
+</script>
+{% endblock %}

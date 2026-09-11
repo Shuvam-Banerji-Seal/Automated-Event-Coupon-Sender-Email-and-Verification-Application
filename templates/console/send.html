@@ -1,0 +1,346 @@
+{% extends "console/base.html" %}
+{% block title %}Send{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <h1>Send</h1>
+  <p>Issue coupons and email them. Coupons are created only for people who do
+     not already have one, so running this twice never invalidates a code
+     already sitting in somebody's inbox.</p>
+</div>
+
+<div id="preflight" class="stack mb-2"></div>
+
+<div class="grid split">
+  <div class="card">
+    <div class="card-head"><h2>What to send</h2></div>
+    <div class="card-body">
+      <div class="field">
+        <label for="template">Template</label>
+        <select id="template"></select>
+        <div class="hint" id="template-hint"></div>
+      </div>
+
+      <div class="field">
+        <label>Who gets it</label>
+        <div class="stack">
+          <label class="check">
+            <input type="radio" name="audience" value="pending" checked>
+            <span>Everyone without a coupon
+              <span class="hint" id="pending-hint"></span></span>
+          </label>
+          <label class="check">
+            <input type="radio" name="audience" value="selected">
+            <span>Only addresses I list
+              <span class="hint">One per line, below</span></span>
+          </label>
+          <label class="check">
+            <input type="radio" name="audience" value="resend">
+            <span>Re-send to people who already have a coupon
+              <span class="hint">Same code as before — for delivery failures</span></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="field hidden" id="selected-field">
+        <label for="selected-emails">Addresses</label>
+        <textarea id="selected-emails" rows="5"
+                  placeholder="ada@iiserkol.ac.in&#10;grace@iiserkol.ac.in"></textarea>
+        <div class="hint" id="selected-count"></div>
+      </div>
+
+      <div class="field">
+        <label for="attachment">Attachment <span class="muted">(optional)</span></label>
+        <input type="file" id="attachment">
+        <div class="hint" id="attachment-hint">A schedule or map, sent to everyone.</div>
+      </div>
+
+      <div class="field">
+        <label for="throttle">Pace</label>
+        <select id="throttle">
+          <option value="0.4">Fast — 0.4 s between messages</option>
+          <option value="0.8" selected>Normal — 0.8 s (recommended)</option>
+          <option value="1.5">Slow — 1.5 s</option>
+          <option value="3">Very slow — 3 s</option>
+        </select>
+        <div class="hint">Slower pacing reduces the chance a provider throttles
+          the account mid-run.</div>
+      </div>
+    </div>
+    <div class="card-foot">
+      <button class="btn primary lg" id="start">
+        <svg><use href="#i-send"/></svg> Start sending
+      </button>
+      <span class="muted small" id="start-summary"></span>
+    </div>
+  </div>
+
+  <div>
+    <div class="card" id="progress-card">
+      <div class="card-head">
+        <h2>Progress</h2>
+        <span class="sub" id="job-state"></span>
+        <span class="spacer"></span>
+        <button class="btn sm danger hidden" id="stop">
+          <svg><use href="#i-stop"/></svg> Stop
+        </button>
+      </div>
+      <div class="card-body" id="progress-body">
+        <div class="empty" style="padding:34px">
+          <svg><use href="#i-send"/></svg>
+          <h3>Nothing sending</h3>
+          <p>Start a run and watch it here.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Mail accounts</h2>
+        <a class="btn sm ghost" href="{{ url_for('settings_page') }}">Manage</a>
+      </div>
+      <div class="card-body" id="accounts"></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let pollTimer = null;
+let overview = null;
+
+async function load() {
+  overview = await api('/api/overview');
+
+  const select = document.getElementById('template');
+  select.innerHTML = overview.templates.length
+    ? overview.templates.map((t) => `<option value="${escapeHtml(t.name)}">${escapeHtml(t.name)}</option>`).join('')
+    : '<option value="">No templates</option>';
+  updateTemplateHint();
+
+  document.getElementById('pending-hint').textContent =
+    `${fmtNumber(overview.stats.pending)} recipients have no coupon yet`;
+
+  renderPreflight();
+  renderAccounts();
+  updateSummary();
+}
+
+function updateTemplateHint() {
+  const t = overview.templates.find((x) => x.name === document.getElementById('template').value);
+  document.getElementById('template-hint').textContent = t
+    ? `Subject: ${t.subject || '(none)'}`
+    : 'Write a template in Compose first.';
+}
+document.getElementById('template').onchange = updateTemplateHint;
+
+function renderPreflight() {
+  const problems = [];
+  if (!overview.smtp.configured) {
+    problems.push(['danger', 'No mail account configured',
+      'Add one in Settings — nothing can be sent until you do.']);
+  } else if (overview.smtp.total_remaining <= 0) {
+    problems.push(['danger', 'No sending capacity left today',
+      'Every account has hit its daily limit. Limits reset at midnight.']);
+  } else if (overview.smtp.total_remaining < overview.stats.pending) {
+    problems.push(['warn', 'Not enough capacity for everyone',
+      `${fmtNumber(overview.smtp.total_remaining)} sends left today but ` +
+      `${fmtNumber(overview.stats.pending)} people are waiting. The run will stop ` +
+      'when accounts run out; restart it tomorrow to finish.']);
+  }
+  if (!overview.templates.length) {
+    problems.push(['danger', 'No template', 'Write one in Compose first.']);
+  }
+  if (!overview.stats.recipients) {
+    problems.push(['warn', 'No recipients', 'Upload a CSV first.']);
+  }
+  document.getElementById('preflight').innerHTML = problems.map(([k, t, b]) => `
+    <div class="notice ${k}"><svg><use href="#i-alert"/></svg>
+      <div><strong>${escapeHtml(t)}</strong><span class="small">${escapeHtml(b)}</span></div>
+    </div>`).join('');
+}
+
+function renderAccounts() {
+  const rows = overview.smtp.accounts || [];
+  document.getElementById('accounts').innerHTML = rows.length ? rows.map((a) => {
+    const pct = a.daily_limit ? (a.sent_today / a.daily_limit * 100) : 0;
+    return `<div class="mb-2">
+      <div class="row between small">
+        <span class="truncate mono" style="max-width:190px">${escapeHtml(a.username)}</span>
+        <span class="tnum muted">${fmtNumber(a.remaining)} left</span>
+      </div>
+      <div class="meter"><span style="width:${pct}%"></span></div>
+      <div class="small muted">${fmtNumber(a.sent_today)} of ${fmtNumber(a.daily_limit)} used today
+        ${a.enabled ? '' : ' · <span class="badge">disabled</span>'}</div>
+    </div>`;
+  }).join('') : '<p class="muted small mb-0">No accounts configured.</p>';
+}
+
+/* ---------------------------------------------------------------- audience */
+
+document.querySelectorAll('input[name="audience"]').forEach((radio) => {
+  radio.onchange = () => {
+    const needsList = radio.value !== 'pending' && radio.checked;
+    document.getElementById('selected-field').classList.toggle('hidden', !needsList);
+    updateSummary();
+  };
+});
+
+document.getElementById('selected-emails').oninput = debounce(() => {
+  const n = parsedEmails().length;
+  document.getElementById('selected-count').textContent =
+    n ? `${fmtNumber(n)} addresses` : 'One address per line';
+  updateSummary();
+}, 150);
+
+function parsedEmails() {
+  return document.getElementById('selected-emails').value
+    .split(/[\s,;]+/).map((s) => s.trim().toLowerCase())
+    .filter((s) => s.includes('@'));
+}
+
+function audience() {
+  return document.querySelector('input[name="audience"]:checked').value;
+}
+
+function updateSummary() {
+  const mode = audience();
+  let text = '';
+  if (mode === 'pending') text = `${fmtNumber(overview?.stats.pending || 0)} recipients`;
+  else text = `${fmtNumber(parsedEmails().length)} addresses`;
+  document.getElementById('start-summary').textContent = text;
+}
+
+/* ------------------------------------------------------------- attachments */
+
+let attachmentPath = null;
+document.getElementById('attachment').onchange = async (e) => {
+  const file = e.target.files[0];
+  if (!file) { attachmentPath = null; return; }
+  const form = new FormData();
+  form.append('file', file);
+  try {
+    const d = await api('/api/send/attachment', { method: 'POST', body: form });
+    attachmentPath = d.path;
+    document.getElementById('attachment-hint').textContent =
+      `${d.name} attached (${(d.size / 1024).toFixed(0)} KB)`;
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+};
+
+/* -------------------------------------------------------------- run control */
+
+document.getElementById('start').onclick = async (e) => {
+  const mode = audience();
+  const count = mode === 'pending' ? overview.stats.pending : parsedEmails().length;
+  if (!count) { toast('Nobody to send to', 'warn'); return; }
+
+  const ok = await confirmDialog({
+    title: `Send to ${fmtNumber(count)} ${count === 1 ? 'person' : 'people'}?`,
+    body: `<p>This sends real email using template
+           <strong>${escapeHtml(document.getElementById('template').value)}</strong>.</p>
+           <p class="muted small mb-0">You can stop the run at any point, but
+           messages already delivered cannot be recalled.</p>`,
+    confirmLabel: `Send to ${fmtNumber(count)}`,
+  });
+  if (!ok) return;
+
+  setBusy(e.currentTarget, true, 'Starting…');
+  try {
+    const d = await api('/api/send/start', {
+      method: 'POST',
+      body: {
+        template: document.getElementById('template').value,
+        audience: mode,
+        emails: parsedEmails(),
+        attachments: attachmentPath ? [attachmentPath] : [],
+        throttle: Number(document.getElementById('throttle').value),
+      },
+    });
+    toast(`Sending to ${fmtNumber(d.total)} recipients`);
+    poll(d.job_id);
+  } catch (err) {
+    toast(err.message, 'error', 9000);
+  } finally {
+    setBusy(e.currentTarget, false);
+  }
+};
+
+let currentJob = null;
+document.getElementById('stop').onclick = async () => {
+  if (!currentJob) return;
+  await api(`/api/send/stop/${currentJob}`, { method: 'POST' });
+  toast('Stopping after the current message…', 'warn');
+};
+
+function poll(jobId) {
+  currentJob = jobId;
+  document.getElementById('stop').classList.remove('hidden');
+  clearInterval(pollTimer);
+  const tick = async () => {
+    try {
+      const d = await api(`/api/send/status/${jobId}`);
+      renderProgress(d.job);
+      if (d.job.done) {
+        clearInterval(pollTimer);
+        document.getElementById('stop').classList.add('hidden');
+        currentJob = null;
+        toast(d.job.cancelled
+          ? `Stopped — ${fmtNumber(d.job.sent)} sent`
+          : `Finished — ${fmtNumber(d.job.sent)} sent, ${fmtNumber(d.job.failed)} failed`,
+          d.job.failed ? 'warn' : 'ok', 9000);
+        load();
+      }
+    } catch (err) {
+      clearInterval(pollTimer);
+      toast(err.message, 'error');
+    }
+  };
+  tick();
+  pollTimer = setInterval(tick, 1200);
+}
+
+function renderProgress(job) {
+  const pct = job.total ? (job.processed / job.total * 100) : 0;
+  document.getElementById('job-state').textContent = job.done
+    ? (job.cancelled ? 'stopped' : 'finished') : 'running';
+
+  document.getElementById('progress-body').innerHTML = `
+    <div class="row between mb-1">
+      <span class="tnum" style="font-size:1.5rem;font-weight:640">
+        ${fmtNumber(job.processed)}<span class="muted" style="font-size:1rem"> / ${fmtNumber(job.total)}</span>
+      </span>
+      <span class="badge ${job.done ? (job.failed ? 'warn' : 'ok') : 'accent'}">
+        ${job.done ? (job.cancelled ? 'Stopped' : 'Done') : 'Sending'}
+      </span>
+    </div>
+    <div class="meter"><span style="width:${pct}%"></span></div>
+    <div class="grid cols-3 mt-2">
+      <div><div class="stat-label">Sent</div><div class="tnum" style="font-size:1.2rem;color:var(--ok)">${fmtNumber(job.sent)}</div></div>
+      <div><div class="stat-label">Failed</div><div class="tnum" style="font-size:1.2rem;color:${job.failed ? 'var(--danger)' : 'inherit'}">${fmtNumber(job.failed)}</div></div>
+      <div><div class="stat-label">Remaining</div><div class="tnum" style="font-size:1.2rem">${job.eta_seconds != null ? escapeHtml(fmtDuration(job.eta_seconds)) : '—'}</div></div>
+    </div>
+    <div class="small muted mt-2">
+      ${escapeHtml(fmtDuration(job.elapsed_seconds))} elapsed · ${job.rate_per_minute}/min
+      ${job.current ? ' · sending to ' + escapeHtml(job.current) : ''}
+    </div>
+    ${job.error ? `<div class="notice danger mt-2"><svg><use href="#i-alert"/></svg>
+       <div>${escapeHtml(job.error)}</div></div>` : ''}
+    ${job.failures.length ? `
+      <details class="mt-2"><summary class="small muted" style="cursor:pointer">
+        ${fmtNumber(job.failures.length)} failures — show</summary>
+        <div class="table-wrap mt-1" style="max-height:200px;overflow-y:auto">
+          <table class="data"><tbody>
+            ${job.failures.map((f) => `<tr>
+              <td class="mono small">${escapeHtml(f.email)}</td>
+              <td class="small muted">${escapeHtml((f.error || '').slice(0, 90))}</td>
+            </tr>`).join('')}
+          </tbody></table>
+        </div>
+      </details>` : ''}`;
+}
+
+load();
+</script>
+{% endblock %}

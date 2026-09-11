@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0b0e13">
+<title>Scanner access</title>
+<link rel="icon" href="{{ url_for('static', filename='icons/favicon.svg') }}">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;
+       background:#0b0e13;color:#eef1f5;
+       font:15px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  .box{width:100%;max-width:340px;text-align:center}
+  .mark{width:56px;height:56px;border-radius:16px;background:#6b86ff;margin:0 auto 18px;
+        display:grid;place-items:center}
+  .mark svg{width:28px;height:28px;color:#0b0e14}
+  h1{font-size:1.2rem;margin:0 0 6px}
+  p{color:#9aa4b2;font-size:.88rem;margin:0 0 22px}
+  input{width:100%;padding:17px;border-radius:14px;text-align:center;
+        background:#1f2632;border:2px solid #2b3340;color:#eef1f5;
+        font:700 1.7rem/1 ui-monospace,monospace;letter-spacing:.3em;text-indent:.3em}
+  input:focus{outline:none;border-color:#6b86ff}
+  button{width:100%;margin-top:14px;padding:16px;border:none;border-radius:14px;
+         background:#6b86ff;color:#0b0e14;font:640 1rem inherit;cursor:pointer}
+  .err{background:#2d0a0a;border:1px solid #991b1b;color:#fca5a5;
+       padding:11px;border-radius:11px;margin-bottom:16px;font-size:.86rem}
+</style>
+</head>
+<body>
+{% include '_icons.html' %}
+<form class="box" method="post">
+  <div class="mark"><svg><use href="#i-scan"/></svg></div>
+  <h1>Scanner access</h1>
+  <p>Enter the PIN the organisers gave you. You only need to do this once on
+     this phone.</p>
+  {% if error %}<div class="err">{{ error }}</div>{% endif %}
+  <input name="pin" type="text" inputmode="numeric" autocomplete="off"
+         autofocus placeholder="••••" aria-label="Access PIN">
+  <button type="submit">Unlock</button>
+</form>
+</body>
+</html>

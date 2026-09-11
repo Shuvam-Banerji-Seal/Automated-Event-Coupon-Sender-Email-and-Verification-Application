@@ -1,0 +1,42 @@
+{#
+Subject: Thanks for coming to {{ event_name }}
+
+A short note to send after the event. Deliberately plain — a long HTML email
+after the fact is unwelcome, and this one has no QR code to carry.
+#}
+<table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"
+       style="background:#f4f5f7;margin:0;padding:26px 12px">
+  <tr>
+    <td align="center">
+      <table width="540" cellpadding="0" cellspacing="0" border="0" role="presentation"
+             style="max-width:540px;width:100%;background:#ffffff;border-radius:16px;
+                    overflow:hidden;box-shadow:0 1px 3px rgba(16,20,26,.08)">
+        <tr>
+          <td style="background:#1c2333;padding:30px 32px;text-align:center">
+            <div style="font:700 22px/1.3 Georgia,'Times New Roman',serif;color:#ffffff">
+              Thank you for coming
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:30px 32px;font:400 15px/1.72 Arial,Helvetica,sans-serif;color:#333d4d">
+            <p style="margin:0 0 16px"><strong>Dear {{ first_name }},</strong></p>
+            <p style="margin:0 0 16px">
+              Thank you for joining us at <strong>{{ event_name }}</strong>. It was
+              a better evening for having you there.
+            </p>
+            <p style="margin:0 0 16px">
+              We hope you enjoyed it as much as we enjoyed putting it together.
+            </p>
+            <div style="border-top:1px solid #e4e7ec;padding-top:18px;margin-top:22px;
+                        font:400 13px/1.7 Arial,Helvetica,sans-serif;color:#7b8494">
+              With thanks,<br>
+              <strong style="color:#333d4d">{{ organizer_batch }}</strong><br>
+              {{ organizer_institution }}
+            </div>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>

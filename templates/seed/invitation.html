@@ -1,0 +1,125 @@
+{#
+Subject: You're invited to {{ event_name }}
+
+Starter invitation. Written the way email has to be written: tables for layout,
+inline styles, no flexbox, no grid, no inline SVG, no external stylesheet. It
+renders the same in Gmail, Outlook and Apple Mail because it asks for nothing
+any of them refuse.
+#}
+<table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"
+       style="background:#f4f5f7;margin:0;padding:26px 12px">
+  <tr>
+    <td align="center">
+      <table width="580" cellpadding="0" cellspacing="0" border="0" role="presentation"
+             style="max-width:580px;width:100%;background:#ffffff;border-radius:16px;
+                    overflow:hidden;box-shadow:0 1px 3px rgba(16,20,26,.08)">
+
+        <!-- Header -->
+        <tr>
+          <td style="background:#1c2333;padding:36px 32px;text-align:center">
+            <div style="font:700 25px/1.25 Georgia,'Times New Roman',serif;color:#ffffff;
+                        letter-spacing:-.01em">{{ event_name }}</div>
+            <div style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#93a0b8;
+                        padding-top:7px;letter-spacing:.1em;text-transform:uppercase">
+              {{ organizer_institution }}
+            </div>
+          </td>
+        </tr>
+
+        <!-- Body -->
+        <tr>
+          <td style="padding:32px 32px 8px;font:400 15px/1.72 Arial,Helvetica,sans-serif;color:#333d4d">
+            <p style="margin:0 0 16px;font-size:17px;color:#1c2333">
+              <strong>Dear {{ first_name }},</strong>
+            </p>
+            <p style="margin:0 0 16px">
+              You are warmly invited to <strong>{{ event_name }}</strong>. We would
+              be delighted to have you there.
+            </p>
+          </td>
+        </tr>
+
+        <!-- Event details -->
+        <tr>
+          <td style="padding:8px 32px">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"
+                   style="background:#f4f5f7;border-radius:11px">
+              <tr>
+                <td style="padding:17px 20px;font:400 14px/1.9 Arial,Helvetica,sans-serif;color:#333d4d">
+                  <strong style="color:#1c2333">When</strong><br>
+                  {{ event_date }} at {{ event_time }}<br>
+                  <strong style="color:#1c2333;display:inline-block;padding-top:9px">Where</strong><br>
+                  {{ event_venue }}
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        {% if include_qr %}
+        <!-- Entry pass -->
+        <tr>
+          <td style="padding:24px 32px 8px" align="center">
+            <table cellpadding="0" cellspacing="0" border="0" role="presentation"
+                   style="background:{{ food_colour }};border-radius:15px">
+              <tr>
+                <td style="padding:22px" align="center">
+                  <div style="font:700 11px/1.5 Arial,Helvetica,sans-serif;color:#ffffff;
+                              letter-spacing:.16em;text-transform:uppercase;padding-bottom:13px">
+                    Your entry pass
+                  </div>
+                  <img src="{{ qr_code_src }}" width="190" height="190"
+                       alt="Entry pass QR code"
+                       style="display:block;border-radius:10px;background:#ffffff;padding:11px">
+                  <div style="font:700 15px/1.5 Arial,Helvetica,sans-serif;color:#ffffff;
+                              padding-top:13px;letter-spacing:.06em">
+                    {{ food_preference }}
+                  </div>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <tr>
+          <td align="center" style="padding:16px 32px 4px">
+            <div style="font:400 12px/1.6 Arial,Helvetica,sans-serif;color:#7b8494;
+                        letter-spacing:.09em;text-transform:uppercase">
+              Or give this number at the door
+            </div>
+            <div style="font:700 30px/1.35 'Courier New',Courier,monospace;color:#1c2333;
+                        letter-spacing:.2em;padding-top:2px">{{ verification_code }}</div>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:14px 32px 0;font:400 13px/1.7 Arial,Helvetica,sans-serif;color:#7b8494">
+            <p style="margin:0">
+              Have this ready on your phone when you arrive — screenshot it if you
+              would rather not search your inbox at the door. It admits one person
+              and works only once.
+            </p>
+          </td>
+        </tr>
+        {% endif %}
+
+        <!-- Footer -->
+        <tr>
+          <td style="padding:28px 32px 30px">
+            <div style="border-top:1px solid #e4e7ec;padding-top:18px;
+                        font:400 13px/1.7 Arial,Helvetica,sans-serif;color:#7b8494">
+              Looking forward to seeing you,<br>
+              <strong style="color:#333d4d">{{ organizer_batch }}</strong><br>
+              {{ organizer_institution }}
+            </div>
+          </td>
+        </tr>
+
+      </table>
+      <div style="font:400 11px/1.6 Arial,Helvetica,sans-serif;color:#98a1b0;
+                  padding:16px 12px 0;max-width:580px">
+        Sent to {{ email }} because you were listed as a guest of {{ event_name }}.
+      </div>
+    </td>
+  </tr>
+</table>

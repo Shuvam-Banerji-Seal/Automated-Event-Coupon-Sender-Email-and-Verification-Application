@@ -1,0 +1,415 @@
+{% extends "console/base.html" %}
+{% block title %}Recipients{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <h1>Recipients</h1>
+  <p>Upload your attendee sheet. The columns are detected automatically — check
+     the guesses, correct anything wrong, and confirm.</p>
+</div>
+
+<div class="steps">
+  <div class="step active" data-step="1"><span class="n">1</span> Choose file</div>
+  <div class="step" data-step="2"><span class="n">2</span> Match columns</div>
+  <div class="step" data-step="3"><span class="n">3</span> Confirm</div>
+</div>
+
+<!-- Step 1 ---------------------------------------------------------------- -->
+<section id="step-1" class="card">
+  <div class="card-head"><h2>Upload a CSV</h2></div>
+  <div class="card-body">
+    <div id="dropzone" tabindex="0" role="button"
+         aria-label="Choose a CSV file, or drop one here"
+         style="border:2px dashed var(--border-strong);border-radius:var(--radius-lg);
+                padding:44px 24px;text-align:center;cursor:pointer;transition:all .15s">
+      <svg style="width:38px;height:38px;color:var(--text-3)"><use href="#i-upload"/></svg>
+      <h3 class="mt-1">Drop a CSV here, or click to choose</h3>
+      <p class="muted small mb-0">
+        Exports from Google Forms, Excel or anything else. Comma, semicolon and
+        tab separated files all work.
+      </p>
+      <input type="file" id="file-input" accept=".csv,.tsv,.txt" class="visually-hidden">
+    </div>
+    <div id="upload-error" class="mt-2"></div>
+  </div>
+</section>
+
+<!-- Step 2 ---------------------------------------------------------------- -->
+<section id="step-2" class="hidden">
+  <div class="card">
+    <div class="card-head">
+      <h2>Match columns</h2>
+      <span class="sub" id="file-summary"></span>
+      <button class="btn sm ghost" id="start-over">Choose a different file</button>
+    </div>
+    <div class="card-body">
+      <div class="notice info mb-2">
+        <svg><use href="#i-info"/></svg>
+        <div><strong>These are guesses</strong><span class="small">
+          Detected from both the column headings and the values inside them.
+          Change any that are wrong. Columns you leave unmatched are still kept
+          and become variables you can use in the email.</span></div>
+      </div>
+      <div class="map-grid" id="map-grid"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h2>Preview</h2>
+      <span class="sub" id="preview-sub"></span></div>
+    <div class="card-body tight">
+      <div class="table-wrap table-scroll"><table class="data" id="preview-table"></table></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h2>Check</h2></div>
+    <div class="card-body" id="validation"></div>
+    <div class="card-foot">
+      <label class="check">
+        <input type="radio" name="mode" value="replace" checked>
+        <span>Replace the list<span class="hint">Existing coupons are kept regardless</span></span>
+      </label>
+      <label class="check" style="margin-left:18px">
+        <input type="radio" name="mode" value="merge">
+        <span>Add to the list<span class="hint">Update people already there</span></span>
+      </label>
+      <span class="spacer"></span>
+      <button class="btn primary lg" id="commit">
+        <svg><use href="#i-check"/></svg> Confirm and import
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- Current list ---------------------------------------------------------- -->
+<section id="current" class="card mt-2">
+  <div class="card-head">
+    <h2>Current list</h2>
+    <span class="sub" id="list-count"></span>
+    <span class="spacer"></span>
+    <div class="row">
+      <input type="search" id="search" placeholder="Search name or email"
+             style="width:200px" aria-label="Search recipients">
+      <select id="filter-status" style="width:150px" aria-label="Filter by status">
+        <option value="all">All statuses</option>
+        <option value="pending">No coupon yet</option>
+        <option value="generated">Issued, not sent</option>
+        <option value="sent">Emailed</option>
+        <option value="used">Checked in</option>
+      </select>
+      <button class="btn sm danger" id="clear-list">
+        <svg><use href="#i-trash"/></svg> Clear
+      </button>
+    </div>
+  </div>
+  <div class="card-body tight">
+    <div class="table-wrap table-scroll">
+      <table class="data">
+        <thead><tr>
+          <th>Name</th><th>Email</th><th>Meal</th><th>Pass</th>
+          <th>Status</th><th>Code</th>
+        </tr></thead>
+        <tbody id="list-rows"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+{% raw %}
+let inspection = null;
+let allRecipients = [];
+
+/* ------------------------------------------------------------------ step 1 */
+
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('file-input');
+
+dropzone.onclick = () => fileInput.click();
+dropzone.onkeydown = (e) => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); }
+};
+['dragenter', 'dragover'].forEach((ev) => dropzone.addEventListener(ev, (e) => {
+  e.preventDefault();
+  dropzone.style.borderColor = 'var(--accent)';
+  dropzone.style.background = 'var(--accent-soft)';
+}));
+['dragleave', 'drop'].forEach((ev) => dropzone.addEventListener(ev, (e) => {
+  e.preventDefault();
+  dropzone.style.borderColor = '';
+  dropzone.style.background = '';
+}));
+dropzone.addEventListener('drop', (e) => {
+  if (e.dataTransfer.files.length) upload(e.dataTransfer.files[0]);
+});
+fileInput.onchange = () => { if (fileInput.files.length) upload(fileInput.files[0]); };
+
+async function upload(file) {
+  document.getElementById('upload-error').innerHTML = '';
+  dropzone.innerHTML = '<span class="spinner" style="margin:0 auto;display:block"></span>' +
+    '<p class="muted mt-1 mb-0">Reading ' + escapeHtml(file.name) + '…</p>';
+  const form = new FormData();
+  form.append('file', file);
+  try {
+    inspection = await api('/api/csv/inspect', { method: 'POST', body: form });
+    showStep(2);
+    renderMapping();
+    renderPreview();
+    renderValidation();
+  } catch (e) {
+    resetDropzone();
+    document.getElementById('upload-error').innerHTML =
+      `<div class="notice danger"><svg><use href="#i-alert"/></svg>
+       <div><strong>Could not read that file</strong><span class="small">${escapeHtml(e.message)}</span></div></div>`;
+  }
+}
+
+function resetDropzone() {
+  dropzone.innerHTML =
+    '<svg style="width:38px;height:38px;color:var(--text-3)"><use href="#i-upload"/></svg>' +
+    '<h3 class="mt-1">Drop a CSV here, or click to choose</h3>' +
+    '<p class="muted small mb-0">Exports from Google Forms, Excel or anything else. ' +
+    'Comma, semicolon and tab separated files all work.</p>';
+  dropzone.appendChild(fileInput);
+  fileInput.value = '';
+}
+
+function showStep(n) {
+  document.getElementById('step-1').classList.toggle('hidden', n !== 1);
+  document.getElementById('step-2').classList.toggle('hidden', n !== 2);
+  document.querySelectorAll('.step').forEach((el) => {
+    const i = Number(el.dataset.step);
+    el.classList.toggle('active', i === n);
+    el.classList.toggle('done', i < n);
+  });
+  if (n === 1) resetDropzone();
+}
+
+document.getElementById('start-over').onclick = () => { inspection = null; showStep(1); };
+
+/* ------------------------------------------------------------------ step 2 */
+
+function columnByName(name) {
+  return inspection.columns.find((c) => c.name === name);
+}
+
+function renderMapping() {
+  document.getElementById('file-summary').textContent =
+    `${inspection.filename} · ${fmtNumber(inspection.row_count)} rows · ` +
+    `${inspection.headers.length} columns`;
+
+  const roles = inspection.roles;
+  document.getElementById('map-grid').innerHTML = Object.entries(roles).map(([role, meta]) => {
+    const selected = inspection.suggested_mapping[role];
+    const options = ['<option value="">— not in this file —</option>']
+      .concat(inspection.headers.map((h) => {
+        const score = columnByName(h)?.scores[role] ?? 0;
+        const hint = score >= 0.7 ? ' ✓' : score >= 0.35 ? ' ·' : '';
+        return `<option value="${escapeHtml(h)}"${h === selected ? ' selected' : ''}>${escapeHtml(h)}${hint}</option>`;
+      })).join('');
+
+    return `<div class="map-row ${meta.required ? 'required' : ''}">
+      <div class="map-role">
+        <strong>${escapeHtml(meta.label)}${meta.required ? ' <span style="color:var(--danger)">*</span>' : ''}</strong>
+        <span class="hint">${escapeHtml(meta.help)}</span>
+      </div>
+      <div>
+        <select data-role="${role}">${options}</select>
+        <div class="map-samples" data-samples="${role}"></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  document.querySelectorAll('[data-role]').forEach((select) => {
+    select.onchange = () => { renderSamples(); renderPreview(); renderValidation(); };
+  });
+  renderSamples();
+}
+
+function currentMapping() {
+  const mapping = {};
+  document.querySelectorAll('[data-role]').forEach((s) => {
+    mapping[s.dataset.role] = s.value || null;
+  });
+  return mapping;
+}
+
+function renderSamples() {
+  const mapping = currentMapping();
+  Object.entries(mapping).forEach(([role, column]) => {
+    const host = document.querySelector(`[data-samples="${role}"]`);
+    if (!host) return;
+    if (!column) { host.innerHTML = '<span class="muted">nothing selected</span>'; return; }
+    const profile = columnByName(column);
+    const score = profile?.scores[role] ?? 0;
+    const pct = Math.round(score * 100);
+    const conf = score >= 0.7 ? 'var(--ok)' : score >= 0.35 ? 'var(--warn)' : 'var(--text-3)';
+    host.innerHTML =
+      (profile?.samples || []).map((s) => `<span>${escapeHtml(s)}</span>`).join('') +
+      `<span class="confidence" style="color:${conf}">
+         <span class="bar"><span style="width:${pct}%;background:${conf}"></span></span>${pct}% match
+       </span>`;
+  });
+}
+
+function renderPreview() {
+  const mapping = currentMapping();
+  const roleOf = {};
+  Object.entries(mapping).forEach(([role, col]) => { if (col) roleOf[col] = role; });
+  const labels = { email: 'Email', name: 'Name', food_preference: 'Meal',
+                   include_qr: 'Pass' };
+
+  const head = '<thead><tr>' + inspection.headers.map((h) => {
+    const role = roleOf[h];
+    return `<th>${escapeHtml(h)}${role
+      ? ` <span class="badge accent" style="font-size:.62rem">${labels[role]}</span>`
+      : ''}</th>`;
+  }).join('') + '</tr></thead>';
+
+  const rows = inspection.preview.map((r) => '<tr>' + inspection.headers.map((h) => {
+    const v = r[h] ?? '';
+    return `<td${roleOf[h] ? ' style="font-weight:560"' : ' class="muted"'}>${escapeHtml(v) || '—'}</td>`;
+  }).join('') + '</tr>').join('');
+
+  document.getElementById('preview-table').innerHTML = head + '<tbody>' + rows + '</tbody>';
+  document.getElementById('preview-sub').textContent =
+    `first ${inspection.preview.length} of ${fmtNumber(inspection.row_count)} rows`;
+}
+
+function renderValidation() {
+  const mapping = currentMapping();
+  const v = inspection.validation;
+  const items = [];
+
+  if (!mapping.email) {
+    items.push(['danger', 'No email column chosen',
+      'Pick the column holding email addresses — nothing can be sent without it.']);
+  } else {
+    items.push(['ok', `${fmtNumber(v.valid_emails)} usable addresses`,
+      'These rows will be imported.']);
+  }
+  if (v.invalid_count) {
+    const examples = v.invalid.slice(0, 3)
+      .map((i) => `row ${i.row}${i.value ? `: "${i.value}"` : ' (blank)'}`).join(', ');
+    items.push(['warn', `${fmtNumber(v.invalid_count)} rows will be skipped`,
+      `Missing or malformed addresses — ${examples}${v.invalid_count > 3 ? ', …' : ''}`]);
+  }
+  if (v.duplicate_count) {
+    items.push(['warn', `${fmtNumber(v.duplicate_count)} duplicate addresses`,
+      'Only the first occurrence of each address is kept.']);
+  }
+  if (!mapping.name) {
+    items.push(['info', 'No name column',
+      'Greetings will fall back to the part of the address before the @.']);
+  }
+  if (!mapping.food_preference) {
+    items.push(['info', 'No meal column',
+      'Everyone will be recorded as vegetarian. You can change this later.']);
+  }
+
+  const unmapped = inspection.headers.filter((h) => !Object.values(mapping).includes(h));
+  if (unmapped.length) {
+    items.push(['info', `${unmapped.length} extra columns kept`,
+      `Available in the email as ${unmapped.slice(0, 4).map(
+        (h) => '{{ ' + h.trim().toLowerCase().replace(/\W+/g, '_').replace(/^_|_$/g, '') + ' }}'
+      ).join(', ')}${unmapped.length > 4 ? ' and more' : ''}.`]);
+  }
+
+  document.getElementById('validation').innerHTML = items.map(([kind, title, body]) => `
+    <div class="notice ${kind}">
+      <svg><use href="#i-${kind === 'ok' ? 'check-circle' : kind === 'info' ? 'info' : 'alert'}"/></svg>
+      <div><strong>${escapeHtml(title)}</strong><span class="small">${escapeHtml(body)}</span></div>
+    </div>`).join('');
+
+  document.getElementById('commit').disabled = !mapping.email;
+}
+
+document.getElementById('commit').onclick = async (e) => {
+  const button = e.currentTarget;
+  setBusy(button, true, 'Importing…');
+  try {
+    const result = await api('/api/csv/commit', {
+      method: 'POST',
+      body: {
+        upload_id: inspection.upload_id,
+        mapping: currentMapping(),
+        mode: document.querySelector('input[name="mode"]:checked').value,
+      },
+    });
+    toast(`Imported ${fmtNumber(result.imported)} recipients` +
+      (result.rejected_count ? ` · ${result.rejected_count} skipped` : ''));
+    inspection = null;
+    showStep(1);
+    loadList();
+  } catch (err) {
+    toast(err.message, 'error');
+  } finally {
+    setBusy(button, false);
+  }
+};
+
+/* -------------------------------------------------------------- current list */
+
+async function loadList() {
+  try {
+    const d = await api('/api/recipients');
+    allRecipients = d.recipients;
+    renderList();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+function renderList() {
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  const status = document.getElementById('filter-status').value;
+  const rows = allRecipients.filter((r) =>
+    (!q || r.email.toLowerCase().includes(q) || (r.name || '').toLowerCase().includes(q)) &&
+    (status === 'all' || r.status === status));
+
+  document.getElementById('list-count').textContent =
+    rows.length === allRecipients.length
+      ? `${fmtNumber(allRecipients.length)} people`
+      : `${fmtNumber(rows.length)} of ${fmtNumber(allRecipients.length)}`;
+
+  const body = document.getElementById('list-rows');
+  if (!rows.length) {
+    body.innerHTML = `<tr><td colspan="6"><div class="empty">
+      <svg><use href="#i-users"/></svg>
+      <h3>${allRecipients.length ? 'Nothing matches' : 'No recipients yet'}</h3>
+      <p>${allRecipients.length ? 'Try a different search.' : 'Upload a CSV above to get started.'}</p>
+    </div></td></tr>`;
+    return;
+  }
+  body.innerHTML = rows.map((r) => `<tr>
+    <td><div class="truncate" style="max-width:180px">${escapeHtml(r.name || '—')}</div></td>
+    <td class="mono small"><div class="truncate" style="max-width:230px">${escapeHtml(r.email)}</div></td>
+    <td>${foodBadge(r.food_preference)}</td>
+    <td>${r.include_qr ? '<span class="badge ok">Yes</span>' : '<span class="badge">No</span>'}</td>
+    <td>${statusBadge(r.status)}</td>
+    <td class="mono">${r.verification_code ? escapeHtml(r.verification_code) : '<span class="muted">—</span>'}</td>
+  </tr>`).join('');
+}
+
+document.getElementById('search').oninput = debounce(renderList, 150);
+document.getElementById('filter-status').onchange = renderList;
+
+document.getElementById('clear-list').onclick = async () => {
+  const ok = await confirmDialog({
+    title: 'Clear the recipient list?',
+    body: '<p>This removes everyone from the recipient list. <strong>Coupons already ' +
+          'issued are not affected</strong> — anyone holding one can still check in.</p>' +
+          '<p class="muted small mb-0">You will need to upload a CSV again to send to anyone new.</p>',
+    confirmLabel: 'Clear the list', danger: true,
+  });
+  if (!ok) return;
+  await api('/api/recipients', { method: 'DELETE' });
+  toast('Recipient list cleared');
+  loadList();
+};
+
+loadList();
+{% endraw %}
+</script>
+{% endblock %}

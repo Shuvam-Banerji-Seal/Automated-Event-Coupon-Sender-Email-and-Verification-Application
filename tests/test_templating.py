@@ -26,6 +26,24 @@ class TestRendering:
         ctx = T.build_context(name="Ada", email="a@x.com")
         assert T.render_subject("Hello\n  {{ first_name }}  \n", ctx) == "Hello Ada"
 
+    def test_subject_is_not_html_escaped(self):
+        """Subjects are not HTML. An apostrophe must not arrive as "&#39;"."""
+        ctx = T.build_context(name="Ada", email="a@x.com",
+                              settings={"event_name": "Freshers' Welcome"})
+        subject = T.render_subject("You're invited to {{ event_name }}", ctx)
+        assert subject == "You're invited to Freshers' Welcome"
+        assert "&#39;" not in subject
+
+    def test_subject_still_blocks_header_injection(self):
+        """Escaping is off, so collapsing newlines is what keeps headers safe."""
+        subject = T.render_subject("A{{ x }}B", {"x": "\nBcc: evil@example.com"})
+        assert "\n" not in subject and "\r" not in subject
+
+    def test_html_body_is_still_escaped(self):
+        """Turning off escaping for subjects must not affect the body."""
+        ctx = T.build_context(name="<b>x</b>", email="a@x.com")
+        assert "&lt;b&gt;" in T.render("<p>{{ name }}</p>", ctx)
+
     def test_sandbox_blocks_attribute_escape(self):
         """Templates are authored in the browser, so the sandbox is load-bearing."""
         with pytest.raises(T.TemplateError):

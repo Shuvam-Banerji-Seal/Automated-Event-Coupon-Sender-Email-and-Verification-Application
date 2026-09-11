@@ -1,0 +1,277 @@
+{% extends "console/base.html" %}
+{% block title %}Overview{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <h1>Overview</h1>
+  <p>Where the event stands right now — who has been invited, who has arrived,
+     and whether the system is ready to send.</p>
+</div>
+
+<div id="checks" class="stack mb-2"></div>
+
+<div class="grid cols-4 mb-2">
+  <div class="stat">
+    <div class="stat-label">Recipients</div>
+    <div class="stat-value tnum" id="s-recipients">—</div>
+    <div class="stat-meta" id="s-recipients-meta">loaded from your sheet</div>
+  </div>
+  <div class="stat accent">
+    <div class="stat-label">Coupons issued</div>
+    <div class="stat-value tnum" id="s-issued">—</div>
+    <div class="stat-meta" id="s-issued-meta"></div>
+  </div>
+  <div class="stat ok">
+    <div class="stat-label">Checked in</div>
+    <div class="stat-value tnum" id="s-used">—</div>
+    <div class="meter ok"><span id="s-used-bar" style="width:0"></span></div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Sending capacity left</div>
+    <div class="stat-value tnum" id="s-capacity">—</div>
+    <div class="stat-meta" id="s-capacity-meta">across all mail accounts today</div>
+  </div>
+</div>
+
+<div class="grid sidebar-right">
+  <div>
+    <div class="card">
+      <div class="card-head">
+        <h2>Arrivals</h2>
+        <span class="sub" id="arrivals-sub"></span>
+        <button class="btn sm ghost" id="refresh-scans">
+          <svg><use href="#i-refresh"/></svg> Refresh
+        </button>
+      </div>
+      <div class="card-body tight">
+        <div class="table-wrap table-scroll">
+          <table class="data">
+            <thead><tr>
+              <th>Time</th><th>Guest</th><th>Meal</th><th>Result</th><th>Gate</th>
+            </tr></thead>
+            <tbody id="scan-rows">
+              <tr><td colspan="5"><div class="skeleton" style="height:2em"></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Meal counts</h2>
+        <span class="sub">For catering — issued against actually checked in</span>
+      </div>
+      <div class="card-body" id="meal-counts"></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="card">
+      <div class="card-head"><h2>Scanner</h2></div>
+      <div class="card-body stack">
+        <p class="small muted mb-0">
+          Open this on volunteers' phones. They must be on the same network as
+          this machine.
+        </p>
+        <div class="row">
+          <input type="text" id="scanner-url" readonly class="mono small">
+          <button class="btn sm" id="copy-url" aria-label="Copy scanner address">
+            <svg><use href="#i-copy"/></svg>
+          </button>
+        </div>
+        <div id="scanner-lock"></div>
+        <div style="text-align:center;padding:6px 0">
+          <img id="scanner-qr" alt="QR code linking to the scanner page"
+               width="170" height="170"
+               style="border-radius:8px;background:#fff;padding:8px">
+          <div class="small muted mt-1">Point a phone camera here</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>QR health</h2></div>
+      <div class="card-body" id="qr-health"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Export</h2></div>
+      <div class="card-body stack">
+        <a class="btn block" href="/api/export/coupons.csv">
+          <svg><use href="#i-download"/></svg> Coupons CSV
+        </a>
+        <a class="btn block" href="/api/export/scans.csv">
+          <svg><use href="#i-download"/></svg> Scan log CSV
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let overview = null;
+
+function renderChecks(d) {
+  const checks = [];
+  if (!d.smtp.configured) {
+    checks.push(['warn', 'No mail account configured',
+      'Add one in Settings before you can send anything.',
+      '<a class="btn sm" href="/settings">Open settings</a>']);
+  }
+  if (!d.templates.length) {
+    checks.push(['warn', 'No email template yet',
+      'Write one in Compose so there is something to send.',
+      '<a class="btn sm" href="/compose">Open compose</a>']);
+  }
+  if (!d.stats.recipients) {
+    checks.push(['info', 'No recipients loaded',
+      'Upload your attendee sheet to get started.',
+      '<a class="btn sm" href="/recipients">Upload a CSV</a>']);
+  }
+  if (!d.scanner_locked && d.stats.total) {
+    checks.push(['warn', 'Scanner has no PIN',
+      'Anyone who can reach this machine on the network can redeem coupons. ' +
+      'Set SCANNER_PIN in your .env and restart.', '']);
+  }
+  if (d.stats.pending > 0 && d.stats.total > 0) {
+    checks.push(['info', `${fmtNumber(d.stats.pending)} recipients have no coupon yet`,
+      'They will be issued one when you next send.',
+      '<a class="btn sm" href="/send">Go to send</a>']);
+  }
+
+  document.getElementById('checks').innerHTML = checks.map(([kind, title, body, action]) => `
+    <div class="notice ${kind}">
+      <svg><use href="#i-${kind === 'warn' ? 'alert' : 'info'}"/></svg>
+      <div style="flex:1"><strong>${escapeHtml(title)}</strong><span class="small">${escapeHtml(body)}</span></div>
+      ${action}
+    </div>`).join('');
+}
+
+function renderStats(d) {
+  const s = d.stats;
+  document.getElementById('s-recipients').textContent = fmtNumber(s.recipients);
+  document.getElementById('s-issued').textContent = fmtNumber(s.total);
+  document.getElementById('s-issued-meta').textContent =
+    `${fmtNumber(s.sent)} emailed · ${fmtNumber(s.generated)} not yet sent`;
+  document.getElementById('s-used').textContent = fmtNumber(s.used);
+  const pct = s.total ? (s.used / s.total * 100) : 0;
+  document.getElementById('s-used-bar').style.width = `${pct}%`;
+  document.getElementById('s-recipients-meta').textContent =
+    s.pending ? `${fmtNumber(s.pending)} awaiting a coupon` : 'all have coupons';
+
+  const cap = d.smtp.total_remaining || 0;
+  document.getElementById('s-capacity').textContent = d.smtp.configured ? fmtNumber(cap) : '—';
+  document.getElementById('s-capacity-meta').textContent = d.smtp.configured
+    ? `${d.smtp.accounts.length} account${d.smtp.accounts.length === 1 ? '' : 's'} · resets at midnight`
+    : 'no account configured';
+
+  // Meal counts matter to catering, so show issued and arrived side by side.
+  const food = s.food || {}, used = s.food_used || {};
+  const kinds = [...new Set([...Object.keys(food), ...Object.keys(used)])];
+  document.getElementById('meal-counts').innerHTML = kinds.length ? kinds.map((k) => {
+    const issued = food[k] || 0, arrived = used[k] || 0;
+    const pc = issued ? (arrived / issued * 100) : 0;
+    return `<div class="mb-2">
+      <div class="row between small mb-1">
+        <span>${foodBadge(k)} <strong>${escapeHtml(k)}</strong></span>
+        <span class="tnum muted">${fmtNumber(arrived)} of ${fmtNumber(issued)} arrived</span>
+      </div>
+      <div class="meter"><span style="width:${pc}%;background:var(--${k === 'Non-Vegetarian' ? 'nonveg' : 'veg'})"></span></div>
+    </div>`;
+  }).join('') : '<p class="muted small mb-0">No coupons issued yet.</p>';
+}
+
+function renderScans(scans) {
+  const body = document.getElementById('scan-rows');
+  if (!scans.length) {
+    body.innerHTML = `<tr><td colspan="5">
+      <div class="empty" style="padding:32px">
+        <svg><use href="#i-scan"/></svg>
+        <h3>Nobody has arrived yet</h3>
+        <p>Scans will appear here as volunteers check people in.</p>
+      </div></td></tr>`;
+    return;
+  }
+  const label = { ok: ['ok', 'Admitted'], already_used: ['danger', 'Already used'],
+                  not_found: ['warn', 'Unknown code'], revoked: ['danger', 'Revoked'],
+                  undo: ['', 'Reverted'] };
+  body.innerHTML = scans.map((s) => {
+    const [cls, text] = label[s.result] || ['', s.result];
+    return `<tr>
+      <td class="nowrap small muted">${escapeHtml(fmtRelative(s.scanned_at))}</td>
+      <td><div class="truncate" style="max-width:200px">${escapeHtml(s.name || s.email || '—')}</div></td>
+      <td>${s.food_preference ? foodBadge(s.food_preference) : '<span class="muted">—</span>'}</td>
+      <td><span class="badge ${cls}">${escapeHtml(text)}</span></td>
+      <td class="small muted">${escapeHtml(s.scanner || '—')}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('arrivals-sub').textContent = `${scans.length} most recent`;
+}
+
+async function loadQrHealth() {
+  try {
+    const d = await api('/api/qr/diagnostics');
+    const good = d.within_limit;
+    document.getElementById('qr-health').innerHTML = `
+      <div class="notice ${good ? 'ok' : 'danger'}" style="margin-bottom:12px">
+        <svg><use href="#i-${good ? 'check-circle' : 'alert'}"/></svg>
+        <div><strong>${good ? 'Good for scanning' : 'Too dense to scan reliably'}</strong>
+        <span class="small">Version ${d.version} · ${escapeHtml(d.modules)} modules</span></div>
+      </div>
+      <table class="data"><tbody>
+        <tr><td class="muted">Payload</td><td class="mono">${escapeHtml(d.payload)}</td></tr>
+        <tr><td class="muted">Size</td><td class="tnum">${d.bytes} bytes</td></tr>
+        <tr><td class="muted">Error correction</td><td>${escapeHtml(d.error_correction)}</td></tr>
+        <tr><td class="muted">Module size</td><td class="tnum">${d.px_per_module_at_300} px at 300 px wide</td></tr>
+      </tbody></table>
+      <p class="small muted mt-2 mb-0">Bigger modules scan better off cracked
+      screens. Anything above ~8 px per module is comfortable.</p>`;
+  } catch (e) {
+    document.getElementById('qr-health').innerHTML =
+      `<p class="small muted mb-0">${escapeHtml(e.message)}</p>`;
+  }
+}
+
+async function load() {
+  try {
+    overview = await api('/api/overview');
+    renderChecks(overview);
+    renderStats(overview);
+    renderScans(overview.recent_scans);
+
+    const url = overview.scanner_url;
+    document.getElementById('scanner-url').value = url;
+    document.getElementById('scanner-qr').src =
+      '/api/qr/scanner.png';
+    document.getElementById('scanner-lock').innerHTML = overview.scanner_locked
+      ? '<div class="notice ok small"><svg><use href="#i-check-circle"/></svg><div>Protected by a PIN</div></div>'
+      : '<div class="notice warn small"><svg><use href="#i-alert"/></svg><div>No PIN set — anyone on this network can scan</div></div>';
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+document.getElementById('copy-url').onclick = () =>
+  copyText(document.getElementById('scanner-url').value);
+
+document.getElementById('refresh-scans').onclick = async () => {
+  const d = await api('/api/overview');
+  renderScans(d.recent_scans);
+  renderStats(d);
+  toast('Refreshed');
+};
+
+load();
+loadQrHealth();
+// The dashboard is left open on a laptop during an event, so keep it current.
+setInterval(async () => {
+  try {
+    const d = await api('/api/overview');
+    renderStats(d);
+    renderScans(d.recent_scans);
+  } catch {}
+}, 15000);
+</script>
+{% endblock %}

@@ -24,6 +24,14 @@ from src.store import first_name, food_colour, normalise_food
 
 _env = SandboxedEnvironment(autoescape=True, trim_blocks=False, lstrip_blocks=False)
 
+# Subject lines are not HTML. Rendering them through the autoescaping
+# environment turns an apostrophe in the event name into "&#39;", which then
+# appears literally in the recipient's inbox — "Freshers&#39; Welcome". Subjects
+# get their own environment with escaping off; they are still sandboxed, and
+# render_subject() collapses them to a single line so header injection via a
+# newline is not possible.
+_subject_env = SandboxedEnvironment(autoescape=False)
+
 
 class TemplateError(Exception):
     """A template failed to parse or render, with a message fit for the UI."""
@@ -158,8 +166,17 @@ def render(source: str, context: Dict[str, Any]) -> str:
 
 
 def render_subject(source: str, context: Dict[str, Any]) -> str:
-    """Subjects are templates too, but must collapse to a single line."""
-    rendered = render(source or "", context)
+    """Render a subject line: no HTML escaping, always one line.
+
+    Collapsing whitespace is what keeps a newline in an event name from
+    splitting the header and injecting one of its own.
+    """
+    try:
+        rendered = _subject_env.from_string(source or "").render(**context)
+    except TemplateSyntaxError as exc:
+        raise TemplateError(f"Line {exc.lineno}: {exc.message}") from exc
+    except Exception as exc:  # noqa: BLE001 - surfaced to the editor
+        raise TemplateError(str(exc)) from exc
     return " ".join(rendered.split())
 
 

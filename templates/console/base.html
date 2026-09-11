@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>{% block title %}Console{% endblock %} · Coupon System</title>
+<link rel="icon" href="{{ url_for('static', filename='icons/favicon.svg') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+<script>
+  /* Applied before first paint so a dark-theme reload does not flash white. */
+  try {
+    const t = localStorage.getItem('coupon-theme');
+    if (t && t !== 'system') document.documentElement.setAttribute('data-theme', t);
+  } catch {}
+</script>
+{% block head %}{% endblock %}
+</head>
+<body>
+{% include '_icons.html' %}
+
+<div class="app">
+  <header class="topbar">
+    <a class="brand" href="{{ url_for('dashboard') }}">
+      <svg style="color:var(--accent)"><use href="#i-logo"/></svg>
+      Coupon System
+    </a>
+    <span class="topbar-event">{{ settings.event_name }}</span>
+    <span class="topbar-spacer"></span>
+    <a class="btn sm ghost" href="{{ url_for('scanner_page') }}" target="_blank" rel="noopener">
+      <svg><use href="#i-scan"/></svg> Open scanner
+    </a>
+    <button class="btn sm ghost" data-theme-toggle data-theme-icon
+            aria-label="Switch between light and dark">
+      <svg><use href="#i-moon"/></svg>
+    </button>
+  </header>
+
+  <div class="shell">
+    <nav class="sidebar" aria-label="Sections">
+      <div class="nav">
+        <span class="nav-label">Prepare</span>
+        <a href="{{ url_for('dashboard') }}" {% if page=='dashboard' %}class="active" aria-current="page"{% endif %}>
+          <svg><use href="#i-dashboard"/></svg> Overview
+        </a>
+        <a href="{{ url_for('recipients_page') }}" {% if page=='recipients' %}class="active" aria-current="page"{% endif %}>
+          <svg><use href="#i-users"/></svg> Recipients
+          <span class="count" data-count="recipients"></span>
+        </a>
+        <a href="{{ url_for('compose_page') }}" {% if page=='compose' %}class="active" aria-current="page"{% endif %}>
+          <svg><use href="#i-mail"/></svg> Compose
+        </a>
+
+        <span class="nav-label">Run</span>
+        <a href="{{ url_for('send_page') }}" {% if page=='send' %}class="active" aria-current="page"{% endif %}>
+          <svg><use href="#i-send"/></svg> Send
+          <span class="count" data-count="pending"></span>
+        </a>
+        <a href="{{ url_for('scanner_page') }}">
+          <svg><use href="#i-scan"/></svg> Scanner
+        </a>
+
+        <span class="nav-label">Configure</span>
+        <a href="{{ url_for('settings_page') }}" {% if page=='settings' %}class="active" aria-current="page"{% endif %}>
+          <svg><use href="#i-settings"/></svg> Settings
+        </a>
+      </div>
+    </nav>
+
+    <main class="main">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+
+<div class="toasts" aria-live="polite"></div>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+<script>
+  /* Sidebar counters, refreshed on load so every page agrees on the numbers. */
+  api('/api/overview').then((d) => {
+    const set = (key, value) => {
+      const el = document.querySelector(`[data-count="${key}"]`);
+      if (el && value) el.textContent = fmtNumber(value);
+    };
+    set('recipients', d.stats.recipients);
+    set('pending', d.stats.pending);
+  }).catch(() => {});
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

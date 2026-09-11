@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>{{ code }} · Coupon System</title>
+<link rel="icon" href="{{ url_for('static', filename='icons/favicon.svg') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body>
+{% include '_icons.html' %}
+<div style="min-height:100vh;display:grid;place-items:center;padding:24px">
+  <div class="empty">
+    <svg><use href="#i-alert"/></svg>
+    <h1 style="font-size:3.2rem;letter-spacing:-.04em;margin-bottom:4px">{{ code }}</h1>
+    <p>{{ message }}</p>
+    <a class="btn primary mt-2" href="/">Back to overview</a>
+  </div>
+</div>
+</body>
+</html>
