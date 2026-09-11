@@ -74,6 +74,45 @@ The console opens at `https://127.0.0.1:5000/` and the scanner at
 
 ---
 
+## Deploying
+
+`./start_server.sh` runs `serve.py`, which starts the app with the debugger and
+the auto-reloader off.
+
+**It must stay a single process.** Send-job progress, parsed uploads awaiting a
+column mapping, the tunnel handle and the outbox worker all live in memory and
+are shared across requests. Under `gunicorn -w 4` each worker would hold its
+own copy: polling a send would hit a worker that never heard of it, and every
+worker would run its own outbox. Use waitress (single process, thread pool) or
+the built-in server — never a multi-worker one.
+
+### As a service
+
+A systemd user unit keeps it running across logout and restarts it on failure:
+
+```bash
+systemctl --user enable --now coupon-system
+systemctl --user status coupon-system
+journalctl --user -u coupon-system -f
+```
+
+### TLS, and why the server choice depends on it
+
+Phone cameras need https, and there are two ways to get it:
+
+| | server | local network | public |
+|---|---|---|---|
+| `SSL_ENABLED=true` (default) | built-in, threaded | https, self-signed warning | via the share |
+| `SSL_ENABLED=false` | waitress | http, **no camera** | via the share |
+
+The default keeps TLS on. waitress cannot terminate TLS, and without it a
+venue with no internet leaves you with no camera at all — the built-in server
+with debug off sustained ~350 scans/sec with ten concurrent scanners, which is
+far past what a door produces. If you have a reverse proxy, run waitress behind
+it and get both.
+
+---
+
 ## Things worth knowing
 
 ### The scanner needs HTTPS

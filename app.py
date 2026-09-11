@@ -1285,7 +1285,10 @@ def api_tunnel_start():
         }), 400
 
     body = request.get_json(silent=True) or {}
-    result = tunnel.start(APP_PORT, basic_auth=body.get("basic_auth") or None)
+    serving_https = os.getenv("SSL_ENABLED", "false").lower() in ("1", "true", "yes") \
+        and os.path.exists("cert.pem")
+    result = tunnel.start(APP_PORT, basic_auth=body.get("basic_auth") or None,
+                          backend_https=serving_https)
     if result.get("success"):
         store.set_setting("last_tunnel_url", result.get("url") or "")
     return jsonify(result), (200 if result.get("success") else 500)

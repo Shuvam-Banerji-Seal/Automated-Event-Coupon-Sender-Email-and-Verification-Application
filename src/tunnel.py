@@ -199,8 +199,17 @@ class ZrokTunnel:
 
     # ----------------------------------------------------------------- start
 
-    def start(self, port: int, basic_auth: Optional[str] = None) -> Dict[str, Any]:
+    def start(self, port: int, basic_auth: Optional[str] = None,
+              backend_https: bool = False) -> Dict[str, Any]:
         """Open a public share pointing at ``port``.
+
+        ``backend_https`` must match how the application is actually serving.
+        zrok speaks plain http to its target by default, so pointing it at a
+        TLS listener produces a share that starts cleanly, reports "live", and
+        then answers every request with 502 — the worst kind of failure, since
+        the console says everything is fine while volunteers hold a dead link.
+        With TLS the target needs an explicit scheme, and --insecure because
+        the certificate is self-signed.
 
         Blocks until zrok reports an endpoint or the timeout expires, so the UI
         can show the address immediately rather than polling for it.
@@ -225,7 +234,13 @@ class ZrokTunnel:
                          f"application first, then open the tunnel.",
             }
 
-        command = [self.binary, "share", "public", f"localhost:{port}", "--headless"]
+        if backend_https:
+            target = f"https://localhost:{port}"
+            command = [self.binary, "share", "public", target, "--headless",
+                       "--insecure"]
+        else:
+            command = [self.binary, "share", "public", f"localhost:{port}",
+                       "--headless"]
         if basic_auth:
             command += ["--basic-auth", basic_auth]
 
@@ -262,6 +277,17 @@ class ZrokTunnel:
                 "log_tail": tail,
             }
 
+        reachable, detail = self._probe(url)
+        if not reachable:
+            self.stop()
+            return {
+                "success": False,
+                "error": f"The share opened but does not serve traffic ({detail}). "
+                         f"This usually means the backend scheme is wrong — the "
+                         f"application is serving {'https' if backend_https else 'http'}.",
+                "log_tail": self._log_tail(10),
+            }
+
         with self._lock:
             self._state.running = True
             self._state.status = "running"
@@ -271,6 +297,35 @@ class ZrokTunnel:
 
         logger.info("zrok share live at %s", url)
         return {"success": True, **self.state().as_dict()}
+
+    def _probe(self, url: str, attempts: int = 4) -> tuple:
+        """Fetch the health endpoint through the share before reporting success.
+
+        A share whose target scheme is wrong starts perfectly and then 502s
+        everything. Checking here turns that into an error the operator sees
+        immediately, rather than a broken link handed to volunteers.
+        """
+        import urllib.error
+        import urllib.request
+
+        request = urllib.request.Request(
+            f"{url}/api/health",
+            headers={"skip_zrok_interstitial": "true",
+                     "User-Agent": "coupon-system-selfcheck"},
+        )
+        last = "no response"
+        for attempt in range(attempts):
+            try:
+                with urllib.request.urlopen(request, timeout=20) as response:
+                    if response.status == 200:
+                        return True, "ok"
+                    last = f"HTTP {response.status}"
+            except urllib.error.HTTPError as exc:
+                last = f"HTTP {exc.code}"
+            except Exception as exc:  # noqa: BLE001 - reported to the operator
+                last = str(exc)[:80]
+            time.sleep(1.5 * (attempt + 1))
+        return False, last
 
     def _await_url(self, process: subprocess.Popen, timeout: float) -> Optional[str]:
         """Watch the log until zrok prints an endpoint, or give up."""

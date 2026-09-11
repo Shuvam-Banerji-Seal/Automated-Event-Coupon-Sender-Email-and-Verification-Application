@@ -105,12 +105,27 @@ bold "Scanner   $SCHEME://$LAN_IP:$PORT/scan"
 echo
 
 mkdir -p logs data
-if $BACKGROUND; then
-  nohup $PYTHON app.py > logs/server.log 2>&1 &
-  echo $! > .server.pid
-  sleep 2
-  ok "running in the background (pid $(cat .server.pid)), logging to logs/server.log"
-  echo "   stop with: kill \$(cat .server.pid)"
+
+# serve.py runs the app without the development server or the auto-reloader.
+# app.py directly remains the fallback for a checkout without waitress.
+if [[ -f serve.py ]]; then
+  ENTRY=serve.py
 else
-  exec $PYTHON app.py
+  ENTRY=app.py
+  warn "serve.py missing — falling back to the development server"
+fi
+
+if $BACKGROUND; then
+  nohup $PYTHON "$ENTRY" > logs/server.log 2>&1 &
+  echo $! > .server.pid
+  sleep 3
+  if kill -0 "$(cat .server.pid)" 2>/dev/null; then
+    ok "running in the background (pid $(cat .server.pid)) via $ENTRY"
+    echo "   log:  logs/server.log"
+    echo "   stop: kill \$(cat .server.pid)"
+  else
+    fail "the server exited immediately — see logs/server.log"
+  fi
+else
+  exec $PYTHON "$ENTRY"
 fi
