@@ -476,8 +476,15 @@ async function openCamera(userInitiated) {
     return;
   }
 
-  // Rear camera first, then progressively looser constraints. An exact
-  // facingMode throws OverconstrainedError on devices with only a front camera.
+  // Two ways to ask, tried in order.
+  //
+  // First by facingMode, which is what you want when it works. On phones with
+  // several lenses it frequently does not: the browser matches no device and
+  // throws NotFoundError, and on some builds even a bare {video:true} fails
+  // the same way because the default device it picks is not one it can open.
+  // Observed on an Android phone reporting five cameras with permission
+  // already granted — every constraint below failed until the camera was
+  // requested by its explicit deviceId.
   const attempts = [
     { video: { facingMode: { exact: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } },
     { video: { facingMode: 'environment', width: { ideal: 1280 } } },
@@ -495,6 +502,39 @@ async function openCamera(userInitiated) {
       lastError = err;
       // A refusal will not be reversed by looser constraints, so stop asking.
       if (err.name === 'NotAllowedError' || err.name === 'SecurityError') break;
+    }
+  }
+
+  // Second, one device at a time. Labels are readable once permission has been
+  // granted, so the rear camera can be preferred; a phone's main rear lens is
+  // usually the first "back" entry, and the ultrawide/macro/depth sensors that
+  // follow it often cannot be opened for video at all.
+  if (!stream && lastError && lastError.name !== 'NotAllowedError'
+      && lastError.name !== 'SecurityError') {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const cams = devices.filter((d) => d.kind === 'videoinput');
+      const rank = (d) => {
+        const label = (d.label || '').toLowerCase();
+        if (/(back|rear|environment)/.test(label)) {
+          return /(wide|ultra|macro|depth|tele|mono)/.test(label) ? 2 : 3;
+        }
+        if (/(front|face|user|self)/.test(label)) return 0;
+        return 1;
+      };
+      for (const cam of [...cams].sort((a, b) => rank(b) - rank(a))) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { deviceId: { exact: cam.deviceId } },
+          });
+          lastError = null;
+          break;
+        } catch (err) {
+          lastError = err;
+        }
+      }
+    } catch (err) {
+      lastError = lastError || err;
     }
   }
 
@@ -520,9 +560,19 @@ async function openCamera(userInitiated) {
         'Close any other app using the camera, then tap to try again.',
         describe(lastError));
     } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
+      const count = await countCameras();
       cameraError('No usable camera found',
-        'This device did not offer a camera we can use. You can still type '
-        + 'codes by hand.',
+        count > 0
+          ? `Your phone lists ${count} camera${count === 1 ? '' : 's'} but the `
+            + 'browser could not open any of them. Usually one of:<br>'
+            + '&bull; Android\u2019s <b>Camera access</b> switch is off \u2014 swipe '
+            + 'down twice and check the quick settings tile.<br>'
+            + '&bull; <b>Brave Shields</b> blocking it \u2014 tap the lion and set '
+            + 'Shields down for this site.<br>'
+            + '&bull; another app is holding the camera \u2014 close it and retry.<br>'
+            + 'If none of those, try Chrome or Firefox.'
+          : 'This device did not offer a camera we can use. You can still type '
+            + 'codes by hand.',
         describe(lastError));
     } else {
       cameraError('Could not start the camera',
@@ -573,6 +623,13 @@ function stopTracks() {
   video.srcObject = null;
 }
 
+async function countCameras() {
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    return devices.filter((d) => d.kind === 'videoinput').length;
+  } catch { return 0; }
+}
+
 async function cameraDiagnostics() {
   const bits = [];
   bits.push(`page: ${location.protocol}//${location.host}`);
@@ -584,7 +641,11 @@ async function cameraDiagnostics() {
   } catch { bits.push('permission: not reportable'); }
   try {
     const devices = await navigator.mediaDevices.enumerateDevices();
-    bits.push(`cameras seen: ${devices.filter((d) => d.kind === 'videoinput').length}`);
+    const cams = devices.filter((d) => d.kind === 'videoinput');
+    bits.push(`cameras seen: ${cams.length}`);
+    cams.forEach((c, i) => {
+      bits.push(`  cam ${i + 1}: ${c.label || '(label hidden)'}`);
+    });
   } catch { bits.push('cameras seen: unknown'); }
   bits.push(`ua: ${navigator.userAgent.slice(0, 90)}`);
   return bits.join('\n');
