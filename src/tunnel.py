@@ -38,7 +38,10 @@ ZROK_HOST_SUFFIX = ".shares.zrok.io"
 
 # zrok prints its endpoint inside a JSON log line, e.g.
 #   {"msg":"access your zrok share at the following endpoints:\n abc123.shares.zrok.io"}
-_URL_RE = re.compile(r"([a-z0-9]{6,})\.shares\.zrok\.io")
+# Hyphens matter: a reserved name like "iiserkol-coupons" would otherwise be
+# parsed as just "coupons", and every check would then run against the wrong
+# address and report a 404 that looks like a backend fault.
+_URL_RE = re.compile(r"([a-z0-9](?:[a-z0-9-]{4,62}))\.shares\.zrok\.io")
 
 STARTUP_TIMEOUT = 45.0
 
@@ -50,6 +53,14 @@ STARTUP_TIMEOUT = 45.0
 # killed the instant that request finished. A pidfile reaped at startup is
 # deterministic and has no such trap.
 PID_FILENAME = "zrok.pid"
+
+# A share with no reserved name gets a fresh random subdomain every time it
+# starts, so the address volunteers were given dies with any restart. A
+# reserved name in the public namespace keeps one stable address across
+# restarts — the thing you can print on a poster.
+NAME_CONFLICT = "already in use by another share"
+NAME_RETRIES = 5
+NAME_RETRY_WAIT = 4.0
 
 
 def find_zrok() -> Optional[str]:
@@ -110,6 +121,7 @@ class TunnelState:
     started_at: Optional[float] = None
     error: Optional[str] = None
     status: str = "stopped"          # stopped | starting | running | failed
+    reserved_name: Optional[str] = None
     log_tail: List[str] = field(default_factory=list)
 
     def as_dict(self) -> Dict[str, Any]:
@@ -120,6 +132,8 @@ class TunnelState:
             "scanner_url": f"{self.url}/scan" if self.url else None,
             "port": self.port,
             "status": self.status,
+            "reserved_name": self.reserved_name,
+            "stable": bool(self.reserved_name),
             "error": self.error,
             "uptime_seconds": round(uptime) if self.started_at else 0,
             "log_tail": self.log_tail[-12:],
@@ -141,6 +155,107 @@ class ZrokTunnel:
         self._reader: Optional[threading.Thread] = None
 
     # ------------------------------------------------------------ diagnostics
+
+    def names(self) -> List[Dict[str, str]]:
+        """Reserved names on this account, from ``zrok overview``."""
+        if not self.binary:
+            return []
+        try:
+            out = subprocess.run(
+                [self.binary, "overview"], capture_output=True, text=True, timeout=25
+            ).stdout
+        except (OSError, subprocess.SubprocessError):
+            return []
+        rows = []
+        for line in out.splitlines():
+            if ".shares.zrok.io" not in line or "│" not in line:
+                continue
+            cells = [c.strip() for c in line.split("│") if c.strip()]
+            if len(cells) >= 4 and cells[3].lower() == "true":
+                rows.append({
+                    "url": cells[0],
+                    "name": cells[0].split(".")[0],
+                    "in_use": cells[2] not in ("-", ""),
+                })
+        return rows
+
+    def prune_stale_shares(self, port: int) -> int:
+        """Delete share registrations left behind for this application's port.
+
+        A share is a record on the zrok account, not just a local process.
+        Killing the process — or restarting the machine — leaves the record,
+        and they accumulate: enough of them and the controller starts refusing
+        new shares with "invalid session", which looks nothing like the actual
+        cause. This was diagnosed the hard way, with a share still registered
+        against a test port from an earlier run blocking every new share.
+
+        Only shares whose target is this port on this machine are removed, so
+        anything else the operator uses zrok for is left alone.
+        """
+        if not self.binary:
+            return 0
+        try:
+            out = subprocess.run(
+                [self.binary, "overview"], capture_output=True, text=True, timeout=30
+            ).stdout
+        except (OSError, subprocess.SubprocessError):
+            return 0
+
+        # `overview` groups shares under an environment header. Only act inside
+        # the block for this host, so another machine's shares are untouched.
+        host = socket.gethostname()
+        mine = False
+        targets = (f"localhost:{port}", f"127.0.0.1:{port}")
+        tokens = []
+        for line in out.splitlines():
+            if line.startswith(">") or "envZId" in line:
+                mine = host in line
+                continue
+            if not mine or "│" not in line:
+                continue
+            cells = [c.strip() for c in line.split("│") if c.strip()]
+            if len(cells) >= 4 and any(t in cells[3] for t in targets):
+                tokens.append(cells[0])
+
+        removed = 0
+        for token in tokens:
+            try:
+                result = subprocess.run(
+                    [self.binary, "delete", "share", token],
+                    capture_output=True, text=True, timeout=30,
+                )
+                if result.returncode == 0:
+                    logger.warning("Removed a stale zrok share (%s)", token)
+                    removed += 1
+            except (OSError, subprocess.SubprocessError):
+                pass
+        return removed
+
+    def ensure_name(self, name: str) -> Dict[str, Any]:
+        """Reserve ``name`` if this account does not already hold it."""
+        if not self.binary:
+            return {"success": False, "error": "zrok is not installed."}
+        if any(n["name"] == name for n in self.names()):
+            return {"success": True, "created": False}
+        try:
+            result = subprocess.run(
+                [self.binary, "create", "name", name],
+                capture_output=True, text=True, timeout=40,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            return {"success": False, "error": str(exc)}
+        output = result.stdout + result.stderr
+        if result.returncode != 0 or "[ERROR]" in output:
+            detail = output.strip().splitlines()[-1] if output.strip() else "unknown error"
+            if "already" in detail.lower() or "conflict" in detail.lower():
+                return {
+                    "success": False,
+                    "error": f"The name '{name}' is taken by another zrok account. "
+                             f"Pick a different one.",
+                }
+            return {"success": False, "error": detail[:300]}
+        logger.info("Reserved zrok name %r", name)
+        return {"success": True, "created": True}
 
     def environment(self) -> Dict[str, Any]:
         """Whether zrok is installed and the account environment is enabled.
@@ -200,7 +315,8 @@ class ZrokTunnel:
     # ----------------------------------------------------------------- start
 
     def start(self, port: int, basic_auth: Optional[str] = None,
-              backend_https: bool = False) -> Dict[str, Any]:
+              backend_https: bool = False,
+              reserved_name: Optional[str] = None) -> Dict[str, Any]:
         """Open a public share pointing at ``port``.
 
         ``backend_https`` must match how the application is actually serving.
@@ -243,8 +359,41 @@ class ZrokTunnel:
                        "--headless"]
         if basic_auth:
             command += ["--basic-auth", basic_auth]
+        if reserved_name:
+            ready = self.ensure_name(reserved_name)
+            if not ready["success"]:
+                return {"success": False, "error": ready["error"]}
+            # namespace:name — the bare name is read as a namespace token.
+            command += ["-n", f"public:{reserved_name}"]
 
         logger.info("Starting zrok share for port %d", port)
+        self.prune_stale_shares(port)
+
+        attempts = NAME_RETRIES if reserved_name else 1
+        for attempt in range(attempts):
+            outcome = self._spawn(command, port, reserved_name, backend_https)
+            if outcome is not None:
+                return outcome
+            # A share that has just stopped keeps its name for a couple of
+            # seconds. Restarting the application lands inside that window, so
+            # wait it out rather than failing the operator's first click.
+            if attempt < attempts - 1:
+                logger.info(
+                    "Name %r is still held by the previous share; retrying",
+                    reserved_name,
+                )
+                time.sleep(NAME_RETRY_WAIT)
+        return {
+            "success": False,
+            "error": f"The name '{reserved_name}' is still attached to a share "
+                     f"that has not finished shutting down. Wait a few seconds "
+                     f"and try again.",
+            "log_tail": self._log_tail(10),
+        }
+
+    def _spawn(self, command, port: int, reserved_name: Optional[str],
+               backend_https: bool) -> Optional[Dict[str, Any]]:
+        """One attempt. Returns None when the name was busy and a retry is due."""
         log_file = open(self.log_path, "w", encoding="utf-8")
         try:
             process = subprocess.Popen(
@@ -261,20 +410,23 @@ class ZrokTunnel:
         with self._lock:
             self._process = process
             self._state = TunnelState(status="starting", port=port,
-                                      started_at=time.time())
+                                      started_at=time.time(),
+                                      reserved_name=reserved_name)
         self._write_pid(process.pid)
 
         url = self._await_url(process, STARTUP_TIMEOUT)
         log_file.close()
 
         if url is None:
+            conflict = NAME_CONFLICT in self._raw_log()
             self.stop()
-            tail = self._log_tail(14)
+            if conflict and reserved_name:
+                return None                     # caller retries
             return {
                 "success": False,
                 "error": "zrok did not report a public address within "
                          f"{int(STARTUP_TIMEOUT)}s. See logs/zrok.log.",
-                "log_tail": tail,
+                "log_tail": self._log_tail(14),
             }
 
         reachable, detail = self._probe(url)
@@ -347,8 +499,17 @@ class ZrokTunnel:
             if "invalid session" in content:
                 logger.error("zrok reported an invalid session")
                 return None
+            if NAME_CONFLICT in content:
+                return None
             time.sleep(0.4)
         return None
+
+    def _raw_log(self) -> str:
+        try:
+            with open(self.log_path, "r", encoding="utf-8") as handle:
+                return handle.read()
+        except OSError:
+            return ""
 
     def _log_tail(self, lines: int) -> List[str]:
         """Readable tail of the log — zrok writes JSON lines, so unwrap them."""
@@ -432,6 +593,7 @@ class ZrokTunnel:
     def stop(self) -> Dict[str, Any]:
         with self._lock:
             process = self._process
+            port = self._state.port
             self._process = None
             self._state = TunnelState(status="stopped")
 
@@ -446,6 +608,10 @@ class ZrokTunnel:
             process.kill()
             process.wait(timeout=5)
         logger.info("zrok share stopped")
+        if port:
+            # A terminated share usually deregisters itself; a killed one does
+            # not, and the record would block the next start.
+            self.prune_stale_shares(port)
         return {"success": True}
 
     def __del__(self):

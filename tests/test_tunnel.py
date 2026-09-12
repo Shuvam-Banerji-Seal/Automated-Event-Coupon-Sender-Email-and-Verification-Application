@@ -55,6 +55,54 @@ class TestPorts:
         assert port_is_free(port)
 
 
+class TestUrlParsing:
+    """The endpoint is scraped out of zrok's log, so the pattern is load-bearing.
+
+    It first read `[a-z0-9]{6,}`, which silently truncated a hyphenated
+    reserved name: "iiserkol-coupons.shares.zrok.io" was parsed as
+    "coupons.shares.zrok.io". Every subsequent check then ran against an
+    address that does not exist and reported a 404 that looked like a backend
+    misconfiguration.
+    """
+
+    LOG = ('{"msg":"access your zrok share at the following endpoints:'
+           '\\n %s.shares.zrok.io"}')
+
+    @pytest.mark.parametrize("name", [
+        "iiserkol-coupons", "ps0vyltt9brr", "my-event-scanner-2026", "a-b-c-d",
+    ])
+    def test_extracts_the_whole_hostname(self, name):
+        from src.tunnel import _URL_RE
+        match = _URL_RE.search(self.LOG % name)
+        assert match is not None
+        assert match.group(0) == f"{name}.shares.zrok.io"
+
+    def test_hyphenated_names_are_not_truncated(self):
+        from src.tunnel import _URL_RE
+        found = _URL_RE.search(self.LOG % "iiserkol-coupons").group(0)
+        assert not found.startswith("coupons"), "hyphenated prefix was dropped"
+
+
+class TestReservedName:
+    def test_state_reports_whether_the_address_is_stable(self):
+        from src.tunnel import TunnelState
+        assert TunnelState(reserved_name="x").as_dict()["stable"] is True
+        assert TunnelState().as_dict()["stable"] is False
+
+    def test_name_is_validated_before_reserving(self, client):
+        for bad in ("no", "Has Capitals", "under_score", "-leading", "a" * 60):
+            response = client.post("/api/tunnel/name", json={"name": bad})
+            assert response.status_code == 400, f"{bad!r} should be rejected"
+
+    def test_clearing_the_name_is_allowed(self, client):
+        assert client.post("/api/tunnel/name", json={"name": ""}).status_code == 200
+
+    def test_name_is_remembered_as_a_setting(self, client):
+        store = client.app_module.store
+        store.set_setting("zrok_name", "my-event")
+        assert client.get("/api/tunnel").get_json()["reserved_name"] == "my-event"
+
+
 class TestOrphanReaping:
     """A crash must not leave a public address pointing at a dead port."""
 

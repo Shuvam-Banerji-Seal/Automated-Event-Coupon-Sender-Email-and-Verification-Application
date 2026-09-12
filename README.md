@@ -175,6 +175,30 @@ Scans take roughly half a second over the internet against about ten
 milliseconds on the local network. Both are fine for a door; pick the public
 address when getting everyone onto one wifi is the harder problem.
 
+### Keep the address fixed
+
+By default zrok issues a **new random subdomain every time the share starts**,
+so a link handed to volunteers dies at the next restart. Reserve a name once,
+in Settings under "Fixed address", and the same URL comes back every time:
+
+```
+https://<your-name>.shares.zrok.io/scan
+```
+
+Set `ZROK_RESERVED_NAME` in `.env` so it survives a fresh database too. The
+name is reserved on your zrok account, so it is yours until you release it, and
+it can be printed or circulated before the event.
+
+Two things the code has to handle, both learned the hard way:
+
+* A share keeps its name for a couple of seconds after stopping, so a restart
+  lands inside that window. Starting retries through it rather than failing.
+* A share is a record on the zrok account, not just a local process. Killing
+  the process leaves the record behind, and enough of them make the controller
+  reject new shares with `invalid session` — which looks nothing like the real
+  cause. Stale records for this port are pruned on start and stop; shares
+  belonging to other machines or other uses are left alone.
+
 If the application is killed while a share is open, the next start closes the
 orphan automatically.
 

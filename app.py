@@ -18,6 +18,7 @@ import atexit
 import io
 import logging
 import os
+import re
 import secrets
 import signal
 import socket
@@ -102,6 +103,9 @@ DEFAULT_SETTINGS = {
     "organizer_batch": os.getenv("ORGANIZER_BATCH", ""),
     "organizer_institution": os.getenv("ORGANIZER_INSTITUTION", "IISER Kolkata"),
     "reply_to": os.getenv("REPLY_TO", ""),
+    # Reserved zrok name. Blank means an ephemeral share, whose address changes
+    # on every restart.
+    "zrok_name": os.getenv("ZROK_RESERVED_NAME", ""),
 }
 
 APP_PORT = int(os.getenv("PORT", "5000"))
@@ -1263,6 +1267,8 @@ def api_tunnel_status():
         "environment": tunnel.environment(),
         "port": APP_PORT,
         "scanner_pin_set": bool(SCANNER_PIN),
+        "reserved_name": event_settings().get("zrok_name", ""),
+        "names": tunnel.names(),
     })
 
 
@@ -1287,11 +1293,40 @@ def api_tunnel_start():
     body = request.get_json(silent=True) or {}
     serving_https = os.getenv("SSL_ENABLED", "false").lower() in ("1", "true", "yes") \
         and os.path.exists("cert.pem")
+    reserved = (body.get("reserved_name")
+                or event_settings().get("zrok_name", "")).strip()
+    if reserved:
+        store.set_setting("zrok_name", reserved)
     result = tunnel.start(APP_PORT, basic_auth=body.get("basic_auth") or None,
-                          backend_https=serving_https)
+                          backend_https=serving_https,
+                          reserved_name=reserved or None)
     if result.get("success"):
         store.set_setting("last_tunnel_url", result.get("url") or "")
     return jsonify(result), (200 if result.get("success") else 500)
+
+
+@app.post("/api/tunnel/name")
+@admin_only
+def api_tunnel_name():
+    """Reserve a stable name for the public address."""
+    body = request.get_json(silent=True) or {}
+    name = (body.get("name") or "").strip().lower()
+    if not name:
+        store.set_setting("zrok_name", "")
+        return jsonify({"success": True, "reserved_name": ""})
+    if not re.fullmatch(r"[a-z0-9][a-z0-9-]{2,40}", name):
+        return jsonify({
+            "success": False,
+            "error": "Use 3-41 characters: lowercase letters, digits and "
+                     "hyphens, starting with a letter or digit.",
+        }), 400
+    result = tunnel.ensure_name(name)
+    if not result["success"]:
+        return jsonify(result), 400
+    store.set_setting("zrok_name", name)
+    return jsonify({"success": True, "reserved_name": name,
+                    "created": result.get("created", False),
+                    "url": f"https://{name}.shares.zrok.io"})
 
 
 @app.post("/api/tunnel/stop")

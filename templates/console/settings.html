@@ -110,6 +110,21 @@
           published</strong> — this console stays on this machine.
         </p>
         <div id="tunnel-env"></div>
+
+        <div class="field">
+          <label for="zrok-name">Fixed address <span class="muted">(recommended)</span></label>
+          <div class="row">
+            <input type="text" id="zrok-name" placeholder="my-event-scanner"
+                   autocapitalize="off" autocorrect="off" spellcheck="false">
+            <span class="muted small nowrap">.shares.zrok.io</span>
+            <button class="btn sm" id="zrok-name-save">Save</button>
+          </div>
+          <div class="hint" id="zrok-name-hint">
+            Without one, a new random address is issued every time the tunnel
+            restarts, and any link you handed out stops working.
+          </div>
+        </div>
+
         <div id="tunnel-body"></div>
       </div>
       <div class="card-foot">
@@ -320,6 +335,14 @@ async function loadTunnel() {
     t.running ? '<span class="badge ok"><span class="dot"></span>Live</span>'
               : '<span class="badge">Offline</span>';
 
+  const nameInput = document.getElementById('zrok-name');
+  if (document.activeElement !== nameInput) nameInput.value = d.reserved_name || '';
+  document.getElementById('zrok-name-hint').innerHTML = d.reserved_name
+    ? `Address is fixed: <strong>https://${escapeHtml(d.reserved_name)}.shares.zrok.io/scan</strong> ` +
+      `— it stays the same across restarts, so you can share it in advance.`
+    : 'Without one, a new random address is issued every time the tunnel ' +
+      'restarts, and any link you handed out stops working.';
+
   document.getElementById('tunnel-env').innerHTML = env.installed && env.enabled
     ? ''
     : `<div class="notice warn mb-2"><svg><use href="#i-alert"/></svg>
@@ -331,6 +354,13 @@ async function loadTunnel() {
       <div class="notice ok mb-2"><svg><use href="#i-check-circle"/></svg>
         <div><strong>Scanner is live on the internet</strong>
         <span class="small">Anyone with this address and the PIN can check guests in.</span></div></div>
+      ${t.stable
+        ? '<div class="notice ok mb-2"><svg><use href="#i-check-circle"/></svg><div>' +
+          '<strong>Fixed address</strong><span class="small">This link survives ' +
+          'restarts — safe to print or send out ahead of the event.</span></div></div>'
+        : '<div class="notice warn mb-2"><svg><use href="#i-alert"/></svg><div>' +
+          '<strong>Temporary address</strong><span class="small">This changes ' +
+          'every restart. Set a fixed address above and reopen the tunnel.</span></div></div>'}
       <div class="notice mb-2"><svg><use href="#i-info"/></svg>
         <div><strong>Tell your volunteers two things</strong><span class="small">
           zrok shows a warning page the first time; they tap &ldquo;Visit
@@ -368,6 +398,20 @@ async function loadTunnel() {
   document.getElementById('tunnel-uptime').textContent =
     t.running ? `up ${fmtDuration(t.uptime_seconds)} · port ${t.port}` : '';
 }
+
+document.getElementById('zrok-name-save').onclick = async (e) => {
+  const name = document.getElementById('zrok-name').value.trim().toLowerCase();
+  setBusy(e.currentTarget, true, 'Reserving…');
+  try {
+    const d = await api('/api/tunnel/name', { method: 'POST', body: { name } });
+    toast(d.reserved_name
+      ? `Address fixed: ${d.reserved_name}.shares.zrok.io`
+      : 'Fixed address cleared');
+    loadTunnel();
+  } catch (err) {
+    toast(err.message, 'error', 10000);
+  } finally { setBusy(e.currentTarget, false); }
+};
 
 document.getElementById('tunnel-start').onclick = async (e) => {
   setBusy(e.currentTarget, true, 'Opening…');
