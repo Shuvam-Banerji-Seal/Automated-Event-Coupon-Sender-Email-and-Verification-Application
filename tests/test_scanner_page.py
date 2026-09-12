@@ -54,8 +54,17 @@ class TestCameraConstraints:
         code = strip_comments(script)
         assert "pause(" in code, "no delay between camera attempts"
 
-    def test_falls_back_to_the_front_camera(self, script):
-        assert "facingMode: 'user'" in script
+    def test_the_front_camera_is_still_reachable(self, script):
+        """As a last resort, not as an early fallback.
+
+        It is ranked lowest in the device list rather than requested by a
+        dedicated constraint, so it is only ever reached once every rear lens
+        has refused — and {video:true} can still land on it on a first run,
+        before labels exist.
+        """
+        code = strip_comments(script)
+        assert "front|face|user|self" in code
+        assert re.search(r"\{\s*video:\s*true\s*\}", code)
 
     def test_tries_plain_video_true(self, script):
         assert re.search(r"\{\s*video:\s*true\s*\}", script)
@@ -69,6 +78,75 @@ class TestCameraConstraints:
 
     def test_permission_refusal_short_circuits(self, script):
         assert "NotAllowedError" in script
+
+
+class TestCameraSelection:
+    """The scanner must land on a rear lens, and let the operator override it.
+
+    Reported from the field: it opened the *front* camera. A bare {video:true}
+    returns the browser default, which on a phone is usually the selfie camera,
+    and it was being tried before the device list was consulted.
+    """
+
+    def test_device_list_is_consulted_before_video_true(self, script):
+        code = strip_comments(script)
+        by_device = code.index("enumerateDevices")
+        video_true = code.index("video: true")
+        assert by_device < video_true, (
+            "{video:true} is tried before the camera list; it returns the "
+            "browser default, which is usually the front camera"
+        )
+
+    def test_rear_cameras_rank_above_front(self, script):
+        assert "rankCamera" in script
+        code = strip_comments(script)
+        assert "back|rear|environment" in code
+        assert "front|face|user|self" in code
+
+    def test_secondary_lenses_rank_below_the_main_rear(self, script):
+        """Ultrawide, macro and depth sensors often cannot produce video."""
+        assert "wide|ultra|macro|depth|tele|mono" in strip_comments(script)
+
+    def test_choice_is_remembered(self, script):
+        assert "scanner-camera-id" in script
+        assert "rememberCamera" in script
+
+    def test_a_switcher_is_offered(self, source, script):
+        assert 'id="btn-switch"' in source
+        assert 'id="cam-list"' in source
+        assert "renderCameraChooser" in script
+
+
+class TestCameraLifecycle:
+    """Start/stop must be reliable and never swallow a press.
+
+    Reported: repeated presses of Start did nothing, and Stop followed by Start
+    left the camera off. The first was a busy flag that discarded presses while
+    a slow attempt ran; the second was Android refusing to reopen a camera
+    released a moment earlier.
+    """
+
+    def test_a_press_while_busy_restarts_rather_than_returning(self, script):
+        code = strip_comments(script)
+        assert "if (cameraBusy) return" not in code, (
+            "presses are silently discarded while an attempt is in flight"
+        )
+        assert "cameraGeneration" in code, "no way to cancel an in-flight attempt"
+
+    def test_stop_leaves_a_settle_window(self, script):
+        assert "cameraSettleUntil" in strip_comments(script)
+
+    def test_stop_cancels_an_attempt_in_flight(self, script):
+        stop = re.search(r"function stopCamera\(\) \{.*?\n\}", script, re.S).group(0)
+        assert "cameraGeneration" in stop
+
+    def test_starting_shows_progress(self, script):
+        """Without feedback, a slow start is indistinguishable from a dead button."""
+        assert "setButtonState('starting')" in script
+
+    def test_stop_releases_the_wake_lock(self, script):
+        stop = re.search(r"function stopCamera\(\) \{.*?\n\}", script, re.S).group(0)
+        assert "releaseWake" in stop
 
 
 class TestMobileVideoElement:

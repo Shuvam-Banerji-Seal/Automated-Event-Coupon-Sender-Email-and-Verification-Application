@@ -160,6 +160,16 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
   font-style: normal; font-size: .72rem; color: var(--bad); white-space: nowrap;
 }
 
+.mini-spin {
+  width: 15px; height: 15px; border-radius: 50%; display: inline-block;
+  border: 2px solid rgb(255 255 255 / .35); border-top-color: currentColor;
+  animation: spin .7s linear infinite; vertical-align: -2px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.pick.on { border-color: var(--accent); background: var(--panel-2); }
+.pick em.ok { color: var(--ok); }
+
 .link-btn {
   color: var(--accent); font-size: .84rem; text-decoration: underline;
   padding: 10px; min-height: 44px;
@@ -302,6 +312,9 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
   </div>
   <div class="spacer"></div>
   <div class="counter"><b id="count-used">—</b><span>checked in</span></div>
+  <button class="icon-btn" id="btn-switch" hidden aria-label="Choose camera">
+    <svg><use href="#i-camera"/></svg>
+  </button>
   <button class="icon-btn" id="torch" hidden aria-label="Toggle torch">
     <svg><use href="#i-torch"/></svg>
   </button>
@@ -365,6 +378,18 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
     <div class="sheet-actions">
       <button id="sheet-cancel">Cancel</button>
       <button id="sheet-go" class="primary" disabled>Check in</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="cam-sheet">
+  <div class="sheet-inner">
+    <h2>Choose a camera</h2>
+    <p>Rear cameras read QR codes; the front one is for selfies. Your choice is
+       remembered on this phone.</p>
+    <div id="cam-list" class="picker"></div>
+    <div class="sheet-actions">
+      <button id="cam-cancel">Close</button>
     </div>
   </div>
 </div>
@@ -440,43 +465,79 @@ function beep(ok) {
 
 /* ---------------------------------------------------------------- camera */
 
+/* ===================================================================
+   Camera acquisition.
+
+   Rebuilt after field reports: it landed on the front camera, took many
+   seconds, ignored repeated presses of Start, and would not restart after
+   Stop. Each of those was a separate fault in the previous approach.
+
+   The core change is to enumerate first. Once permission has been granted the
+   device labels are readable, so the rear camera can be identified and opened
+   directly — one call, correct lens, no guessing. Constraint-based requests
+   are only a fallback for the very first run, when labels are still hidden.
+   =================================================================== */
+
 let cameraBusy = false;
-let knownCameras = [];        // [{deviceId, label, error}]
+let cameraGeneration = 0;      // invalidates an in-flight attempt when restarted
+let knownCameras = [];         // [{deviceId, label, error}]
+let activeCameraId = null;
+let cameraSettleUntil = 0;    // Android will not reopen the camera instantly
 
+const CAMERA_PREF_KEY = 'scanner-camera-id';
 
-/* Why this is not started automatically without a fallback:
-   iOS Safari rejects getUserMedia called on page load, before the user has
-   touched anything, with NotAllowedError — the permission sheet never appears.
-   The previous version reported that as "permission was refused", which is both
-   wrong and unactionable: nothing was refused, the browser wanted a gesture.
-   Autostart is still attempted, because on Android it just works and one less
-   tap at a door matters; when it fails for any reason we show a large tap
-   target and the real error rather than a guess. */
-
-function cameraError(title, detail, technical) {
-  renderPicker();
-  document.getElementById('start-title').textContent = title;
-  document.getElementById('start-detail').innerHTML = detail;
-  const tech = document.getElementById('start-tech');
-  tech.textContent = technical || '';
-  tech.style.display = technical ? '' : 'none';
-  document.getElementById('pane-start').classList.add('show');
+function rememberedCamera() {
+  try { return localStorage.getItem(CAMERA_PREF_KEY); } catch { return null; }
 }
 
-function renderPicker() {
-  const host = document.getElementById('start-picker');
-  if (!knownCameras.length) { host.innerHTML = ''; return; }
-  host.innerHTML = '<div class="pick-label">Try a specific camera</div>'
-    + knownCameras.map((c, i) => {
-        const name = c.label || `Camera ${i + 1}`;
-        return `<button class="pick" data-cam="${i}">`
-          + `<span>${esc(name)}</span>`
-          + (c.error ? `<em>${esc(c.error.split(":")[0])}</em>` : '')
-          + '</button>';
-      }).join('');
-  host.querySelectorAll('[data-cam]').forEach((b) => {
-    b.onclick = () => useCamera(knownCameras[Number(b.dataset.cam)].deviceId);
-  });
+function rememberCamera(deviceId) {
+  try { localStorage.setItem(CAMERA_PREF_KEY, deviceId); } catch { /* private mode */ }
+}
+
+const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/* Rank a camera for "most likely to be the main rear lens".
+
+   Phones expose ultrawide, macro and depth sensors alongside the real rear
+   camera. Several of those cannot produce a usable video stream at all, and
+   picking one looks identical to the camera being broken. */
+function rankCamera(device) {
+  const label = (device.label || '').toLowerCase();
+  if (/(back|rear|environment)/.test(label)) {
+    if (/(wide|ultra|macro|depth|tele|mono|bokeh)/.test(label)) return 2;
+    return 3;                       // plain rear camera: what we want
+  }
+  if (/(front|face|user|self)/.test(label)) return 0;
+  return 1;                         // unlabelled
+}
+
+async function listCameras() {
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    return devices
+      .filter((d) => d.kind === 'videoinput')
+      .map((d) => ({ deviceId: d.deviceId, label: d.label, error: null }));
+  } catch {
+    return [];
+  }
+}
+
+function usable(candidate) {
+  // A stream can arrive with no track, or a track that has already ended.
+  // Accepting one leaves a black preview and a scanner that decodes nothing.
+  const tracks = candidate ? candidate.getVideoTracks() : [];
+  return tracks.length > 0 && tracks[0].readyState === 'live';
+}
+
+function releaseStream(candidate) {
+  try { candidate?.getTracks().forEach((t) => t.stop()); } catch { /* already gone */ }
+}
+
+function stopTracks() {
+  releaseStream(stream);
+  stream = null;
+  activeCameraId = null;
+  video.srcObject = null;
 }
 
 function describe(err) {
@@ -485,17 +546,100 @@ function describe(err) {
   return `${name}: ${msg}`;
 }
 
-async function startCamera(userInitiated = false) {
-  if (cameraBusy) return;
-  cameraBusy = true;
+/* Open one camera. Returns the stream, or throws. */
+async function openDevice(constraints) {
+  const candidate = await navigator.mediaDevices.getUserMedia(constraints);
+  if (!usable(candidate)) {
+    releaseStream(candidate);
+    throw new Error('camera opened but produced no live video');
+  }
+  return candidate;
+}
+
+function setStatus(text) {
+  hint.textContent = text;
+}
+
+async function attachStream(candidate, deviceId) {
+  stream = candidate;
+  activeCameraId = deviceId || null;
+  video.srcObject = candidate;
   try {
-    await openCamera(userInitiated);
-  } finally {
-    cameraBusy = false;
+    await video.play();
+  } catch (err) {
+    // iOS can hand back a live stream and still refuse to play it without a
+    // gesture; the preview stays black while every other signal looks fine.
+    stopTracks();
+    throw err;
+  }
+  if (deviceId) rememberCamera(deviceId);
+  document.getElementById('pane-start').classList.remove('show');
+  document.getElementById('pane-denied').classList.remove('show');
+  document.getElementById('pane-insecure').classList.remove('show');
+  setButtonState('running');
+  setupTorch();
+  await keepAwake();
+  await setupDetector();
+  scanning = true;
+  setStatus('Point the camera at the QR code');
+  renderCameraChooser();
+  tick();
+}
+
+async function setupDetector() {
+  if (detector || !('BarcodeDetector' in window)) return;
+  try {
+    const formats = await window.BarcodeDetector.getSupportedFormats();
+    if (formats.includes('qr_code')) {
+      detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+    }
+  } catch { /* jsQR handles it */ }
+}
+
+function setButtonState(state) {
+  const button = document.getElementById('btn-camera');
+  if (state === 'running') {
+    button.innerHTML = '<svg><use href="#i-x"/></svg> Stop camera';
+  } else if (state === 'starting') {
+    button.innerHTML = '<span class="mini-spin"></span> Starting…';
+  } else {
+    button.innerHTML = '<svg><use href="#i-camera"/></svg> Start camera';
   }
 }
 
-async function openCamera(userInitiated) {
+/* ------------------------------------------------------------------ start */
+
+async function startCamera(userInitiated = false, preferredId = null) {
+  // A press while an attempt is running restarts it rather than being
+  // discarded. Silently ignoring presses is what made this feel broken: the
+  // previous attempt could still be grinding through a chain of timeouts with
+  // nothing on screen to say so.
+  const generation = ++cameraGeneration;
+  if (cameraBusy) {
+    setStatus('Restarting the camera…');
+    stopTracks();
+    await pause(250);
+    if (generation !== cameraGeneration) return;
+  }
+
+  const wait = cameraSettleUntil - Date.now();
+  if (wait > 0) await pause(wait);
+  if (generation !== cameraGeneration) return;
+
+  cameraBusy = true;
+  setButtonState('starting');
+  setStatus('Starting the camera…');
+  try {
+    await acquire(userInitiated, preferredId, generation);
+  } finally {
+    if (generation === cameraGeneration) {
+      cameraBusy = false;
+      if (!stream) setButtonState('idle');
+    }
+  }
+}
+
+async function acquire(userInitiated, preferredId, generation) {
   const local = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
   if (!window.isSecureContext && !local) {
     document.getElementById('https-url').textContent =
@@ -506,219 +650,183 @@ async function openCamera(userInitiated) {
   if (!navigator.mediaDevices?.getUserMedia) {
     cameraError('Camera not available in this browser',
       'If you opened this from inside another app (WhatsApp, Instagram, a mail '
-      + 'client), tap the &ldquo;open in browser&rdquo; option and try again. '
-      + 'Otherwise use Safari or Chrome.',
+      + 'client), choose &ldquo;open in browser&rdquo; and try again. Otherwise '
+      + 'use Chrome, Safari or Firefox.',
       'navigator.mediaDevices.getUserMedia is undefined');
     return;
   }
 
-  // Constraint strategy, rebuilt after the previous one failed on every phone
-  // it was tried on while working fine on a laptop.
-  //
-  // Two rules, both learned from the version of this scanner that did work:
-  //
-  // 1. Never use `exact`. Per the spec, exact/min/max are *mandatory*: if no
-  //    device satisfies them the request is rejected outright. Plain and
-  //    `ideal` values instead have "gravity" — the browser picks the closest
-  //    camera it has. A phone with five lenses frequently matches none of them
-  //    exactly, and privacy-hardened builds such as Brave randomise deviceIds
-  //    to resist fingerprinting, so an exact deviceId can never match either.
-  //    That is how a phone with permission granted and five cameras listed
-  //    still reported "Requested device not found".
-  //
-  // 2. Pause between attempts. On Android the camera subsystem needs a moment
-  //    after a rejected request; firing the next one immediately gets
-  //    NotFoundError regardless of how reasonable the constraints are, which
-  //    makes one bad first attempt look like a total absence of cameras.
-  const pause = (ms) => new Promise((r) => setTimeout(r, ms));
-
-  const attempts = [
-    { video: { facingMode: 'environment' } },
-    { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } } },
-    { video: true },
-    { video: { facingMode: 'user' } },
-  ];
-
+  const stale = () => generation !== cameraGeneration;
   let lastError = null;
-  for (let i = 0; i < attempts.length; i++) {
-    if (i > 0) await pause(700);
+
+  // 1. A camera chosen explicitly, or remembered from last time. This is the
+  //    fast path on every run after the first.
+  const wanted = preferredId || rememberedCamera();
+  if (wanted) {
     try {
-      const candidate = await navigator.mediaDevices.getUserMedia(attempts[i]);
-      if (usable(candidate)) { stream = candidate; lastError = null; break; }
-      releaseStream(candidate);          // opened but dead; do not keep it
-      lastError = new Error('camera opened but produced no live track');
+      const candidate = await openDevice({ video: { deviceId: wanted } });
+      if (stale()) { releaseStream(candidate); return; }
+      await attachStream(candidate, wanted);
+      return;
     } catch (err) {
       lastError = err;
-      if (err.name === 'NotAllowedError' || err.name === 'SecurityError') break;
     }
   }
 
-  // Still nothing: walk the actual device list. deviceId is passed as a plain
-  // value, not `exact`, so a randomised or stale id degrades into "pick
-  // something close" rather than failing outright.
-  if (!stream && lastError && lastError.name !== 'NotAllowedError'
-      && lastError.name !== 'SecurityError') {
-    knownCameras = await listCameras();
-    const rank = (d) => {
-      const label = (d.label || '').toLowerCase();
-      if (/(back|rear|environment)/.test(label)) {
-        return /(wide|ultra|macro|depth|tele|mono)/.test(label) ? 2 : 3;
-      }
-      if (/(front|face|user|self)/.test(label)) return 0;
-      return 1;
-    };
-    for (const cam of [...knownCameras].sort((a, b) => rank(b) - rank(a))) {
-      await pause(700);
+  // 2. Pick the rear camera from the device list. Labels are only populated
+  //    once permission has been granted, so this works from the second run
+  //    onward — and it is the only reliable way to avoid the front camera,
+  //    because a bare {video:true} hands back whatever the browser defaults
+  //    to, which on most phones is the selfie camera.
+  knownCameras = await listCameras();
+  if (stale()) return;
+  const labelled = knownCameras.filter((c) => c.label);
+  if (labelled.length) {
+    for (const cam of [...labelled].sort((a, b) => rankCamera(b) - rankCamera(a))) {
+      if (stale()) return;
       try {
-        const candidate = await navigator.mediaDevices.getUserMedia({
-          video: { deviceId: cam.deviceId },
-        });
-        if (usable(candidate)) { stream = candidate; lastError = null; break; }
-        releaseStream(candidate);
-        cam.error = 'no live track';
+        const candidate = await openDevice({ video: { deviceId: cam.deviceId } });
+        if (stale()) { releaseStream(candidate); return; }
+        await attachStream(candidate, cam.deviceId);
+        return;
       } catch (err) {
         cam.error = describe(err);
         lastError = err;
+        if (err.name === 'NotAllowedError' || err.name === 'SecurityError') break;
+        // Android needs a breath after a rejected request; an immediate retry
+        // fails whatever the constraints are.
+        await pause(300);
       }
     }
   }
 
-  if (!stream) {
-    const name = lastError && lastError.name;
-    if (name === 'NotAllowedError' || name === 'SecurityError') {
-      if (!userInitiated) {
-        // Almost certainly the missing-gesture case rather than a real refusal.
-        cameraError('Tap to turn on the camera',
-          'Your phone needs you to tap once before it will allow the camera.',
-          null);
-      } else {
-        cameraError('Camera permission is blocked',
-          'Allow camera access for this site, then tap again.<br>'
-          + '<b>iPhone:</b> the <b>aA</b> button in the address bar &rarr; '
-          + 'Website Settings &rarr; Camera &rarr; Allow.<br>'
-          + '<b>Android:</b> the padlock in the address bar &rarr; '
-          + 'Permissions &rarr; Camera.',
-          describe(lastError));
+  // 3. First run, or nothing in the list opened: ask by facing mode. This is
+  //    also what raises the permission prompt, after which the list above
+  //    becomes usable. Never `exact` — that is mandatory per spec and a phone
+  //    with several lenses frequently matches none of them.
+  if (!stream && (!lastError || (lastError.name !== 'NotAllowedError'
+      && lastError.name !== 'SecurityError'))) {
+    for (const constraints of [
+      { video: { facingMode: 'environment' } },
+      { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } } },
+      { video: true },
+    ]) {
+      if (stale()) return;
+      try {
+        const candidate = await openDevice(constraints);
+        if (stale()) { releaseStream(candidate); return; }
+        const track = candidate.getVideoTracks()[0];
+        const id = track.getSettings ? track.getSettings().deviceId : null;
+        await attachStream(candidate, id);
+        // Permission has now been granted, so labels are readable. Refresh the
+        // list so the chooser is populated and the rear camera can be picked
+        // deliberately next time.
+        knownCameras = await listCameras();
+        renderCameraChooser();
+        return;
+      } catch (err) {
+        lastError = err;
+        if (err.name === 'NotAllowedError' || err.name === 'SecurityError') break;
+        await pause(300);
       }
-    } else if (name === 'NotReadableError' || name === 'TrackStartError') {
-      cameraError('The camera is in use',
-        'Close any other app using the camera, then tap to try again.',
-        describe(lastError));
-    } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
-      if (!knownCameras.length) knownCameras = await listCameras();
-      const count = knownCameras.length;
-      cameraError('No usable camera found',
-        count > 0
-          ? `Your phone lists ${count} camera${count === 1 ? '' : 's'} but the `
-            + 'browser could not open any of them. Usually one of:<br>'
-            + '&bull; Android\u2019s <b>Camera access</b> switch is off \u2014 swipe '
-            + 'down twice and check the quick settings tile.<br>'
-            + '&bull; <b>Brave Shields</b> blocking it \u2014 tap the lion and set '
-            + 'Shields down for this site.<br>'
-            + '&bull; another app is holding the camera \u2014 close it and retry.<br>'
-            + 'If none of those, try Chrome or Firefox.'
-          : 'This device did not offer a camera we can use. You can still type '
-            + 'codes by hand.',
-        describe(lastError));
+    }
+  }
+
+  if (stale()) return;
+  reportFailure(lastError, userInitiated);
+}
+
+function reportFailure(lastError, userInitiated) {
+  const name = lastError && lastError.name;
+  if (name === 'NotAllowedError' || name === 'SecurityError') {
+    if (!userInitiated) {
+      cameraError('Tap to turn on the camera',
+        'Your phone needs you to tap once before it will allow the camera.', null);
     } else {
-      cameraError('Could not start the camera',
-        'Tap to try again. Typing codes by hand always works.',
-        lastError ? describe(lastError) : 'no camera matched any constraint');
+      cameraError('Camera permission is blocked',
+        'Allow camera access for this site, then tap again.<br>'
+        + '<b>Android:</b> the padlock in the address bar &rarr; Permissions '
+        + '&rarr; Camera.<br>'
+        + '<b>iPhone:</b> the <b>aA</b> button &rarr; Website Settings &rarr; '
+        + 'Camera &rarr; Allow.',
+        describe(lastError));
     }
-    return;
+  } else if (name === 'NotReadableError' || name === 'TrackStartError') {
+    cameraError('The camera is in use',
+      'Close any other app using the camera, then tap to try again.',
+      describe(lastError));
+  } else if (knownCameras.length) {
+    cameraError('Could not open any camera',
+      `Your phone lists ${knownCameras.length} camera`
+      + `${knownCameras.length === 1 ? '' : 's'} but none of them would open. `
+      + 'Pick one below, or check that Android&rsquo;s <b>Camera access</b> '
+      + 'switch is on and that no other app is holding the camera.',
+      lastError ? describe(lastError) : null);
+  } else {
+    cameraError('Could not start the camera',
+      'Tap to try again. Typing codes by hand always works.',
+      lastError ? describe(lastError) : 'no camera matched any request');
   }
-
-  video.srcObject = stream;
-  try {
-    await video.play();
-  } catch (err) {
-    // iOS can hand back a live stream and still refuse to play it without a
-    // gesture; the preview stays black while everything looks fine.
-    stopTracks();
-    cameraError('Tap to start the preview',
-      'Your phone will not show the camera until you tap.', describe(err));
-    return;
-  }
-
-  document.getElementById('pane-insecure').classList.remove('show');
-  document.getElementById('pane-denied').classList.remove('show');
-  document.getElementById('pane-start').classList.remove('show');
-  document.getElementById('btn-camera').innerHTML =
-    '<svg><use href="#i-x"/></svg> Stop camera';
-
-  setupTorch();
-  await keepAwake();
-
-  if ('BarcodeDetector' in window) {
-    try {
-      const formats = await window.BarcodeDetector.getSupportedFormats();
-      if (formats.includes('qr_code')) {
-        detector = new window.BarcodeDetector({ formats: ['qr_code'] });
-      }
-    } catch {}
-  }
-
-  scanning = true;
-  hint.textContent = 'Point the camera at the QR code';
-  tick();
 }
 
-function usable(candidate) {
-  // A stream can come back with no track, or a track that is already ended.
-  // Treating that as success leaves a black preview and a scanner that never
-  // decodes anything.
-  const tracks = candidate ? candidate.getVideoTracks() : [];
-  return tracks.length > 0 && tracks[0].readyState === 'live';
-}
+/* ------------------------------------------------------- camera selection */
 
-function releaseStream(candidate) {
-  try { candidate?.getTracks().forEach((t) => t.stop()); } catch {}
-}
-
-function stopTracks() {
-  stream?.getTracks().forEach((t) => t.stop());
-  stream = null;
-  video.srcObject = null;
-}
-
-async function listCameras() {
-  try {
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    return devices.filter((d) => d.kind === 'videoinput')
-      .map((d) => ({ deviceId: d.deviceId, label: d.label, error: null }));
-  } catch { return []; }
-}
-
-async function useCamera(deviceId) {
-  // Open one specific camera, chosen by hand from the picker.
-  stopTracks();
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: { deviceId },
-    });
-  } catch (err) {
-    cameraError('That camera would not open',
-      'Try a different one from the list below.', describe(err));
-    renderPicker();
-    return false;
+function cameraName(cam, index) {
+  if (!cam.label) return `Camera ${index + 1}`;
+  // "camera 0, facing back" reads better as "Rear camera 1".
+  const m = cam.label.match(/camera\s*(\d+).*facing\s*(back|front)/i);
+  if (m) {
+    return `${m[2].toLowerCase() === 'back' ? 'Rear' : 'Front'} camera ${Number(m[1]) + 1}`;
   }
-  try {
-    await video.play();
-  } catch (err) {
-    stopTracks();
-    cameraError('Tap to start the preview',
-      'Your phone will not show the camera until you tap.', describe(err));
-    return false;
-  }
-  document.getElementById('pane-start').classList.remove('show');
-  document.getElementById('btn-camera').innerHTML =
-    '<svg><use href="#i-x"/></svg> Stop camera';
-  setupTorch();
-  await keepAwake();
-  scanning = true;
-  hint.textContent = 'Point the camera at the QR code';
-  tick();
-  return true;
+  return cam.label;
+}
+
+function renderCameraChooser() {
+  const button = document.getElementById('btn-switch');
+  button.hidden = knownCameras.length < 2;
+  const sheet = document.getElementById('cam-list');
+  if (!sheet) return;
+  sheet.innerHTML = knownCameras.map((c, i) => {
+    const active = c.deviceId === activeCameraId;
+    return `<button class="pick${active ? ' on' : ''}" data-cam="${i}">`
+      + `<span>${esc(cameraName(c, i))}</span>`
+      + (active ? '<em class="ok">in use</em>'
+                : c.error ? `<em>${esc(c.error.split(':')[0])}</em>` : '')
+      + '</button>';
+  }).join('') || '<p class="muted small">No cameras detected.</p>';
+  sheet.querySelectorAll('[data-cam]').forEach((b) => {
+    b.onclick = () => {
+      document.getElementById('cam-sheet').classList.remove('show');
+      startCamera(true, knownCameras[Number(b.dataset.cam)].deviceId);
+    };
+  });
+}
+
+function renderPicker() {
+  // The failure screen offers the same list, so a jammed automatic choice can
+  // be overridden without hunting for a menu.
+  const host = document.getElementById('start-picker');
+  if (!host) return;
+  if (!knownCameras.length) { host.innerHTML = ''; return; }
+  host.innerHTML = '<div class="pick-label">Try a specific camera</div>'
+    + knownCameras.map((c, i) => `<button class="pick" data-pick="${i}">`
+        + `<span>${esc(cameraName(c, i))}</span>`
+        + (c.error ? `<em>${esc(c.error.split(':')[0])}</em>` : '')
+        + '</button>').join('');
+  host.querySelectorAll('[data-pick]').forEach((b) => {
+    b.onclick = () => startCamera(true, knownCameras[Number(b.dataset.pick)].deviceId);
+  });
+}
+
+function cameraError(title, detail, technical) {
+  renderPicker();
+  document.getElementById('start-title').textContent = title;
+  document.getElementById('start-detail').innerHTML = detail;
+  const tech = document.getElementById('start-tech');
+  tech.textContent = technical || '';
+  tech.style.display = technical ? '' : 'none';
+  document.getElementById('pane-start').classList.add('show');
+  setStatus('Camera not running');
 }
 
 async function cameraDiagnostics() {
@@ -730,28 +838,37 @@ async function cameraDiagnostics() {
     const status = await navigator.permissions?.query({ name: 'camera' });
     if (status) bits.push(`permission: ${status.state}`);
   } catch { bits.push('permission: not reportable'); }
-  try {
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    const cams = devices.filter((d) => d.kind === 'videoinput');
-    bits.push(`cameras seen: ${cams.length}`);
-    cams.forEach((c, i) => {
-      const seen = knownCameras.find((k) => k.deviceId === c.deviceId);
-      bits.push(`  cam ${i + 1}: ${c.label || '(label hidden)'}`
-        + (seen && seen.error ? `  -> ${seen.error}` : ''));
-    });
-  } catch { bits.push('cameras seen: unknown'); }
+  const cams = await listCameras();
+  bits.push(`cameras seen: ${cams.length}`);
+  cams.forEach((c, i) => {
+    const seen = knownCameras.find((k) => k.deviceId === c.deviceId);
+    bits.push(`  cam ${i + 1}: ${c.label || '(label hidden)'}`
+      + (c.deviceId === activeCameraId ? '  [in use]' : '')
+      + (seen && seen.error ? `  -> ${seen.error}` : ''));
+  });
+  bits.push(`remembered: ${rememberedCamera() || 'none'}`);
   bits.push(`ua: ${navigator.userAgent.slice(0, 90)}`);
   return bits.join('\n');
 }
 
 function stopCamera() {
+  // Bump the generation so an attempt still in flight abandons itself instead
+  // of attaching a stream to a scanner the operator has just switched off.
+  cameraGeneration += 1;
   scanning = false;
+  cameraBusy = false;
   cancelAnimationFrame(rafId);
   stopTracks();
-  document.getElementById('torch').hidden = true;
-  document.getElementById('btn-camera').innerHTML =
-    '<svg><use href="#i-camera"/></svg> Start camera';
+  detector = null;
+  const torch = document.getElementById('torch');
+  torch.hidden = true;
+  torch.classList.remove('on');
+  setButtonState('idle');
+  setStatus('Camera stopped');
   releaseWake();
+  // Android does not hand the camera straight back after it is released, so a
+  // Start pressed immediately after Stop used to fail for that reason alone.
+  cameraSettleUntil = Date.now() + 600;
 }
 
 function setupTorch() {
@@ -991,6 +1108,17 @@ document.getElementById('start-why').onclick = async () => {
   if (!box.hidden) { box.hidden = true; return; }
   box.textContent = await cameraDiagnostics();
   box.hidden = false;
+};
+
+document.getElementById('btn-switch').onclick = async () => {
+  knownCameras = await listCameras();
+  renderCameraChooser();
+  document.getElementById('cam-sheet').classList.add('show');
+};
+document.getElementById('cam-cancel').onclick =
+  () => document.getElementById('cam-sheet').classList.remove('show');
+document.getElementById('cam-sheet').onclick = (e) => {
+  if (e.target.id === 'cam-sheet') e.currentTarget.classList.remove('show');
 };
 
 document.getElementById('btn-camera').onclick = () => {
