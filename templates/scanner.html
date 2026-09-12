@@ -144,6 +144,22 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
   font: 400 .72rem/1.5 ui-monospace, monospace; color: #6f7a88;
   word-break: break-word; max-width: 36ch;
 }
+.picker { display: flex; flex-direction: column; gap: 6px; width: min(92vw, 340px); }
+.pick-label {
+  font-size: .74rem; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--text-2); margin-top: 4px;
+}
+.pick {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  min-height: 48px; padding: 10px 14px; border-radius: 12px;
+  background: var(--panel-2); color: var(--text); text-align: left;
+  font-size: .86rem; border: 1px solid var(--line);
+}
+.pick:active { background: var(--line); }
+.pick em {
+  font-style: normal; font-size: .72rem; color: var(--bad); white-space: nowrap;
+}
+
 .link-btn {
   color: var(--accent); font-size: .84rem; text-decoration: underline;
   padding: 10px; min-height: 44px;
@@ -326,6 +342,7 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
     <p id="start-detail">Your phone needs you to tap once before it will allow
        the camera.</p>
     <p class="tech" id="start-tech" style="display:none"></p>
+    <div id="start-picker" class="picker"></div>
     <button class="link-btn" id="start-why">Why isn't it working?</button>
     <pre class="diag" id="start-diag" hidden></pre>
   </div>
@@ -424,6 +441,8 @@ function beep(ok) {
 /* ---------------------------------------------------------------- camera */
 
 let cameraBusy = false;
+let knownCameras = [];        // [{deviceId, label, error}]
+
 
 /* Why this is not started automatically without a fallback:
    iOS Safari rejects getUserMedia called on page load, before the user has
@@ -435,12 +454,29 @@ let cameraBusy = false;
    target and the real error rather than a guess. */
 
 function cameraError(title, detail, technical) {
+  renderPicker();
   document.getElementById('start-title').textContent = title;
   document.getElementById('start-detail').innerHTML = detail;
   const tech = document.getElementById('start-tech');
   tech.textContent = technical || '';
   tech.style.display = technical ? '' : 'none';
   document.getElementById('pane-start').classList.add('show');
+}
+
+function renderPicker() {
+  const host = document.getElementById('start-picker');
+  if (!knownCameras.length) { host.innerHTML = ''; return; }
+  host.innerHTML = '<div class="pick-label">Try a specific camera</div>'
+    + knownCameras.map((c, i) => {
+        const name = c.label || `Camera ${i + 1}`;
+        return `<button class="pick" data-cam="${i}">`
+          + `<span>${esc(name)}</span>`
+          + (c.error ? `<em>${esc(c.error.split(":")[0])}</em>` : '')
+          + '</button>';
+      }).join('');
+  host.querySelectorAll('[data-cam]').forEach((b) => {
+    b.onclick = () => useCamera(knownCameras[Number(b.dataset.cam)].deviceId);
+  });
 }
 
 function describe(err) {
@@ -511,30 +547,28 @@ async function openCamera(userInitiated) {
   // follow it often cannot be opened for video at all.
   if (!stream && lastError && lastError.name !== 'NotAllowedError'
       && lastError.name !== 'SecurityError') {
-    try {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const cams = devices.filter((d) => d.kind === 'videoinput');
-      const rank = (d) => {
-        const label = (d.label || '').toLowerCase();
-        if (/(back|rear|environment)/.test(label)) {
-          return /(wide|ultra|macro|depth|tele|mono)/.test(label) ? 2 : 3;
-        }
-        if (/(front|face|user|self)/.test(label)) return 0;
-        return 1;
-      };
-      for (const cam of [...cams].sort((a, b) => rank(b) - rank(a))) {
-        try {
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: { deviceId: { exact: cam.deviceId } },
-          });
-          lastError = null;
-          break;
-        } catch (err) {
-          lastError = err;
-        }
+    knownCameras = await listCameras();
+    const rank = (d) => {
+      const label = (d.label || '').toLowerCase();
+      if (/(back|rear|environment)/.test(label)) {
+        return /(wide|ultra|macro|depth|tele|mono)/.test(label) ? 2 : 3;
       }
-    } catch (err) {
-      lastError = lastError || err;
+      if (/(front|face|user|self)/.test(label)) return 0;
+      return 1;
+    };
+    for (const cam of [...knownCameras].sort((a, b) => rank(b) - rank(a))) {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { deviceId: { exact: cam.deviceId } },
+        });
+        lastError = null;
+        break;
+      } catch (err) {
+        // Recorded per device: when every one fails the same way, the block is
+        // outside this page and no constraint will get around it.
+        cam.error = describe(err);
+        lastError = err;
+      }
     }
   }
 
@@ -560,7 +594,8 @@ async function openCamera(userInitiated) {
         'Close any other app using the camera, then tap to try again.',
         describe(lastError));
     } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
-      const count = await countCameras();
+      if (!knownCameras.length) knownCameras = await listCameras();
+      const count = knownCameras.length;
       cameraError('No usable camera found',
         count > 0
           ? `Your phone lists ${count} camera${count === 1 ? '' : 's'} but the `
@@ -623,11 +658,44 @@ function stopTracks() {
   video.srcObject = null;
 }
 
-async function countCameras() {
+async function listCameras() {
   try {
     const devices = await navigator.mediaDevices.enumerateDevices();
-    return devices.filter((d) => d.kind === 'videoinput').length;
-  } catch { return 0; }
+    return devices.filter((d) => d.kind === 'videoinput')
+      .map((d) => ({ deviceId: d.deviceId, label: d.label, error: null }));
+  } catch { return []; }
+}
+
+async function useCamera(deviceId) {
+  // Open one specific camera, chosen by hand from the picker.
+  stopTracks();
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { deviceId: { exact: deviceId } },
+    });
+  } catch (err) {
+    cameraError('That camera would not open',
+      'Try a different one from the list below.', describe(err));
+    renderPicker();
+    return false;
+  }
+  try {
+    await video.play();
+  } catch (err) {
+    stopTracks();
+    cameraError('Tap to start the preview',
+      'Your phone will not show the camera until you tap.', describe(err));
+    return false;
+  }
+  document.getElementById('pane-start').classList.remove('show');
+  document.getElementById('btn-camera').innerHTML =
+    '<svg><use href="#i-x"/></svg> Stop camera';
+  setupTorch();
+  await keepAwake();
+  scanning = true;
+  hint.textContent = 'Point the camera at the QR code';
+  tick();
+  return true;
 }
 
 async function cameraDiagnostics() {
@@ -644,7 +712,9 @@ async function cameraDiagnostics() {
     const cams = devices.filter((d) => d.kind === 'videoinput');
     bits.push(`cameras seen: ${cams.length}`);
     cams.forEach((c, i) => {
-      bits.push(`  cam ${i + 1}: ${c.label || '(label hidden)'}`);
+      const seen = knownCameras.find((k) => k.deviceId === c.deviceId);
+      bits.push(`  cam ${i + 1}: ${c.label || '(label hidden)'}`
+        + (seen && seen.error ? `  -> ${seen.error}` : ''));
     });
   } catch { bits.push('cameras seen: unknown'); }
   bits.push(`ua: ${navigator.userAgent.slice(0, 90)}`);
