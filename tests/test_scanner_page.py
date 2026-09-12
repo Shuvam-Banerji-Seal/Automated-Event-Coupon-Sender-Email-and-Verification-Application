@@ -149,6 +149,46 @@ class TestCameraLifecycle:
         assert "releaseWake" in stop
 
 
+class TestCameraRelease:
+    """The camera must be handed back when the page goes away.
+
+    Android reserves a camera for whoever holds the stream. A page reloaded or
+    navigated away from while the camera runs leaks that reservation, and the
+    next attempt gets NotReadableError while other lenses report NotFoundError
+    — curable only by restarting the browser. The scanner this replaced had a
+    beforeunload handler; the rewrite dropped it, which is what produced
+    "worked once after clearing the cache, never again".
+    """
+
+    def test_released_on_pagehide(self, script):
+        assert "addEventListener('pagehide'" in script
+
+    def test_released_on_beforeunload(self, script):
+        assert "addEventListener('beforeunload'" in script
+
+    def test_released_when_backgrounded(self, script):
+        """Holding a camera in a background tab blocks every other app."""
+        code = strip_comments(script)
+        handler = re.search(r"visibilitychange.*?\n\}\);", code, re.S).group(0)
+        assert "releaseCamera" in handler
+
+    def test_resumes_when_brought_back(self, script):
+        assert "resumeOnReturn" in script
+
+    def test_not_holding_one_camera_while_asking_for_another(self, script):
+        """Requesting a camera while still holding one self-inflicts
+        NotReadableError."""
+        code = strip_comments(script)
+        acquire = code[code.index("async function acquire("):]
+        assert "releaseCamera()" in acquire[:2000]
+
+    def test_busy_camera_gets_its_own_advice(self, script):
+        """NotReadableError means found-but-held, which needs different
+        instructions from 'no camera found'."""
+        assert "NotReadableError" in script
+        assert "recent apps" in script, "no guidance for a camera held by a dead tab"
+
+
 class TestMobileVideoElement:
     def test_playsinline_is_set(self, source):
         """Without it iOS takes the video fullscreen instead of inline."""

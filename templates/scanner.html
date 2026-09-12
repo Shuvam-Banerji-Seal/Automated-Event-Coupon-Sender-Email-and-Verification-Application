@@ -629,6 +629,9 @@ async function startCamera(userInitiated = false, preferredId = null) {
   cameraBusy = true;
   setButtonState('starting');
   setStatus('Starting the camera…');
+  // Clear the previous failure while trying again; leaving it on screen next
+  // to a spinner reads as two contradictory states at once.
+  document.getElementById('pane-start').classList.remove('show');
   try {
     await acquire(userInitiated, preferredId, generation);
   } finally {
@@ -658,6 +661,14 @@ async function acquire(userInitiated, preferredId, generation) {
 
   const stale = () => generation !== cameraGeneration;
   let lastError = null;
+
+  // Never ask for a camera while still holding one: that reliably produces
+  // NotReadableError against our own stream.
+  if (stream) {
+    releaseCamera();
+    await pause(400);
+    if (stale()) return;
+  }
 
   // 1. A camera chosen explicitly, or remembered from last time. This is the
   //    fast path on every run after the first.
@@ -752,9 +763,19 @@ function reportFailure(lastError, userInitiated) {
         describe(lastError));
     }
   } else if (name === 'NotReadableError' || name === 'TrackStartError') {
-    cameraError('The camera is in use',
-      'Close any other app using the camera, then tap to try again.',
+    cameraError('The camera is busy',
+      'Something else is holding it. Close any other app or browser tab using '
+      + 'the camera and tap to try again. If nothing obvious is using it, '
+      + 'fully close the browser (swipe it away from recent apps) and reopen '
+      + 'this page &mdash; Android sometimes keeps a camera reserved for a tab '
+      + 'that has gone.',
       describe(lastError));
+  } else if (knownCameras.some((c) => (c.error || '').startsWith('NotReadableError'))) {
+    cameraError('The camera is busy',
+      'One of your cameras was found but is being held by something else. '
+      + 'Close other apps using the camera, or fully close the browser (swipe '
+      + 'it away from recent apps) and reopen this page.',
+      lastError ? describe(lastError) : null);
   } else if (knownCameras.length) {
     cameraError('Could not open any camera',
       `Your phone lists ${knownCameras.length} camera`
@@ -891,8 +912,54 @@ async function keepAwake() {
 }
 function releaseWake() { try { wakeLock?.release(); } catch {} wakeLock = null; }
 
+/* Releasing the camera is not optional housekeeping — it is what keeps the
+   scanner working at all.
+
+   Android reserves a camera for whoever holds the stream. A page that is
+   reloaded or navigated away from while the camera runs leaks that
+   reservation, and the next attempt gets NotReadableError ("found it, cannot
+   read it") while every other lens reports NotFoundError. The only way out is
+   restarting the browser, which matches exactly what was reported: it worked
+   once after clearing the cache, then never again.
+
+   The scanner this replaced had a beforeunload handler doing this. The rewrite
+   dropped it. */
+
+function releaseCamera() {
+  try {
+    stream?.getTracks().forEach((t) => t.stop());
+  } catch { /* nothing to release */ }
+  stream = null;
+  activeCameraId = null;
+  try { video.srcObject = null; } catch { /* torn down already */ }
+}
+
+window.addEventListener('pagehide', releaseCamera);
+window.addEventListener('beforeunload', releaseCamera);
+
+let resumeOnReturn = false;
+
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && scanning && !wakeLock) keepAwake();
+  if (document.visibilityState === 'hidden') {
+    // Backgrounded: hand the camera back so another app — or this page on its
+    // next load — can have it. Android suspends the feed anyway, so nothing is
+    // lost but the reservation.
+    if (stream) {
+      resumeOnReturn = true;
+      scanning = false;
+      cancelAnimationFrame(rafId);
+      releaseCamera();
+      releaseWake();
+    }
+    return;
+  }
+  if (resumeOnReturn) {
+    resumeOnReturn = false;
+    setStatus('Resuming…');
+    startCamera(true);
+    return;
+  }
+  if (scanning && !wakeLock) keepAwake();
 });
 
 /* ------------------------------------------------------------- detection */
