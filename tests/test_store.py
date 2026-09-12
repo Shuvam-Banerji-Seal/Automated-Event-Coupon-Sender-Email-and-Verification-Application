@@ -137,8 +137,11 @@ class TestTokens:
         assert store.find_by_token("TOKEN0000000").coupon_id == "c0"
 
     def test_tokens_are_unique(self, store):
+        """Enforced by the database, not by a check the caller could skip."""
+        import sqlite3
+
         make_coupons(store, 1)
-        with pytest.raises(Exception):
+        with pytest.raises(sqlite3.IntegrityError):
             store.insert_coupons(
                 [
                     Coupon(

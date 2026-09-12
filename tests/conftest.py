@@ -13,6 +13,22 @@ import sys
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _hermetic_environment(monkeypatch):
+    """Clear settings that would otherwise leak in from the developer's shell.
+
+    MAIL_DRY_RUN in particular: with it exported, the mailer short-circuits and
+    six rotation tests fail for reasons that have nothing to do with the code.
+    A suite whose result depends on the surrounding shell cannot be trusted to
+    say whether anything is broken. Tests that need these set them explicitly.
+    """
+    for name in ("MAIL_DRY_RUN", "SMTP_USERNAME", "SMTP_PASSWORD", "SMTP_HOST",
+                 "SMTP_PORT", "SMTP_SENDER_NAME", "SMTP_SENDER_EMAIL",
+                 "ZROK_RESERVED_NAME", "SCANNER_PIN", "THANK_YOU_TEMPLATE",
+                 "TRUST_PROXY", "ADMIN_EXTRA_IPS"):
+        monkeypatch.delenv(name, raising=False)
+
+
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     """A fully isolated app instance.

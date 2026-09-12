@@ -1076,7 +1076,13 @@ class CouponStore:
                 )
 
     def requeue_stuck_emails(self, older_than_seconds: int = 300) -> int:
-        """Return messages left 'sending' by a crash to the queue."""
+        """Return messages left 'sending' to the queue.
+
+        ``older_than_seconds=0`` recovers every one, which is what a startup
+        sweep wants: nothing can legitimately be mid-send when no worker is
+        running yet. A positive threshold is for the periodic sweep, where a
+        message genuinely in flight must not be duplicated.
+        """
         cutoff = (
             datetime.now(timezone.utc) - timedelta(seconds=older_than_seconds)
         ).isoformat()

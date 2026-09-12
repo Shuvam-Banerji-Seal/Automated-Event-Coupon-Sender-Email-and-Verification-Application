@@ -143,7 +143,7 @@ class EncryptionService:
             return data
             
         except Exception as e:
-            raise ValueError(f"Decryption failed: {str(e)}")
+            raise ValueError(f"Decryption failed: {str(e)}") from e
     
     def validate_timestamp(self, data: Dict[str, Any], max_age_hours: int = 24) -> bool:
         """

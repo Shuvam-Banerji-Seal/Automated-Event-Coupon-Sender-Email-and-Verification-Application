@@ -235,7 +235,7 @@ def suggest_mapping(profiles: Sequence[ColumnProfile]) -> Dict[str, Optional[str
 
     mapping: Dict[str, Optional[str]] = {role: None for role in ROLES}
     taken: set = set()
-    for score, role, column in candidates:
+    for _score, role, column in candidates:
         if mapping[role] is None and column not in taken:
             mapping[role] = column
             taken.add(column)
@@ -294,7 +294,9 @@ def read_csv_bytes(raw: bytes) -> Tuple[List[str], List[Dict[str, str]], str]:
     rows: List[Dict[str, str]] = []
     for record in reader:
         row: Dict[str, str] = {}
-        for original, clean in zip(raw_headers, headers):
+        # strict: a mismatch here would silently drop columns, and the
+        # operator would never learn why a field went missing.
+        for original, clean in zip(raw_headers, headers, strict=True):
             value = record.get(original, "")
             row[clean] = "" if value is None else str(value).strip()
         if any(v for v in row.values()):

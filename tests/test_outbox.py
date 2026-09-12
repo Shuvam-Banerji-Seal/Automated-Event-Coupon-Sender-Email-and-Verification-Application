@@ -143,6 +143,32 @@ class TestCrashRecovery:
         assert store.requeue_stuck_emails(older_than_seconds=-1) == 1
         assert store.outbox_stats()["queued"] == 1
 
+    def test_startup_recovers_messages_of_any_age(self, store):
+        """A crash strands messages that are seconds old, not minutes.
+
+        Startup recovery originally filtered on an age threshold of five
+        minutes, so the very messages a crash produces were skipped — and since
+        the sweep only ran at startup, nothing ever picked them up again. A
+        row in 'sending' when no worker is running is orphaned by definition.
+        """
+        for i in range(3):
+            store.enqueue_email(f"u{i}@x.com", "Hi", "<p>x</p>")
+        store.claim_emails(10)                       # now 'sending', just now
+        assert store.outbox_stats()["sending"] == 3
+
+        campaign = FakeCampaign()
+        w = worker(store, campaign)
+        w.start()
+        try:
+            deadline = time.time() + 5
+            while time.time() < deadline and len(campaign.sent) < 3:
+                time.sleep(0.05)
+        finally:
+            w.stop(timeout=5)
+
+        assert len(campaign.sent) == 3, "fresh interrupted messages were stranded"
+        assert store.outbox_stats()["sending"] == 0
+
     def test_queue_survives_a_new_store_instance(self, store, tmp_path):
         store.enqueue_email("a@x.com", "Hi", "<p>x</p>")
         store.close()

@@ -39,6 +39,11 @@ MAX_ATTEMPTS = len(RETRY_SCHEDULE)
 IDLE_SLEEP = 2.0
 BATCH_SIZE = 10
 
+# Periodic rescue for a send that hangs rather than fails. Comfortably longer
+# than the SMTP timeout, so a message genuinely in flight is never duplicated.
+SWEEP_INTERVAL = 120.0
+STUCK_AFTER = 300
+
 
 class OutboxWorker:
     """Drains the outbox on a single background thread."""
@@ -68,7 +73,13 @@ class OutboxWorker:
         if self._thread is not None and self._thread.is_alive():
             return
         # Anything left mid-flight by a previous crash goes back on the queue.
-        recovered = self.store.requeue_stuck_emails()
+        #
+        # No age threshold here, deliberately. A message sitting in 'sending'
+        # at startup is orphaned by definition — this process is the only
+        # worker and it has not sent anything yet. Filtering by age stranded
+        # exactly the messages a crash produces, because those are seconds old,
+        # and nothing would ever pick them up again.
+        recovered = self.store.requeue_stuck_emails(older_than_seconds=0)
         if recovered:
             logger.info("Recovered %d interrupted messages", recovered)
         self._stop.clear()
@@ -109,8 +120,20 @@ class OutboxWorker:
     # ------------------------------------------------------------------ loop
 
     def _run(self):
+        last_sweep = time.time()
         while not self._stop.is_set():
             try:
+                # A send that hangs past the SMTP timeout leaves its row in
+                # 'sending'. Startup recovery cannot help a process that never
+                # restarts, so sweep periodically too — with an age threshold
+                # this time, so a message currently being sent is left alone.
+                if time.time() - last_sweep > SWEEP_INTERVAL:
+                    last_sweep = time.time()
+                    stuck = self.store.requeue_stuck_emails(
+                        older_than_seconds=STUCK_AFTER
+                    )
+                    if stuck:
+                        logger.warning("Requeued %d stalled messages", stuck)
                 sent_any = self._drain_once()
             except Exception as exc:  # noqa: BLE001 - the worker must not die
                 logger.exception("Outbox worker error")
