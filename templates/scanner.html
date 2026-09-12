@@ -512,39 +512,50 @@ async function openCamera(userInitiated) {
     return;
   }
 
-  // Two ways to ask, tried in order.
+  // Constraint strategy, rebuilt after the previous one failed on every phone
+  // it was tried on while working fine on a laptop.
   //
-  // First by facingMode, which is what you want when it works. On phones with
-  // several lenses it frequently does not: the browser matches no device and
-  // throws NotFoundError, and on some builds even a bare {video:true} fails
-  // the same way because the default device it picks is not one it can open.
-  // Observed on an Android phone reporting five cameras with permission
-  // already granted — every constraint below failed until the camera was
-  // requested by its explicit deviceId.
+  // Two rules, both learned from the version of this scanner that did work:
+  //
+  // 1. Never use `exact`. Per the spec, exact/min/max are *mandatory*: if no
+  //    device satisfies them the request is rejected outright. Plain and
+  //    `ideal` values instead have "gravity" — the browser picks the closest
+  //    camera it has. A phone with five lenses frequently matches none of them
+  //    exactly, and privacy-hardened builds such as Brave randomise deviceIds
+  //    to resist fingerprinting, so an exact deviceId can never match either.
+  //    That is how a phone with permission granted and five cameras listed
+  //    still reported "Requested device not found".
+  //
+  // 2. Pause between attempts. On Android the camera subsystem needs a moment
+  //    after a rejected request; firing the next one immediately gets
+  //    NotFoundError regardless of how reasonable the constraints are, which
+  //    makes one bad first attempt look like a total absence of cameras.
+  const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+
   const attempts = [
-    { video: { facingMode: { exact: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } },
-    { video: { facingMode: 'environment', width: { ideal: 1280 } } },
     { video: { facingMode: 'environment' } },
+    { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } } },
     { video: true },
+    { video: { facingMode: 'user' } },
   ];
 
   let lastError = null;
-  for (const constraints of attempts) {
+  for (let i = 0; i < attempts.length; i++) {
+    if (i > 0) await pause(700);
     try {
-      stream = await navigator.mediaDevices.getUserMedia(constraints);
-      lastError = null;
-      break;
+      const candidate = await navigator.mediaDevices.getUserMedia(attempts[i]);
+      if (usable(candidate)) { stream = candidate; lastError = null; break; }
+      releaseStream(candidate);          // opened but dead; do not keep it
+      lastError = new Error('camera opened but produced no live track');
     } catch (err) {
       lastError = err;
-      // A refusal will not be reversed by looser constraints, so stop asking.
       if (err.name === 'NotAllowedError' || err.name === 'SecurityError') break;
     }
   }
 
-  // Second, one device at a time. Labels are readable once permission has been
-  // granted, so the rear camera can be preferred; a phone's main rear lens is
-  // usually the first "back" entry, and the ultrawide/macro/depth sensors that
-  // follow it often cannot be opened for video at all.
+  // Still nothing: walk the actual device list. deviceId is passed as a plain
+  // value, not `exact`, so a randomised or stale id degrades into "pick
+  // something close" rather than failing outright.
   if (!stream && lastError && lastError.name !== 'NotAllowedError'
       && lastError.name !== 'SecurityError') {
     knownCameras = await listCameras();
@@ -557,15 +568,15 @@ async function openCamera(userInitiated) {
       return 1;
     };
     for (const cam of [...knownCameras].sort((a, b) => rank(b) - rank(a))) {
+      await pause(700);
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { deviceId: { exact: cam.deviceId } },
+        const candidate = await navigator.mediaDevices.getUserMedia({
+          video: { deviceId: cam.deviceId },
         });
-        lastError = null;
-        break;
+        if (usable(candidate)) { stream = candidate; lastError = null; break; }
+        releaseStream(candidate);
+        cam.error = 'no live track';
       } catch (err) {
-        // Recorded per device: when every one fails the same way, the block is
-        // outside this page and no constraint will get around it.
         cam.error = describe(err);
         lastError = err;
       }
@@ -652,6 +663,18 @@ async function openCamera(userInitiated) {
   tick();
 }
 
+function usable(candidate) {
+  // A stream can come back with no track, or a track that is already ended.
+  // Treating that as success leaves a black preview and a scanner that never
+  // decodes anything.
+  const tracks = candidate ? candidate.getVideoTracks() : [];
+  return tracks.length > 0 && tracks[0].readyState === 'live';
+}
+
+function releaseStream(candidate) {
+  try { candidate?.getTracks().forEach((t) => t.stop()); } catch {}
+}
+
 function stopTracks() {
   stream?.getTracks().forEach((t) => t.stop());
   stream = null;
@@ -671,7 +694,7 @@ async function useCamera(deviceId) {
   stopTracks();
   try {
     stream = await navigator.mediaDevices.getUserMedia({
-      video: { deviceId: { exact: deviceId } },
+      video: { deviceId },
     });
   } catch (err) {
     cameraError('That camera would not open',
