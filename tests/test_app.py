@@ -875,6 +875,29 @@ class TestFullPagePreview:
         assert len(sources) == 4
         assert len(set(sources)) == 4, "the same QR was rendered for every sitting"
 
+    def test_it_defaults_to_a_real_recipient_not_an_invented_one(self, client):
+        """Showing "Ada Lovelace" to an operator whose sheet holds real names
+        reads as though the wrong people are about to be mailed."""
+        load_recipients(client)
+        page = client.get("/preview/invitation").get_data(as_text=True)
+        body = self._rendered_body(page)
+        assert "ada@iiserkol.ac.in" in body, "did not fall through to the first recipient"
+        assert "ada.lovelace@" not in body, "still previewing the invented placeholder"
+        assert "first recipient on your list" in page
+
+    def test_it_falls_back_to_a_sample_when_nobody_is_loaded(self, client):
+        page = client.get("/preview/invitation").get_data(as_text=True)
+        assert "no recipients loaded yet" in page
+        assert "ada.lovelace@iiserkol.ac.in" in self._rendered_body(page)
+
+    def test_a_real_recipient_keeps_their_own_sheet_columns(self, client):
+        load_recipients(client)
+        body = self._rendered_body(
+            client.get("/preview/invitation?email=ada@iiserkol.ac.in").get_data(as_text=True))
+        assert "ada@iiserkol.ac.in" in body       # from the sheet, not the sample
+        assert "ada.lovelace@" not in body, "the invented address leaked through"
+        assert "‹" not in body, "placeholder markers leaked into a real preview"
+
     def test_it_can_render_a_real_attendee(self, client):
         load_recipients(client)
         configure_sittings(client)
@@ -889,18 +912,79 @@ class TestFullPagePreview:
         assert real.verification_code in self._rendered_body(text)
 
 
-class TestOneThankYouPerPerson:
-    def test_collecting_four_meals_sends_one_thank_you(self, client, monkeypatch):
-        monkeypatch.setattr(client.app_module, "THANK_YOU_TEMPLATE", "thank_you")
+class TestThankYouPerSitting:
+    """One thank-you per sitting, each about the meal just collected.
+
+    "Thanks for coming" is worth nothing on the first of four meals. What an
+    attendee wants at that moment is confirmation the scan worked and where to
+    be next, so every message has to differ.
+    """
+
+    def _walk(self, client, monkeypatch, template="icoc_thank_you"):
+        monkeypatch.setattr(client.app_module, "THANK_YOU_TEMPLATE", template)
         load_recipients(client)
         configure_sittings(client)
         client.post("/api/send/start", json={"template": "invitation"})
         wait_for_send(client)
-
         store = client.app_module.store
-        for pass_ in store.coupons_for_email("ada@iiserkol.ac.in"):
-            client.post("/api/scan", json={"payload": pass_.qr_payload,
-                                           "meal": pass_.meal_key})
-        queued = [r for r in store.recent_outbox(limit=50)
-                  if r["to_email"] == "ada@iiserkol.ac.in"]
-        assert len(queued) == 1
+        passes = store.coupons_for_email("ada@iiserkol.ac.in")
+        for p in passes:
+            client.post("/api/scan", json={"payload": p.qr_payload, "meal": p.meal_key})
+        rows = store.conn.execute(
+            "SELECT o.subject, o.html, c.meal_key FROM outbox o"
+            " JOIN coupons c ON c.coupon_id = o.coupon_id"
+            " WHERE o.to_email = ? ORDER BY c.meal_order",
+            ("ada@iiserkol.ac.in",),
+        ).fetchall()
+        return passes, rows
+
+    def test_one_per_sitting(self, client, monkeypatch):
+        _, rows = self._walk(client, monkeypatch)
+        assert len(rows) == 4
+        assert [r["meal_key"] for r in rows] == [
+            "d1-lunch", "d1-dinner", "d2-lunch", "d2-dinner"]
+
+    def test_each_subject_names_its_own_meal(self, client, monkeypatch):
+        _, rows = self._walk(client, monkeypatch)
+        subjects = [r["subject"] for r in rows]
+        assert len(set(subjects)) == 4, subjects
+        assert "3 passes left" in subjects[0]
+        assert "1 pass left" in subjects[2]
+
+    def test_each_one_points_at_the_next_sitting(self, client, monkeypatch):
+        _, rows = self._walk(client, monkeypatch)
+        assert "Day 1 · Dinner" in rows[0]["html"]
+        assert "Day 2 · Lunch" in rows[1]["html"]
+        assert "Day 2 · Conference Dinner" in rows[2]["html"]
+
+    def test_the_last_one_says_goodbye_instead(self, client, monkeypatch):
+        _, rows = self._walk(client, monkeypatch)
+        last = rows[3]
+        assert "Next up" not in last["html"]
+        assert "last meal pass" in last["html"]
+        assert "Thank you for joining us" in last["subject"]
+
+    def test_no_redeemable_code_is_ever_in_a_thank_you(self, client, monkeypatch):
+        """It arrives after a pass is spent; printing a live code invites reuse."""
+        passes, rows = self._walk(client, monkeypatch)
+        unspent = {p.verification_code for p in passes[1:]}
+        assert "cid:" not in rows[0]["html"]
+        for code in unspent:
+            assert code not in rows[0]["html"], f"{code} was still valid when sent"
+
+    def test_rescanning_a_spent_pass_queues_nothing_more(self, client, monkeypatch):
+        passes, _ = self._walk(client, monkeypatch)
+        before = client.app_module.store.outbox_stats()["total"]
+        client.post("/api/scan", json={"payload": passes[0].qr_payload,
+                                       "meal": "d1-lunch"})
+        assert client.app_module.store.outbox_stats()["total"] == before
+
+    def test_a_single_sitting_event_still_gets_one(self, client, monkeypatch):
+        monkeypatch.setattr(client.app_module, "THANK_YOU_TEMPLATE", "thank_you")
+        load_recipients(client)
+        client.post("/api/send/start", json={"template": "invitation"})
+        wait_for_send(client)
+        store = client.app_module.store
+        coupon = store.find_by_email("ada@iiserkol.ac.in")
+        client.post("/api/scan", json={"payload": coupon.qr_payload})
+        assert store.outbox_stats()["total"] == 1

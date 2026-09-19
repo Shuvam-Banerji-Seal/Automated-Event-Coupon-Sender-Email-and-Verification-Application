@@ -44,7 +44,9 @@
     <div class="row">
       <b>Preview — {{ name }}</b>
       <div class="sub">
-        {% if email %}Rendered for {{ email }}{% else %}Rendered with sample data{% endif %}
+        {% if email %}Rendered for <strong>{{ email }}</strong>{% if not asked_for %}
+          — the first recipient on your list{% endif %}{% else %}Rendered with sample
+        data — no recipients loaded yet{% endif %}
       </div>
       <div class="controls">
         <a href="/compose">&larr; Editor</a>

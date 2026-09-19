@@ -62,6 +62,13 @@ SYSTEM_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "c.verification_code", "desc": "Inside the loop: that pass's 6-digit code", "sample": "418206"},
         {"name": "c.qr_code_src", "desc": "Inside the loop: that pass's QR image source", "sample": "cid:qr-d1-lunch"},
     ],
+    "Thank-you mail": [
+        {"name": "redeemed", "desc": "The sitting just collected — redeemed.meal_label, .time, .venue", "sample": "Day 1 · Lunch"},
+        {"name": "checked_in_at", "desc": "When they were scanned, in the event's timezone", "sample": "13:22"},
+        {"name": "remaining", "desc": "Passes they still hold — loop it to list what is left", "sample": "3 passes"},
+        {"name": "remaining_count", "desc": "How many sittings are still ahead of them", "sample": "3"},
+        {"name": "next_pass", "desc": "The next one they hold, or nothing if that was the last", "sample": "Day 1 · Dinner"},
+    ],
     "Event": [
         {"name": "event_name", "desc": "Name of the event", "sample": "Farewell Party 2026"},
         {"name": "event_date", "desc": "Date as configured in settings", "sample": "15 May 2026"},
@@ -122,6 +129,9 @@ def build_context(
     coupon_id: str = "",
     qr_code_src: str = "cid:qrcode",
     coupons: Optional[Sequence[Dict[str, Any]]] = None,
+    redeemed: Optional[Dict[str, Any]] = None,
+    remaining: Optional[Sequence[Dict[str, Any]]] = None,
+    checked_in_at: str = "",
     extra: Optional[Dict[str, Any]] = None,
     settings: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
@@ -135,9 +145,15 @@ def build_context(
     multi-meal conference is one email with a loop rather than one email per
     meal. The flat ``verification_code``/``qr_code_src`` pair keeps describing
     the first pass, which is what a single-sitting event has always meant.
+
+    ``redeemed`` and ``remaining`` are what a thank-you is written around: the
+    sitting somebody just collected, and the ones they still hold. Without them
+    a thank-you can only say "thanks for coming", which is worth nothing on the
+    first of four meals.
     """
     food = normalise_food(food_preference)
     passes = [dict(c) for c in (coupons or [])]
+    still_held = [dict(c) for c in (remaining or [])]
     context: Dict[str, Any] = dict(extra or {})
     context.update(
         {
@@ -153,6 +169,11 @@ def build_context(
             "qr_code_src": qr_code_src if include_qr else "",
             "coupons": passes,
             "coupon_count": len(passes),
+            "redeemed": dict(redeemed) if redeemed else None,
+            "remaining": still_held,
+            "remaining_count": len(still_held),
+            "next_pass": still_held[0] if still_held else None,
+            "checked_in_at": checked_in_at,
             # Long-standing aliases from earlier templates, kept so existing
             # saved templates keep rendering after the upgrade.
             "attendee_name": name,
@@ -251,6 +272,12 @@ def sample_context(
         coupon_id=entries[0]["coupon_id"],
         qr_code_src="{{QR_PREVIEW}}",
         coupons=entries,
+        # Pretend the first sitting has just been collected, so a thank-you
+        # template previews with something in `redeemed` and something left in
+        # `remaining` — the two states it is written around.
+        redeemed=entries[0],
+        remaining=entries[1:],
+        checked_in_at="13:22",
         extra=extra,
         settings=settings,
     )

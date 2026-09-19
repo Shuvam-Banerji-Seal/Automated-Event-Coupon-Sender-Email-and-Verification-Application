@@ -7,16 +7,22 @@ Written the way email has to be written: tables for layout, inline styles, no
 flexbox, no grid, no inline SVG, no external stylesheet, nothing that Gmail,
 Outlook or Apple Mail refuses.
 
-Two things are deliberate and worth keeping:
+Three decisions worth keeping:
 
-* Logos load from raw.githubusercontent.com. Attaching them would add a few
-  hundred KB to every message, and Gmail clips anything past ~102 KB. If the
-  reader blocks remote images the layout still reads — every logo has real alt
-  text and nothing load-bearing is an image.
-* QR codes are the exception: they are attached inline as cid: parts, because
-  they are the functional part of the message and must render even with remote
-  images blocked. The six-digit code is printed under every one as the fallback
-  a volunteer can type.
+* The artwork is authored as SVG (static/brand/icoc/svg/, rebuilt by
+  scripts/build_icoc_art.py) and shipped as PNG. Every client strips inline
+  <svg> and none will load an .svg from an <img src>.
+* Decoration loads from raw.githubusercontent.com. Attaching it would add a few
+  hundred KB to every message and Gmail clips past ~102 KB. Nothing load-bearing
+  is an image, and each has real alt text, so a reader who blocks remote images
+  still gets a complete, usable email.
+* QR codes are the exception: attached inline as cid: parts, because they are
+  the functional part and must render with remote images blocked. The six-digit
+  code is printed under every one and reaches the plain-text alternative too.
+
+Passes are grouped by day. The running counter uses a namespace because Jinja's
+loop.index restarts inside each group, and "Pass 3 of 4" has to keep counting
+across the day boundary.
 #}
 <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"
        style="background:#eef2f0;margin:0;padding:24px 10px">
@@ -30,137 +36,213 @@ Two things are deliberate and worth keeping:
       </div>
 
       <table width="640" cellpadding="0" cellspacing="0" border="0" role="presentation"
-             style="max-width:640px;width:100%;background:#ffffff;border-radius:14px;
+             style="max-width:640px;width:100%;background:#ffffff;border-radius:16px;
                     overflow:hidden;border:1px solid #d9e2dd">
 
-        <!-- ───────────────────────────── Masthead ───────────────────────────── -->
+        <!-- ═══════════════════════════ Masthead ═══════════════════════════ -->
         <tr>
-          <td style="background:#0f5a49;padding:30px 28px 26px;text-align:center">
-            <img src="https://raw.githubusercontent.com/Shuvam-Banerji-Seal/Automated-Event-Coupon-Sender-Email-and-Verification-Application/main/static/brand/icoc/icoc-emblem.png"
-                 width="132" height="134" alt="ICOC-Students 2026"
-                 style="width:132px;max-width:132px;height:auto;display:block;
-                        margin:0 auto 18px;border-radius:50%;background:#ffffff">
-            <div style="font:700 21px/1.3 Georgia,'Times New Roman',serif;color:#ffffff">
+          <td style="padding:0;line-height:0;font-size:0;background:#0f5a49">
+            <img src="https://raw.githubusercontent.com/Shuvam-Banerji-Seal/Automated-Event-Coupon-Sender-Email-and-Verification-Application/main/static/brand/icoc/icoc-masthead.png"
+                 width="640" height="160" alt=""
+                 style="width:100%;max-width:640px;height:auto;display:block;border:0">
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#0f5a49;padding:0 28px 30px;text-align:center">
+            <!-- Pulled up into the artwork so the emblem sits over the network
+                 rather than below it. Negative margin is safe here: Outlook
+                 ignores it and simply stacks the two, which still looks right. -->
+            <div style="margin-top:-72px">
+              <img src="https://raw.githubusercontent.com/Shuvam-Banerji-Seal/Automated-Event-Coupon-Sender-Email-and-Verification-Application/main/static/brand/icoc/icoc-emblem.png"
+                   width="124" height="126" alt="ICOC-Students 2026"
+                   style="width:124px;max-width:124px;height:auto;display:block;
+                          margin:0 auto 20px;border-radius:50%;background:#ffffff;
+                          border:4px solid #ffffff">
+            </div>
+            <div style="font:700 22px/1.32 Georgia,'Times New Roman',serif;color:#ffffff">
               International Conference on<br>Organometallics and Catalysis
             </div>
-            <div style="font:700 13px/1.5 Arial,Helvetica,sans-serif;color:#9fd6c3;
-                        padding-top:8px;letter-spacing:.16em;text-transform:uppercase">
+            <div style="font:700 12px/1.5 Arial,Helvetica,sans-serif;color:#9fd6c3;
+                        padding-top:10px;letter-spacing:.2em;text-transform:uppercase">
               Students Edition &nbsp;·&nbsp; 2026
             </div>
-            <div style="font:400 14px/1.6 Arial,Helvetica,sans-serif;color:#d6ece3;
-                        padding-top:14px">
-              22–23 September 2026 &nbsp;·&nbsp; IISER Kolkata
-            </div>
+            <table cellpadding="0" cellspacing="0" border="0" role="presentation"
+                   align="center" style="margin:20px auto 0">
+              <tr>
+                <td style="background:rgba(255,255,255,.12);border:1px solid #3d7c6b;
+                           border-radius:22px;padding:9px 20px;
+                           font:600 13px/1.4 Arial,Helvetica,sans-serif;color:#eaf6f1">
+                  22–23 September 2026 &nbsp;·&nbsp; IISER Kolkata
+                </td>
+              </tr>
+            </table>
           </td>
         </tr>
 
-        <!-- ───────────────────────────── Greeting ───────────────────────────── -->
+        <!-- ═══════════════════════════ Greeting ═══════════════════════════ -->
         <tr>
-          <td style="padding:30px 28px 4px">
-            <div style="font:400 17px/1.6 Arial,Helvetica,sans-serif;color:#1f2933">
+          <td style="padding:34px 30px 0">
+            <div style="font:400 19px/1.5 Georgia,'Times New Roman',serif;color:#12312a">
               Dear {{ first_name }},
             </div>
-            <div style="font:400 15px/1.75 Arial,Helvetica,sans-serif;color:#414b56;
-                        padding-top:12px">
-              Welcome to <strong>ICOC-Students 2026</strong>, the students-led
-              International Conference on Organometallics and Catalysis, hosted by the
-              Department of Chemical Sciences at IISER Kolkata on
+            <div style="font:400 15px/1.8 Arial,Helvetica,sans-serif;color:#414b56;
+                        padding-top:14px">
+              Welcome to <strong style="color:#0f5a49">ICOC-Students&nbsp;2026</strong>, the
+              students-led International Conference on Organometallics and Catalysis,
+              hosted by the Department of Chemical Sciences at IISER Kolkata on
               <strong>22 and 23 September</strong>.
             </div>
-            <div style="font:400 15px/1.75 Arial,Helvetica,sans-serif;color:#414b56;
+            <div style="font:400 15px/1.8 Arial,Helvetica,sans-serif;color:#414b56;
                         padding-top:12px">
               {% if coupon_count > 1 -%}
               Below are your <strong>{{ coupon_count }} meal passes</strong> — one for each
-              sitting. Each is valid once, for that sitting only.
+              sitting, each valid once and only at its own counter.
               {%- else -%}
               Below is your <strong>meal pass</strong>. It is valid once.
               {%- endif %}
-              Show the QR code at the counter and a volunteer will scan it from your
-              phone. There is nothing to print.
+              Show the QR code and a volunteer will scan it straight off your phone.
+              There is nothing to print.
             </div>
           </td>
         </tr>
 
-        <!-- ──────────────────────────── Meal passes ─────────────────────────── -->
+        <tr><td style="padding:26px 30px 0;line-height:0;font-size:0">
+          <img src="https://raw.githubusercontent.com/Shuvam-Banerji-Seal/Automated-Event-Coupon-Sender-Email-and-Verification-Application/main/static/brand/icoc/icoc-divider.png"
+               width="580" height="24" alt=""
+               style="width:100%;max-width:580px;height:auto;display:block;border:0">
+        </td></tr>
+
+        <!-- ═════════════════════════ Meal passes ══════════════════════════ -->
         <tr>
-          <td style="padding:26px 28px 0">
+          <td style="padding:22px 30px 0;text-align:center">
             <div style="font:700 12px/1.4 Arial,Helvetica,sans-serif;color:#0f5a49;
-                        letter-spacing:.18em;text-transform:uppercase;
-                        border-bottom:2px solid #dcebe4;padding-bottom:9px">
+                        letter-spacing:.22em;text-transform:uppercase">
               {% if coupon_count > 1 %}Your meal passes{% else %}Your meal pass{% endif %}
             </div>
           </td>
         </tr>
 
-        {% for c in coupons %}
+        {% set ns = namespace(n = 0) %}
+        {% for day, group in coupons | groupby('day') %}
+
+        {% if day %}
+        <tr>
+          <td style="padding:24px 30px 0">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation">
+              <tr>
+                <td style="font:700 15px/1.4 Georgia,'Times New Roman',serif;color:#12312a;
+                           white-space:nowrap;padding-right:14px">{{ day }}</td>
+                <td width="100%" style="border-top:1px solid #e3ebe7;font-size:0;line-height:0">&nbsp;</td>
+                <td style="font:400 12px/1.4 Arial,Helvetica,sans-serif;color:#8b959c;
+                           white-space:nowrap;padding-left:14px">
+                  {{ group[0].date }}
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        {% endif %}
+
+        {% for c in group %}
+        {%- set ns.n = ns.n + 1 -%}
         {%- set is_dinner = 'dinner' in (c.meal ~ ' ' ~ c.meal_label)|lower -%}
         {%- set accent = '#1d6f7e' if is_dinner else '#0f5a49' -%}
+        {%- set wash = '#f1f8f9' if is_dinner else '#f3f8f5' -%}
         <tr>
-          <td style="padding:18px 28px 0">
+          <td style="padding:14px 30px 0">
             <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"
-                   style="border:1px solid #d9e2dd;border-radius:12px;overflow:hidden">
+                   style="border:1px solid #dde6e1;border-radius:14px;overflow:hidden">
 
               <!-- Which sitting -->
               <tr>
-                <td style="background:{{ accent }};padding:13px 18px">
-                  <div style="font:700 15px/1.35 Arial,Helvetica,sans-serif;color:#ffffff">
-                    {{ c.meal_label }}
-                  </div>
-                  {% if c.date %}
-                  <div style="font:400 12px/1.5 Arial,Helvetica,sans-serif;color:#cfe6de;
-                              padding-top:3px">{{ c.date }}</div>
-                  {% endif %}
+                <td style="background:{{ accent }};padding:14px 18px">
+                  <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                         role="presentation">
+                    <tr>
+                      <td width="34" style="vertical-align:middle;padding-right:12px">
+                        <img src="https://raw.githubusercontent.com/Shuvam-Banerji-Seal/Automated-Event-Coupon-Sender-Email-and-Verification-Application/main/static/brand/icoc/icoc-badge-{{ 'dinner' if is_dinner else 'lunch' }}.png"
+                             width="34" height="34" alt=""
+                             style="width:34px;max-width:34px;height:auto;display:block;border:0">
+                      </td>
+                      <td style="vertical-align:middle;
+                                 font:700 16px/1.3 Arial,Helvetica,sans-serif;color:#ffffff">
+                        {{ c.meal or c.meal_label }}
+                      </td>
+                      {% if coupon_count > 1 %}
+                      <td align="right" style="vertical-align:middle;white-space:nowrap">
+                        <span style="display:inline-block;background:rgba(255,255,255,.18);
+                                     border:1px solid rgba(255,255,255,.35);border-radius:20px;
+                                     padding:4px 11px;color:#ffffff;
+                                     font:700 10px/1.2 Arial,Helvetica,sans-serif;
+                                     letter-spacing:.12em;text-transform:uppercase">
+                          Pass {{ ns.n }} of {{ coupon_count }}
+                        </span>
+                      </td>
+                      {% endif %}
+                    </tr>
+                  </table>
                 </td>
               </tr>
 
               <!-- The code itself -->
               <tr>
-                <td align="center" style="padding:22px 18px 6px;background:#ffffff">
-                  <img src="{{ c.qr_code_src }}" width="220" height="220"
-                       alt="Meal pass QR code for {{ c.meal_label }} — code {{ c.verification_code }}"
-                       style="width:220px;max-width:220px;height:auto;display:block;
-                              margin:0 auto;border:1px solid #e6ece9;border-radius:8px">
-                  <div style="font:400 11px/1.5 Arial,Helvetica,sans-serif;color:#8b959c;
-                              padding-top:12px;letter-spacing:.12em;text-transform:uppercase">
+                <td align="center" style="padding:24px 18px 4px;background:#ffffff">
+                  <table cellpadding="0" cellspacing="0" border="0" role="presentation"
+                         align="center" style="background:{{ wash }};border-radius:14px">
+                    <tr>
+                      <td style="padding:14px">
+                        <img src="{{ c.qr_code_src }}" width="212" height="212"
+                             alt="Meal pass QR code for {{ c.meal_label }} — code {{ c.verification_code }}"
+                             style="width:212px;max-width:212px;height:auto;display:block;
+                                    border-radius:8px;background:#ffffff">
+                      </td>
+                    </tr>
+                  </table>
+                  <div style="font:400 10px/1.5 Arial,Helvetica,sans-serif;color:#9aa4ab;
+                              padding-top:16px;letter-spacing:.18em;text-transform:uppercase">
                     or read out this code
                   </div>
-                  <div style="font:700 26px/1.2 'Courier New',Courier,monospace;
-                              color:#1f2933;letter-spacing:.14em;padding-top:4px">
+                  <div style="font:700 27px/1.2 'Courier New',Courier,monospace;
+                              color:#12312a;letter-spacing:.2em;padding-top:5px">
                     {{ c.verification_code }}
                   </div>
                 </td>
               </tr>
 
-              <!-- When and where -->
+              <!-- Perforation, then when and where -->
               <tr>
-                <td style="padding:16px 18px 18px;background:#ffffff">
+                <td style="padding:18px 18px 0;background:#ffffff">
+                  <div style="border-top:2px dashed #e3ebe7;font-size:0;line-height:0">&nbsp;</div>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:6px 18px 18px;background:#ffffff">
                   <table width="100%" cellpadding="0" cellspacing="0" border="0"
-                         role="presentation"
-                         style="border-top:1px solid #eef2f0;padding-top:12px">
+                         role="presentation">
                     {% if c.time %}
                     <tr>
-                      <td style="font:400 13px/1.7 Arial,Helvetica,sans-serif;color:#6b7280;
-                                 padding:10px 0 0;width:74px">Served</td>
-                      <td style="font:700 13px/1.7 Arial,Helvetica,sans-serif;color:#1f2933;
-                                 padding:10px 0 0">{{ c.time }}</td>
+                      <td width="72" style="font:400 12px/1.7 Arial,Helvetica,sans-serif;
+                                 color:#8b959c;padding:8px 0 0;letter-spacing:.04em">Served</td>
+                      <td style="font:700 13px/1.7 Arial,Helvetica,sans-serif;color:#12312a;
+                                 padding:8px 0 0">{{ c.time }}</td>
                     </tr>
                     {% endif %}
                     {% if c.venue %}
                     <tr>
-                      <td style="font:400 13px/1.7 Arial,Helvetica,sans-serif;color:#6b7280;
-                                 padding:2px 0 0">Venue</td>
-                      <td style="font:700 13px/1.7 Arial,Helvetica,sans-serif;color:#1f2933;
-                                 padding:2px 0 0">{{ c.venue }}</td>
+                      <td style="font:400 12px/1.7 Arial,Helvetica,sans-serif;color:#8b959c;
+                                 padding:3px 0 0">Venue</td>
+                      <td style="font:700 13px/1.7 Arial,Helvetica,sans-serif;color:#12312a;
+                                 padding:3px 0 0">{{ c.venue }}</td>
                     </tr>
                     {% endif %}
                     <tr>
-                      <td style="font:400 13px/1.7 Arial,Helvetica,sans-serif;color:#6b7280;
-                                 padding:2px 0 0">Meal</td>
-                      <td style="padding:6px 0 0">
+                      <td style="font:400 12px/1.7 Arial,Helvetica,sans-serif;color:#8b959c;
+                                 padding:9px 0 0">Meal</td>
+                      <td style="padding:9px 0 0">
                         <span style="display:inline-block;background:{{ c.food_colour }};
-                                     color:#ffffff;font:700 11px/1 Arial,Helvetica,sans-serif;
-                                     letter-spacing:.1em;text-transform:uppercase;
-                                     padding:6px 11px;border-radius:20px">
+                                     color:#ffffff;font:700 10px/1 Arial,Helvetica,sans-serif;
+                                     letter-spacing:.12em;text-transform:uppercase;
+                                     padding:7px 12px;border-radius:20px">
                           {{ c.food_preference }}
                         </span>
                       </td>
@@ -172,113 +254,161 @@ Two things are deliberate and worth keeping:
           </td>
         </tr>
         {% endfor %}
+        {% endfor %}
 
-        <!-- ───────────────────────────── How it works ───────────────────────── -->
+        <!-- ═════════════════════════ How it works ═════════════════════════ -->
         <tr>
-          <td style="padding:24px 28px 0">
+          <td style="padding:26px 30px 0">
             <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"
-                   style="background:#f4f8f6;border-left:3px solid #0f5a49;border-radius:6px">
+                   style="background:#f3f8f5;border:1px solid #dfeae4;border-radius:12px">
               <tr>
-                <td style="padding:16px 18px">
+                <td style="padding:18px 20px">
                   <div style="font:700 13px/1.5 Arial,Helvetica,sans-serif;color:#0f5a49;
-                              padding-bottom:8px">Before you get to the counter</div>
-                  <div style="font:400 13px/1.85 Arial,Helvetica,sans-serif;color:#414b56">
-                    &bull;&nbsp; Each pass works <strong>once</strong>, and only at its own
-                    sitting — the Day&nbsp;1 lunch code will not open Day&nbsp;2's.<br>
-                    &bull;&nbsp; Turn your screen brightness up. A dim or heavily cracked
-                    screen is the usual reason a scan takes a second try.<br>
-                    &bull;&nbsp; Signal at the venue can be patchy, so take a screenshot of
-                    this email before you arrive.<br>
-                    &bull;&nbsp; If the QR will not read, the volunteer can type the
-                    six-digit code instead.<br>
-                    &bull;&nbsp; Please do not forward this email. Anyone holding these
-                    codes can claim your meals.
+                              letter-spacing:.06em;padding-bottom:10px">
+                    Before you get to the counter
                   </div>
+                  <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                         role="presentation"
+                         style="font:400 13px/1.8 Arial,Helvetica,sans-serif;color:#414b56">
+                    <tr><td width="16" style="vertical-align:top;color:#559347;font-weight:700">&bull;</td>
+                        <td style="padding-bottom:5px">Each pass works <strong>once</strong>, and
+                          only at its own sitting — the Day&nbsp;1 lunch code will not open
+                          Day&nbsp;2's.</td></tr>
+                    <tr><td style="vertical-align:top;color:#559347;font-weight:700">&bull;</td>
+                        <td style="padding-bottom:5px">Turn your screen brightness up. A dim or
+                          heavily cracked screen is the usual reason a scan takes a second
+                          try.</td></tr>
+                    <tr><td style="vertical-align:top;color:#559347;font-weight:700">&bull;</td>
+                        <td style="padding-bottom:5px">Signal at the venue can be patchy, so take a
+                          screenshot of this email before you arrive.</td></tr>
+                    <tr><td style="vertical-align:top;color:#559347;font-weight:700">&bull;</td>
+                        <td style="padding-bottom:5px">If the QR will not read, the volunteer can
+                          type the six-digit code instead.</td></tr>
+                    <tr><td style="vertical-align:top;color:#559347;font-weight:700">&bull;</td>
+                        <td>Please do not forward this email — anyone holding these codes can
+                          claim your meals.</td></tr>
+                  </table>
                 </td>
               </tr>
             </table>
           </td>
         </tr>
 
-        <!-- ────────────────────────────── Schedule ──────────────────────────── -->
+        <tr><td style="padding:30px 30px 0;line-height:0;font-size:0">
+          <img src="https://raw.githubusercontent.com/Shuvam-Banerji-Seal/Automated-Event-Coupon-Sender-Email-and-Verification-Application/main/static/brand/icoc/icoc-divider.png"
+               width="580" height="24" alt=""
+               style="width:100%;max-width:580px;height:auto;display:block;border:0">
+        </td></tr>
+
+        <!-- ══════════════════════════ Programme ═══════════════════════════ -->
         <tr>
-          <td style="padding:30px 28px 0">
+          <td style="padding:22px 30px 0;text-align:center">
             <div style="font:700 12px/1.4 Arial,Helvetica,sans-serif;color:#0f5a49;
-                        letter-spacing:.18em;text-transform:uppercase;
-                        border-bottom:2px solid #dcebe4;padding-bottom:9px">
+                        letter-spacing:.22em;text-transform:uppercase">
               Programme at a glance
             </div>
           </td>
         </tr>
 
-        <!-- Day 1 -->
+        {% macro slot(time, what, where, kind) -%}
+        {%- set bg = '#f3f8f5' if kind == 'lunch' else ('#f1f8f9' if kind == 'dinner' else '') -%}
+        {%- set ink = '#0f5a49' if kind == 'lunch' else ('#1d6f7e' if kind == 'dinner' else '#414b56') -%}
+        {%- set weight = 700 if kind else 400 -%}
         <tr>
-          <td style="padding:20px 28px 0">
-            <div style="font:700 15px/1.4 Georgia,'Times New Roman',serif;color:#1f2933">
-              Day 1 &nbsp;·&nbsp; Tuesday, 22 September
+          <td width="104" style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:{{ ink }};
+                     padding:8px 10px 8px 12px;vertical-align:top;
+                     border-bottom:1px solid #eef2f0;{% if bg %}background:{{ bg }};{% endif %}
+                     {% if kind %}border-left:3px solid {{ ink }};{% else %}border-left:3px solid transparent;{% endif %}">{{ time }}</td>
+          <td style="font:{{ weight }} 13px/1.6 Arial,Helvetica,sans-serif;color:{{ ink }};
+                     padding:8px 12px 8px 0;border-bottom:1px solid #eef2f0;
+                     {% if bg %}background:{{ bg }};{% endif %}">{{ what }}{% if where %}
+            <span style="font-weight:400;color:{{ '#5f8d7f' if kind else '#8b959c' }}"> · {{ where }}</span>{% endif %}</td>
+        </tr>
+        {%- endmacro %}
+
+        <tr>
+          <td style="padding:20px 30px 0">
+            <div style="font:700 15px/1.4 Georgia,'Times New Roman',serif;color:#12312a;
+                        padding-bottom:4px">
+              Day 1 <span style="color:#8b959c;font:400 13px/1.4 Arial,Helvetica,sans-serif">
+                &nbsp;·&nbsp; Tuesday, 22 September</span>
             </div>
             <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"
-                   style="margin-top:10px">
-              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 10px 7px 0;width:104px;vertical-align:top;border-bottom:1px solid #eef2f0">08:30&#8239;–&#8239;09:00</td><td style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 0;border-bottom:1px solid #eef2f0">Registration <span style="color:#8b959c">· M.N. Saha Lecture Hall</span></td></tr>
-              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 10px 7px 0;vertical-align:top;border-bottom:1px solid #eef2f0">09:00&#8239;–&#8239;09:15</td><td style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 0;border-bottom:1px solid #eef2f0">Inaugural Session</td></tr>
-              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 10px 7px 0;vertical-align:top;border-bottom:1px solid #eef2f0">09:15&#8239;–&#8239;10:30</td><td style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 0;border-bottom:1px solid #eef2f0">Session 1 <span style="color:#8b959c">· Chair: Prof. Amitava Das</span></td></tr>
-              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 10px 7px 0;vertical-align:top;border-bottom:1px solid #eef2f0">10:30&#8239;–&#8239;11:00</td><td style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 0;border-bottom:1px solid #eef2f0">Tea Break</td></tr>
-              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 10px 7px 0;vertical-align:top;border-bottom:1px solid #eef2f0">11:00&#8239;–&#8239;11:45</td><td style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 0;border-bottom:1px solid #eef2f0">Session 2 <span style="color:#8b959c">· Chair: Prof. Abu Taleb Khan</span></td></tr>
-              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 10px 7px 0;vertical-align:top;border-bottom:1px solid #eef2f0">11:45&#8239;–&#8239;12:00</td><td style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 0;border-bottom:1px solid #eef2f0">Photo Session</td></tr>
-              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 10px 7px 0;vertical-align:top;border-bottom:1px solid #eef2f0">12:00&#8239;–&#8239;13:10</td><td style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 0;border-bottom:1px solid #eef2f0">Session 3 — Flash &amp; student talks <span style="color:#8b959c">· Chair: Prof. Manindranath Bera</span></td></tr>
-              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#0f5a49;padding:9px 10px 9px 0;vertical-align:top;background:#f4f8f6;border-bottom:1px solid #eef2f0">13:10&#8239;–&#8239;14:25</td><td style="font:700 13px/1.6 Arial,Helvetica,sans-serif;color:#0f5a49;padding:9px 0;background:#f4f8f6;border-bottom:1px solid #eef2f0">Lunch <span style="font-weight:400;color:#5f8d7f">· R.N. Tagore Auditorium</span></td></tr>
-              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 10px 7px 0;vertical-align:top;border-bottom:1px solid #eef2f0">14:25&#8239;–&#8239;15:55</td><td style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 0;border-bottom:1px solid #eef2f0">Session 4 <span style="color:#8b959c">· Chair: Dr. Michèle Soleilhavoup</span></td></tr>
-              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 10px 7px 0;vertical-align:top;border-bottom:1px solid #eef2f0">15:55&#8239;–&#8239;16:20</td><td style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 0;border-bottom:1px solid #eef2f0">Session 5 — Flash talks <span style="color:#8b959c">· Chair: Ms. Mandira Saha</span></td></tr>
-              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 10px 7px 0;vertical-align:top;border-bottom:1px solid #eef2f0">16:20&#8239;–&#8239;16:50</td><td style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 0;border-bottom:1px solid #eef2f0">Tea Break</td></tr>
-              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 10px 7px 0;vertical-align:top;border-bottom:1px solid #eef2f0">16:50&#8239;–&#8239;18:20</td><td style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 0;border-bottom:1px solid #eef2f0">Session 6 <span style="color:#8b959c">· Chair: Prof. Swati De</span></td></tr>
-              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#1d6f7e;padding:9px 10px 9px 0;vertical-align:top;background:#f2f8f9">19:30 onwards</td><td style="font:700 13px/1.6 Arial,Helvetica,sans-serif;color:#1d6f7e;padding:9px 0;background:#f2f8f9">Dinner <span style="font-weight:400;color:#5d8b95">· R.N. Tagore Auditorium</span></td></tr>
+                   style="margin-top:8px">
+              {{ slot('08:30 – 09:00', 'Registration', 'M.N. Saha Lecture Hall', '') }}
+              {{ slot('09:00 – 09:15', 'Inaugural Session', '', '') }}
+              {{ slot('09:15 – 10:30', 'Session 1', 'Chair: Prof. Amitava Das', '') }}
+              {{ slot('10:30 – 11:00', 'Tea Break', '', '') }}
+              {{ slot('11:00 – 11:45', 'Session 2', 'Chair: Prof. Abu Taleb Khan', '') }}
+              {{ slot('11:45 – 12:00', 'Photo Session', '', '') }}
+              {{ slot('12:00 – 13:10', 'Session 3 — flash & student talks', 'Chair: Prof. Manindranath Bera', '') }}
+              {{ slot('13:10 – 14:25', 'Lunch', 'R.N. Tagore Auditorium', 'lunch') }}
+              {{ slot('14:25 – 15:55', 'Session 4', 'Chair: Dr. Michèle Soleilhavoup', '') }}
+              {{ slot('15:55 – 16:20', 'Session 5 — flash talks', 'Chair: Ms. Mandira Saha', '') }}
+              {{ slot('16:20 – 16:50', 'Tea Break', '', '') }}
+              {{ slot('16:50 – 18:20', 'Session 6', 'Chair: Prof. Swati De', '') }}
+              {{ slot('19:30 onwards', 'Dinner', 'R.N. Tagore Auditorium', 'dinner') }}
             </table>
           </td>
         </tr>
 
-        <!-- Day 2 -->
         <tr>
-          <td style="padding:24px 28px 0">
-            <div style="font:700 15px/1.4 Georgia,'Times New Roman',serif;color:#1f2933">
-              Day 2 &nbsp;·&nbsp; Wednesday, 23 September
+          <td style="padding:24px 30px 0">
+            <div style="font:700 15px/1.4 Georgia,'Times New Roman',serif;color:#12312a;
+                        padding-bottom:4px">
+              Day 2 <span style="color:#8b959c;font:400 13px/1.4 Arial,Helvetica,sans-serif">
+                &nbsp;·&nbsp; Wednesday, 23 September</span>
             </div>
             <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"
-                   style="margin-top:10px">
-              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 10px 7px 0;width:104px;vertical-align:top;border-bottom:1px solid #eef2f0">09:00&#8239;–&#8239;10:45</td><td style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 0;border-bottom:1px solid #eef2f0">Session 7 <span style="color:#8b959c">· Chair: Prof. Amit Basak</span></td></tr>
-              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 10px 7px 0;vertical-align:top;border-bottom:1px solid #eef2f0">10:45&#8239;–&#8239;11:15</td><td style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 0;border-bottom:1px solid #eef2f0">Tea Break</td></tr>
-              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 10px 7px 0;vertical-align:top;border-bottom:1px solid #eef2f0">11:15&#8239;–&#8239;11:40</td><td style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 0;border-bottom:1px solid #eef2f0">Session 8 — Flash talks <span style="color:#8b959c">· Chair: Mr. Biplab Gope</span></td></tr>
-              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 10px 7px 0;vertical-align:top;border-bottom:1px solid #eef2f0">11:40&#8239;–&#8239;13:10</td><td style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 0;border-bottom:1px solid #eef2f0">Session 9 <span style="color:#8b959c">· Chair: Prof. Arabinda Chaudhuri</span></td></tr>
-              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#0f5a49;padding:9px 10px 9px 0;vertical-align:top;background:#f4f8f6;border-bottom:1px solid #eef2f0">13:10&#8239;–&#8239;14:25</td><td style="font:700 13px/1.6 Arial,Helvetica,sans-serif;color:#0f5a49;padding:9px 0;background:#f4f8f6;border-bottom:1px solid #eef2f0">Lunch <span style="font-weight:400;color:#5f8d7f">· R.N. Tagore Auditorium</span></td></tr>
-              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 10px 7px 0;vertical-align:top;border-bottom:1px solid #eef2f0">14:25&#8239;–&#8239;15:25</td><td style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 0;border-bottom:1px solid #eef2f0">Session 10 <span style="color:#8b959c">· Chair: Prof. Sanjib Bagchi</span></td></tr>
-              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 10px 7px 0;vertical-align:top;border-bottom:1px solid #eef2f0">15:25&#8239;–&#8239;16:20</td><td style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 0;border-bottom:1px solid #eef2f0">Session 11 <span style="color:#8b959c">· Chair: Mr. Subham Sarkar</span></td></tr>
-              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 10px 7px 0;vertical-align:top;border-bottom:1px solid #eef2f0">16:20&#8239;–&#8239;17:50</td><td style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 0;border-bottom:1px solid #eef2f0">Tea Break &amp; Poster Session <span style="color:#8b959c">· R.N. Tagore Auditorium</span></td></tr>
-              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 10px 7px 0;vertical-align:top;border-bottom:1px solid #eef2f0">17:50&#8239;–&#8239;18:35</td><td style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 0;border-bottom:1px solid #eef2f0">Session 12 <span style="color:#8b959c">· Chair: Dr. Debabrata Mukherjee</span></td></tr>
-              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 10px 7px 0;vertical-align:top;border-bottom:1px solid #eef2f0">18:35&#8239;–&#8239;19:05</td><td style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 0;border-bottom:1px solid #eef2f0">Best Poster Awards, Vote of Thanks &amp; Valedictory</td></tr>
-              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#1d6f7e;padding:9px 10px 9px 0;vertical-align:top;background:#f2f8f9">19:30 onwards</td><td style="font:700 13px/1.6 Arial,Helvetica,sans-serif;color:#1d6f7e;padding:9px 0;background:#f2f8f9">Conference Dinner <span style="font-weight:400;color:#5d8b95">· RISE Foundation</span></td></tr>
+                   style="margin-top:8px">
+              {{ slot('09:00 – 10:45', 'Session 7', 'Chair: Prof. Amit Basak', '') }}
+              {{ slot('10:45 – 11:15', 'Tea Break', '', '') }}
+              {{ slot('11:15 – 11:40', 'Session 8 — flash talks', 'Chair: Mr. Biplab Gope', '') }}
+              {{ slot('11:40 – 13:10', 'Session 9', 'Chair: Prof. Arabinda Chaudhuri', '') }}
+              {{ slot('13:10 – 14:25', 'Lunch', 'R.N. Tagore Auditorium', 'lunch') }}
+              {{ slot('14:25 – 15:25', 'Session 10', 'Chair: Prof. Sanjib Bagchi', '') }}
+              {{ slot('15:25 – 16:20', 'Session 11', 'Chair: Mr. Subham Sarkar', '') }}
+              {{ slot('16:20 – 17:50', 'Tea Break & Poster Session', 'R.N. Tagore Auditorium', '') }}
+              {{ slot('17:50 – 18:35', 'Session 12', 'Chair: Dr. Debabrata Mukherjee', '') }}
+              {{ slot('18:35 – 19:05', 'Best Poster Awards, Vote of Thanks & Valedictory', '', '') }}
+              {{ slot('19:30 onwards', 'Conference Dinner', 'RISE Foundation', 'dinner') }}
             </table>
           </td>
         </tr>
 
-        <!-- ──────────────────────────── Invited talks ───────────────────────── -->
+        <!-- ═══════════════════════ Invited lectures ═══════════════════════ -->
         <tr>
-          <td style="padding:28px 28px 0">
+          <td style="padding:32px 30px 0;text-align:center">
             <div style="font:700 12px/1.4 Arial,Helvetica,sans-serif;color:#0f5a49;
-                        letter-spacing:.18em;text-transform:uppercase;
-                        border-bottom:2px solid #dcebe4;padding-bottom:9px">
+                        letter-spacing:.22em;text-transform:uppercase">
               Invited lectures
             </div>
-            <div style="font:400 13px/1.9 Arial,Helvetica,sans-serif;color:#414b56;
-                        padding-top:12px">
-              <strong>Prof. Biprajit Sarkar</strong> · Freie Universität Berlin<br>
-              <strong>Prof. Guy Bertrand</strong> · University of California, San Diego<br>
-              <strong>Prof. David Scheschkewitz</strong> · Universität des Saarlandes<br>
-              <strong>Prof. Matthias Driess</strong> · Technische Universität Berlin<br>
-              <strong>Prof. Viktoria H. Däschlein-Gessner</strong> · Ruhr-University Bochum<br>
-              <strong>Prof. David C. Powers</strong> · Texas A&amp;M University<br>
-              <strong>Prof. Christo S. Sevov</strong> · The Ohio State University
-            </div>
-            <div style="font:400 13px/1.7 Arial,Helvetica,sans-serif;color:#6b7280;
-                        padding-top:14px">
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:16px 30px 0">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation">
+              {% for who, where in [
+                ('Prof. Biprajit Sarkar', 'Freie Universität Berlin'),
+                ('Prof. Guy Bertrand', 'University of California, San Diego'),
+                ('Prof. David Scheschkewitz', 'Universität des Saarlandes'),
+                ('Prof. Matthias Driess', 'Technische Universität Berlin'),
+                ('Prof. Viktoria H. Däschlein-Gessner', 'Ruhr-University Bochum'),
+                ('Prof. David C. Powers', 'Texas A&M University'),
+                ('Prof. Christo S. Sevov', 'The Ohio State University') ] %}
+              <tr>
+                <td width="18" style="vertical-align:top;padding:6px 0 0">
+                  <div style="width:7px;height:7px;border-radius:50%;background:#559347;
+                              font-size:0;line-height:0">&nbsp;</div>
+                </td>
+                <td style="font:700 13px/1.75 Arial,Helvetica,sans-serif;color:#12312a;
+                           padding:1px 0">{{ who }}<span
+                    style="font-weight:400;color:#6b7280"> · {{ where }}</span></td>
+              </tr>
+              {% endfor %}
+            </table>
+            <div style="font:400 13px/1.75 Arial,Helvetica,sans-serif;color:#6b7280;
+                        padding-top:16px">
               The full programme, with all 31 student talks and the flash-talk lineup, is on
               <a href="https://icocstudents.wixsite.com/icocstudents2026"
                  style="color:#0f5a49;font-weight:700;text-decoration:underline">the
@@ -287,32 +417,24 @@ Two things are deliberate and worth keeping:
           </td>
         </tr>
 
-        <!-- ───────────────────────────── Organisers ─────────────────────────── -->
+        <!-- ═══════════════════════════ Organisers ════════════════════════ -->
         <tr>
-          <td style="padding:30px 28px 0">
-            <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"
-                   style="border-top:1px solid #eef2f0">
-              <tr>
-                <td align="center" style="padding:22px 0 0">
-                  <img src="https://raw.githubusercontent.com/Shuvam-Banerji-Seal/Automated-Event-Coupon-Sender-Email-and-Verification-Application/main/static/brand/icoc/iiser-kolkata.png"
-                       width="108" height="114" alt="IISER Kolkata"
-                       style="width:108px;max-width:108px;height:auto;display:block;margin:0 auto">
-                  <div style="font:400 12px/1.7 Arial,Helvetica,sans-serif;color:#6b7280;
-                              padding-top:12px">
-                    Organised by the Department of Chemical Sciences<br>
-                    Indian Institute of Science Education and Research Kolkata
-                  </div>
-                </td>
-              </tr>
-            </table>
+          <td align="center" style="padding:34px 30px 0">
+            <img src="https://raw.githubusercontent.com/Shuvam-Banerji-Seal/Automated-Event-Coupon-Sender-Email-and-Verification-Application/main/static/brand/icoc/iiser-kolkata.png"
+                 width="104" height="110" alt="IISER Kolkata"
+                 style="width:104px;max-width:104px;height:auto;display:block;margin:0 auto">
+            <div style="font:400 12px/1.8 Arial,Helvetica,sans-serif;color:#6b7280;
+                        padding-top:12px">
+              Organised by the Department of Chemical Sciences<br>
+              Indian Institute of Science Education and Research Kolkata
+            </div>
           </td>
         </tr>
 
-        <!-- ───────────────────────────── Sponsors ───────────────────────────── -->
         <tr>
-          <td align="center" style="padding:22px 28px 26px">
-            <div style="font:400 11px/1.4 Arial,Helvetica,sans-serif;color:#9aa4ab;
-                        letter-spacing:.16em;text-transform:uppercase;padding-bottom:14px">
+          <td align="center" style="padding:26px 30px 6px">
+            <div style="font:400 10px/1.4 Arial,Helvetica,sans-serif;color:#9aa4ab;
+                        letter-spacing:.2em;text-transform:uppercase;padding-bottom:16px">
               With support from
             </div>
             <img src="https://raw.githubusercontent.com/Shuvam-Banerji-Seal/Automated-Event-Coupon-Sender-Email-and-Verification-Application/main/static/brand/icoc/icoc-sponsors.png"
@@ -321,14 +443,18 @@ Two things are deliberate and worth keeping:
           </td>
         </tr>
 
-        <!-- ────────────────────────────── Footer ────────────────────────────── -->
+        <!-- ════════════════════════════ Footer ═══════════════════════════ -->
         <tr>
-          <td style="background:#0f5a49;padding:22px 28px;text-align:center">
+          <td style="background:#0f5a49;padding:6px 30px 24px;text-align:center">
+            <img src="https://raw.githubusercontent.com/Shuvam-Banerji-Seal/Automated-Event-Coupon-Sender-Email-and-Verification-Application/main/static/brand/icoc/icoc-divider-light.png"
+                 width="500" height="20" alt=""
+                 style="width:100%;max-width:500px;height:auto;display:block;
+                        margin:0 auto 16px;border:0">
             <div style="font:400 12px/1.8 Arial,Helvetica,sans-serif;color:#b9dccf">
               Sent to {{ email }} because you are registered for ICOC-Students 2026.<br>
               These passes are yours alone — please do not forward them.
             </div>
-            <div style="font:400 12px/1.8 Arial,Helvetica,sans-serif;padding-top:8px">
+            <div style="font:600 12px/1.8 Arial,Helvetica,sans-serif;padding-top:10px">
               <a href="https://icocstudents.wixsite.com/icocstudents2026"
                  style="color:#ffffff;text-decoration:underline">icocstudents2026</a>
             </div>

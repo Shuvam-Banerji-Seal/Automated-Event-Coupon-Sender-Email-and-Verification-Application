@@ -1,0 +1,309 @@
+{#
+Subject: {% if remaining_count %}Enjoy your {{ redeemed.meal or 'meal' }}, {{ first_name }} — {{ remaining_count }} pass{{ '' if remaining_count == 1 else 'es' }} left{% else %}Thank you for joining us at ICOC-Students 2026, {{ first_name }}{% endif %}
+
+ICOC-Students 2026 — sent the moment a meal pass is scanned.
+
+One per sitting, and each one different. A thank-you that only says "thanks for
+coming" is worth nothing on the first of four meals; what an attendee actually
+wants at that moment is confirmation that the scan worked and a reminder of
+where to be next. So the message has three shapes:
+
+  * mid-conference  — confirmation, then the next sitting in full
+  * last meal       — confirmation, then a proper farewell
+  * single sitting  — no sessions configured, so neither block applies
+
+Lunch is green with a sun, dinner teal with a moon, matching the pass card in
+the invitation so the two read as one piece of stationery.
+
+No QR here on purpose: this arrives *after* a pass is spent, and printing a
+spent code invites somebody to try it again at the next counter.
+#}
+{%- set is_dinner = 'dinner' in ((redeemed.meal if redeemed else '') ~ ' ' ~ (redeemed.meal_label if redeemed else ''))|lower -%}
+{%- set accent = '#1d6f7e' if is_dinner else '#0f5a49' -%}
+{%- set wash = '#f1f8f9' if is_dinner else '#f3f8f5' -%}
+<table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"
+       style="background:#eef2f0;margin:0;padding:24px 10px">
+  <tr>
+    <td align="center">
+
+      <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">
+        {% if remaining_count %}Checked in at {{ checked_in_at }}. Your next pass is
+        {{ next_pass.meal_label }}.{% else %}That was your last meal pass — thank you for
+        coming.{% endif %}
+      </div>
+
+      <table width="640" cellpadding="0" cellspacing="0" border="0" role="presentation"
+             style="max-width:640px;width:100%;background:#ffffff;border-radius:16px;
+                    overflow:hidden;border:1px solid #d9e2dd">
+
+        <!-- ═══════════════════════════ Masthead ═══════════════════════════ -->
+        <tr>
+          <td style="padding:0;line-height:0;font-size:0;background:{{ accent }}">
+            <!-- The artwork has to end in the colour of the cell beneath it, or
+                 the join reads as a rendering bug rather than a design. -->
+            <img src="https://raw.githubusercontent.com/Shuvam-Banerji-Seal/Automated-Event-Coupon-Sender-Email-and-Verification-Application/main/static/brand/icoc/icoc-masthead{{ '-teal' if is_dinner else '' }}.png"
+                 width="640" height="160" alt=""
+                 style="width:100%;max-width:640px;height:auto;display:block;border:0">
+          </td>
+        </tr>
+        <tr>
+          <td style="background:{{ accent }};padding:0 28px 28px;text-align:center">
+            <div style="margin-top:-58px">
+              {% if redeemed %}
+              <img src="https://raw.githubusercontent.com/Shuvam-Banerji-Seal/Automated-Event-Coupon-Sender-Email-and-Verification-Application/main/static/brand/icoc/icoc-badge-{{ 'dinner' if is_dinner else 'lunch' }}.png"
+                   width="62" height="62" alt=""
+                   style="width:62px;max-width:62px;height:auto;display:block;
+                          margin:0 auto 14px;border:0">
+              {% endif %}
+            </div>
+            <div style="font:700 25px/1.3 Georgia,'Times New Roman',serif;color:#ffffff">
+              {% if remaining_count %}Enjoy your {{ (redeemed.meal or 'meal')|lower }}{% else %}Thank you for coming{% endif %}
+            </div>
+            {% if redeemed and redeemed.meal_label %}
+            <div style="font:700 12px/1.5 Arial,Helvetica,sans-serif;color:#cfe8de;
+                        padding-top:10px;letter-spacing:.2em;text-transform:uppercase">
+              {{ redeemed.meal_label }}
+            </div>
+            {% endif %}
+          </td>
+        </tr>
+
+        <!-- ═══════════════════════ Scan confirmation ══════════════════════ -->
+        <tr>
+          <td style="padding:32px 30px 0">
+            <div style="font:400 19px/1.5 Georgia,'Times New Roman',serif;color:#12312a">
+              {{ first_name }},
+            </div>
+            <div style="font:400 15px/1.8 Arial,Helvetica,sans-serif;color:#414b56;
+                        padding-top:14px">
+              Your pass was scanned{% if checked_in_at %} at
+              <strong>{{ checked_in_at }}</strong>{% endif %}{% if redeemed and redeemed.venue %}
+              at the <strong>{{ redeemed.venue }}</strong>{% endif %} and is now used.
+              {% if food_preference %}A <strong style="color:{{ food_colour }}">{{ food_preference|lower }}</strong>
+              meal has been counted for you.{% endif %}
+            </div>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:20px 30px 0">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"
+                   style="background:{{ wash }};border:1px solid #dfeae4;border-radius:12px">
+              <tr>
+                <td style="padding:16px 20px">
+                  <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                         role="presentation">
+                    <tr>
+                      <td width="86" style="font:400 12px/1.7 Arial,Helvetica,sans-serif;
+                                 color:#8b959c;padding:3px 0">Collected</td>
+                      <td style="font:700 13px/1.7 Arial,Helvetica,sans-serif;color:#12312a;
+                                 padding:3px 0">
+                        {{ redeemed.meal_label if redeemed else 'Entry pass' }}
+                      </td>
+                    </tr>
+                    {% if redeemed and redeemed.date %}
+                    <tr>
+                      <td style="font:400 12px/1.7 Arial,Helvetica,sans-serif;color:#8b959c;
+                                 padding:3px 0">Date</td>
+                      <td style="font:400 13px/1.7 Arial,Helvetica,sans-serif;color:#414b56;
+                                 padding:3px 0">{{ redeemed.date }}</td>
+                    </tr>
+                    {% endif %}
+                    <tr>
+                      <td style="font:400 12px/1.7 Arial,Helvetica,sans-serif;color:#8b959c;
+                                 padding:3px 0">Code</td>
+                      <td style="font:700 13px/1.7 'Courier New',Courier,monospace;
+                                 color:#6b7280;padding:3px 0;letter-spacing:.1em">
+                        {{ redeemed.verification_code if redeemed else verification_code }}
+                        <span style="font-family:Arial,Helvetica,sans-serif;font-weight:400;
+                                     letter-spacing:0;color:#9aa4ab"> · spent</span>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        {% if remaining_count %}
+        <!-- ══════════════════════════ What's next ═════════════════════════ -->
+        <tr><td style="padding:28px 30px 0;line-height:0;font-size:0">
+          <img src="https://raw.githubusercontent.com/Shuvam-Banerji-Seal/Automated-Event-Coupon-Sender-Email-and-Verification-Application/main/static/brand/icoc/icoc-divider.png"
+               width="580" height="24" alt=""
+               style="width:100%;max-width:580px;height:auto;display:block;border:0">
+        </td></tr>
+
+        <tr>
+          <td style="padding:22px 30px 0;text-align:center">
+            <div style="font:700 12px/1.4 Arial,Helvetica,sans-serif;color:#0f5a49;
+                        letter-spacing:.22em;text-transform:uppercase">
+              Next up
+            </div>
+          </td>
+        </tr>
+
+        {%- set next_dinner = 'dinner' in (next_pass.meal ~ ' ' ~ next_pass.meal_label)|lower -%}
+        {%- set next_accent = '#1d6f7e' if next_dinner else '#0f5a49' -%}
+        <tr>
+          <td style="padding:16px 30px 0">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"
+                   style="border:1px solid #dde6e1;border-radius:14px;overflow:hidden">
+              <tr>
+                <td style="background:{{ next_accent }};padding:14px 18px">
+                  <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                         role="presentation">
+                    <tr>
+                      <td width="34" style="vertical-align:middle;padding-right:12px">
+                        <img src="https://raw.githubusercontent.com/Shuvam-Banerji-Seal/Automated-Event-Coupon-Sender-Email-and-Verification-Application/main/static/brand/icoc/icoc-badge-{{ 'dinner' if next_dinner else 'lunch' }}.png"
+                             width="34" height="34" alt=""
+                             style="width:34px;max-width:34px;height:auto;display:block;border:0">
+                      </td>
+                      <td style="vertical-align:middle;
+                                 font:700 16px/1.3 Arial,Helvetica,sans-serif;color:#ffffff">
+                        {{ next_pass.meal_label }}
+                      </td>
+                      <td align="right" style="vertical-align:middle;white-space:nowrap;
+                                 font:700 13px/1.3 Arial,Helvetica,sans-serif;color:#ffffff">
+                        {{ next_pass.time }}
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:16px 18px;background:#ffffff">
+                  <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                         role="presentation">
+                    {% if next_pass.date %}
+                    <tr>
+                      <td width="72" style="font:400 12px/1.7 Arial,Helvetica,sans-serif;
+                                 color:#8b959c;padding:2px 0">When</td>
+                      <td style="font:700 13px/1.7 Arial,Helvetica,sans-serif;color:#12312a;
+                                 padding:2px 0">{{ next_pass.date }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if next_pass.venue %}
+                    <tr>
+                      <td style="font:400 12px/1.7 Arial,Helvetica,sans-serif;color:#8b959c;
+                                 padding:2px 0">Where</td>
+                      <td style="font:700 13px/1.7 Arial,Helvetica,sans-serif;color:#12312a;
+                                 padding:2px 0">{{ next_pass.venue }}</td>
+                    </tr>
+                    {% endif %}
+                    <tr>
+                      <td colspan="2" style="padding:12px 0 0;
+                                 font:400 13px/1.7 Arial,Helvetica,sans-serif;color:#6b7280">
+                        Its QR code is in the email you were sent before the conference —
+                        search your inbox for <strong>ICOC-Students 2026</strong>.
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        {% if remaining_count > 1 %}
+        <tr>
+          <td style="padding:16px 30px 0">
+            <div style="font:400 12px/1.8 Arial,Helvetica,sans-serif;color:#8b959c;
+                        padding-bottom:6px">
+              And after that:
+            </div>
+            <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation">
+              {% for r in remaining[1:] %}
+              <tr>
+                <td width="16" style="vertical-align:top;padding:5px 0 0">
+                  <div style="width:7px;height:7px;border-radius:50%;background:#bcd6cb;
+                              font-size:0;line-height:0">&nbsp;</div>
+                </td>
+                <td style="font:400 13px/1.7 Arial,Helvetica,sans-serif;color:#414b56;
+                           padding:1px 0">
+                  <strong style="color:#12312a">{{ r.meal_label }}</strong>{% if r.time %}
+                  <span style="color:#8b959c"> · {{ r.time }}</span>{% endif %}{% if r.venue %}
+                  <span style="color:#8b959c"> · {{ r.venue }}</span>{% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </table>
+          </td>
+        </tr>
+        {% endif %}
+
+        {% else %}
+        <!-- ══════════════════════════ Farewell ════════════════════════════ -->
+        <tr><td style="padding:28px 30px 0;line-height:0;font-size:0">
+          <img src="https://raw.githubusercontent.com/Shuvam-Banerji-Seal/Automated-Event-Coupon-Sender-Email-and-Verification-Application/main/static/brand/icoc/icoc-divider.png"
+               width="580" height="24" alt=""
+               style="width:100%;max-width:580px;height:auto;display:block;border:0">
+        </td></tr>
+
+        <tr>
+          <td style="padding:22px 30px 0">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"
+                   style="background:#f3f8f5;border:1px solid #dfeae4;border-radius:12px">
+              <tr>
+                <td style="padding:20px 22px">
+                  <div style="font:700 15px/1.5 Georgia,'Times New Roman',serif;color:#12312a;
+                              padding-bottom:10px">
+                    That was your last meal pass.
+                  </div>
+                  <div style="font:400 14px/1.8 Arial,Helvetica,sans-serif;color:#414b56">
+                    Thank you for spending these two days with us. Thirty-one student
+                    talks, seven invited lectures, a poster session and a great deal of
+                    chemistry later — we hope you leave with a new collaborator or two.
+                  </div>
+                  <div style="font:400 14px/1.8 Arial,Helvetica,sans-serif;color:#414b56;
+                              padding-top:12px">
+                    Photographs, the best-poster results and news of the next edition will
+                    go up on
+                    <a href="https://icocstudents.wixsite.com/icocstudents2026"
+                       style="color:#0f5a49;font-weight:700;text-decoration:underline">the
+                      conference website</a>. If anything about the food or the venue could
+                    have been better, tell the organising committee — the next cohort
+                    inherits whatever we learn.
+                  </div>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        {% endif %}
+
+        <!-- ═══════════════════════════ Organisers ════════════════════════ -->
+        <tr>
+          <td align="center" style="padding:32px 30px 0">
+            <img src="https://raw.githubusercontent.com/Shuvam-Banerji-Seal/Automated-Event-Coupon-Sender-Email-and-Verification-Application/main/static/brand/icoc/icoc-emblem.png"
+                 width="72" height="73" alt="ICOC-Students 2026"
+                 style="width:72px;max-width:72px;height:auto;display:block;margin:0 auto 14px">
+            <div style="font:400 12px/1.8 Arial,Helvetica,sans-serif;color:#6b7280">
+              Department of Chemical Sciences<br>
+              Indian Institute of Science Education and Research Kolkata
+            </div>
+          </td>
+        </tr>
+
+        <!-- ════════════════════════════ Footer ═══════════════════════════ -->
+        <tr>
+          <td style="background:{{ accent }};padding:6px 30px 24px;text-align:center;
+                     margin-top:24px">
+            <img src="https://raw.githubusercontent.com/Shuvam-Banerji-Seal/Automated-Event-Coupon-Sender-Email-and-Verification-Application/main/static/brand/icoc/icoc-divider-light.png"
+                 width="500" height="20" alt=""
+                 style="width:100%;max-width:500px;height:auto;display:block;
+                        margin:0 auto 16px;border:0">
+            <div style="font:400 12px/1.8 Arial,Helvetica,sans-serif;color:#cfe8de">
+              Sent to {{ email }} when your pass was scanned.<br>
+              This message carries no code — nothing here can be redeemed.
+            </div>
+            <div style="font:600 12px/1.8 Arial,Helvetica,sans-serif;padding-top:10px">
+              <a href="https://icocstudents.wixsite.com/icocstudents2026"
+                 style="color:#ffffff;text-decoration:underline">icocstudents2026</a>
+            </div>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>

@@ -30,6 +30,7 @@ from collections import defaultdict, deque
 from datetime import datetime, timezone
 from functools import wraps
 from typing import Any, Dict, List, Optional
+from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 from flask import (
@@ -49,8 +50,8 @@ from src.tunnel import (
     ZrokTunnel, find_free_port, is_public_host, port_is_free, port_owner,
 )
 from src.store import (
-    Coupon, CouponStore, MealSession, Recipient, food_colour, normalise_food,
-    parse_scan,
+    Coupon, CouponStore, MealSession, Recipient, food_colour,
+    first_name as store_first_name, normalise_food, parse_scan,
 )
 
 load_dotenv()
@@ -113,6 +114,31 @@ DEFAULT_SETTINGS = {
 APP_PORT = int(os.getenv("PORT", "5000"))
 # Which stored template is sent on check-in. Blank disables thank-you mail.
 THANK_YOU_TEMPLATE = os.getenv("THANK_YOU_TEMPLATE", "thank_you").strip()
+
+
+# Stored times are UTC, which is right for a database and wrong for a person.
+# The event has one location, so one timezone covers the whole system.
+EVENT_TIMEZONE = os.getenv("EVENT_TIMEZONE", "Asia/Kolkata")
+
+try:
+    _event_tz = ZoneInfo(EVENT_TIMEZONE)
+except Exception:  # noqa: BLE001 - a bad name must not stop the server booting
+    logger.error("EVENT_TIMEZONE %r is not a known zone; falling back to UTC.",
+                 EVENT_TIMEZONE)
+    _event_tz = timezone.utc
+
+
+def local_time(iso: Optional[str], fmt: str = "%H:%M") -> str:
+    """Format a stored UTC timestamp in the event's own timezone."""
+    if not iso:
+        return ""
+    try:
+        moment = datetime.fromisoformat(iso)
+    except ValueError:
+        return ""
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return moment.astimezone(_event_tz).strftime(fmt)
 
 
 def event_settings() -> Dict[str, str]:
@@ -730,7 +756,8 @@ def api_template_preview():
     target = as_text(body.get("email"), 320).lower()
 
     try:
-        rendered, rendered_subject, context = _render_preview(html, subject, target, food)
+        rendered, rendered_subject, context, _ = _render_preview(
+            html, subject, target, food)
     except templating.TemplateError as exc:
         return jsonify({"success": False, "error": str(exc)}), 400
 
@@ -756,6 +783,17 @@ def _render_preview(html: str, subject: str, target: str = "",
     sessions = store.meal_sessions()
     context = None
 
+    # With no-one named, preview the first person actually on the list rather
+    # than an invented one. Showing "Ada Lovelace" to an operator whose sheet
+    # holds real names reads as though the wrong people are about to be mailed,
+    # and it hides the thing worth checking — that a real name, a real meal
+    # preference and a real set of passes render correctly.
+    resolved = ""
+    if not target:
+        rows = store.recipients_with_status()
+        if rows:
+            target = rows[0]["email"]
+
     if target:
         coupons = store.coupons_for_email(target)
         if coupons:
@@ -768,6 +806,16 @@ def _render_preview(html: str, subject: str, target: str = "",
                 )
                 for c in coupons
             ]
+            # A thank-you preview needs a sitting to have been collected. Use a
+            # real one if they have eaten, and otherwise pretend the first pass
+            # has just been scanned, so the template has something to describe.
+            used = [e for e in entries if e["status"] == "used"]
+            redeemed = used[-1] if used else entries[0]
+            remaining = [
+                e for e in entries
+                if e["coupon_id"] != redeemed["coupon_id"] and e["status"] != "used"
+            ]
+            resolved = lead.email
             context = templating.build_context(
                 name=lead.name, email=lead.email,
                 food_preference=lead.food_preference,
@@ -775,9 +823,17 @@ def _render_preview(html: str, subject: str, target: str = "",
                 verification_code=lead.verification_code,
                 coupon_id=lead.coupon_id,
                 qr_code_src=entries[0]["qr_code_src"],
-                coupons=entries, extra=lead.extra, settings=settings,
+                coupons=entries, redeemed=redeemed, remaining=remaining,
+                checked_in_at=local_time(
+                    next((c.used_at for c in coupons
+                          if c.coupon_id == redeemed["coupon_id"]), None)
+                ) or "13:22",
+                extra=lead.extra, settings=settings,
             )
         else:
+            # On the list but not issued yet. Their real name, address, meal
+            # preference and sheet columns are all known — only the codes are
+            # not, so only the codes are invented.
             for row in store.recipients_with_status():
                 if row["email"] == target:
                     context = templating.sample_context(
@@ -786,9 +842,15 @@ def _render_preview(html: str, subject: str, target: str = "",
                         food_preference=row["food_preference"],
                         sessions=sessions,
                     )
-                    context["name"] = row["name"]
-                    context["email"] = row["email"]
-                    context["first_name"] = (row["name"] or row["email"]).split()[0]
+                    resolved = row["email"]
+                    context.update(row["extra"])
+                    context.update({
+                        "name": row["name"],
+                        "email": row["email"],
+                        "first_name": store_first_name(row["name"], row["email"]),
+                        "attendee_name": row["name"],
+                        "attendee_email": row["email"],
+                    })
                     break
 
     if context is None:
@@ -816,6 +878,7 @@ def _render_preview(html: str, subject: str, target: str = "",
         templating.render(html, context),
         templating.render_subject(subject, context),
         context,
+        resolved,
     )
 
 
@@ -835,14 +898,17 @@ def preview_template_page(name: str):
     target = as_text(request.args.get("email"), 320).lower()
     food = normalise_food(request.args.get("food") or "Vegetarian")
     try:
-        rendered, subject, _ = _render_preview(
+        rendered, subject, _, resolved = _render_preview(
             template["html"], template["subject"], target, food
         )
     except templating.TemplateError as exc:
         return render_template("error.html", code=400,
                                message=f"{name}: {exc}"), 400
+    # `resolved` is blank when nobody real was available and the sample was
+    # used, which the banner has to say out loud — otherwise the page claims to
+    # be previewing a recipient who does not exist.
     return render_template("preview.html", name=name, subject=subject,
-                           body=rendered, email=target)
+                           body=rendered, email=resolved, asked_for=target)
 
 
 # ---------------------------------------------------------------- send jobs
@@ -1288,26 +1354,37 @@ def _queue_thank_you(coupon: Coupon):
             )
         return
     try:
+        sessions = store.session_map()
+        held = store.coupons_for_email(coupon.email)
+        entries = [templating.coupon_context(c, sessions.get(c.meal_key)) for c in held]
+        redeemed = templating.coupon_context(coupon, sessions.get(coupon.meal_key))
+        # What they still hold. This is the useful half of a thank-you at a
+        # multi-meal conference: "that was lunch, dinner is at 19:30 in the
+        # Tagore Auditorium" is worth sending; "thanks for coming" alone is not.
+        remaining = [
+            e for e in entries
+            if e["coupon_id"] != coupon.coupon_id and e["status"] != "used"
+        ]
         context = templating.build_context(
             name=coupon.name, email=coupon.email,
             food_preference=coupon.food_preference, include_qr=False,
             verification_code=coupon.verification_code,
             coupon_id=coupon.coupon_id, qr_code_src="",
+            coupons=entries, redeemed=redeemed, remaining=remaining,
+            checked_in_at=local_time(coupon.used_at),
             extra=coupon.extra, settings=event_settings(),
         )
         html = templating.render(template["html"], context)
         subject = templating.render_subject(
             template["subject"] or "Thank you for coming", context
         )
-        # Thank people once, not once per pass. On a four-meal conference the
-        # per-coupon key would put four identical thank-yous in an inbox over
-        # two days; keying on the attendee means the first meal they collect
-        # triggers it and the rest are no-ops.
-        multi = bool(store.meal_sessions())
+        # One thank-you per sitting, not per attendee: each is about the meal
+        # just collected and points at the next one, so four of them over two
+        # days carry four different messages. The unique index on the outbox
+        # still stops six scanners racing the same coupon into six copies.
         queued = store.enqueue_email(
             to_email=coupon.email, to_name=coupon.name, subject=subject,
             html=html, kind="thank_you", coupon_id=coupon.coupon_id,
-            dedupe_key=coupon.email.lower() if multi else coupon.coupon_id,
         )
         if queued is not None:
             outbox.nudge()

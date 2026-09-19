@@ -189,11 +189,11 @@ def meal_badge(night: bool) -> str:
         )
     else:
         rays = "".join(
-            '  <line x1="{:.1f}" y1="{:.1f}" x2="{:.1f}" y2="{:.1f}" '
-            'stroke="#ffffff" stroke-width="4" stroke-linecap="round"/>\n'.format(
-                44 + 11 * math.cos(math.radians(a)), 18 + 11 * math.sin(math.radians(a)),
-                44 + 14.5 * math.cos(math.radians(a)), 18 + 14.5 * math.sin(math.radians(a)),
-            )
+            f'  <line x1="{44 + 11 * math.cos(math.radians(a)):.1f}"'
+            f' y1="{18 + 11 * math.sin(math.radians(a)):.1f}"'
+            f' x2="{44 + 14.5 * math.cos(math.radians(a)):.1f}"'
+            f' y2="{18 + 14.5 * math.sin(math.radians(a)):.1f}"'
+            f' stroke="#ffffff" stroke-width="4" stroke-linecap="round"/>\n'
             for a in range(0, 360, 45)
         )
         sky = f'  <circle cx="44" cy="18" r="7.5" fill="#ffffff"/>\n{rays}'

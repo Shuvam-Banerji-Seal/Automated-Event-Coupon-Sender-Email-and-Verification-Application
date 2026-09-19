@@ -47,6 +47,13 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv("DISABLE_ADMIN_CHECK", "true")
     monkeypatch.setenv("SCANNER_PIN", "")
     monkeypatch.setenv("EVENT_NAME", "Test Event")
+    # Pinned, not merely cleared. load_dotenv() reads the project's real .env
+    # relative to app.py, and it does not override a variable that is already
+    # set — so deleting these lets the operator's own configuration decide what
+    # the suite asserts. Pointing THANK_YOU_TEMPLATE at the ICOC design, as a
+    # live deployment does, silently broke a test about a *missing* template.
+    monkeypatch.setenv("THANK_YOU_TEMPLATE", "thank_you")
+    monkeypatch.setenv("EVENT_TIMEZONE", "Asia/Kolkata")
     monkeypatch.chdir(tmp_path)
 
     # Seed templates live next to the real app, not in the temp cwd.
