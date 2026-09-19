@@ -33,7 +33,10 @@ DEEPER = "#0a4438"
 MID = "#12654f"
 LEAF = "#559347"
 SPROUT = "#7fbf6a"
-TEAL = "#1d7e8e"
+TEAL = "#1d6f7e"
+TEAL_DEEP = "#155563"
+TEAL_MID = "#22808f"
+TEAL_LIGHT = "#7ed3dd"
 PAPER = "#eef2f0"
 
 
@@ -78,12 +81,14 @@ BONDS = [
 BIG = {"d", "h", "k", "m", "p", "s"}
 
 
-def masthead() -> str:
-    """The header band: a molecular network dissolving into flat green.
+def masthead(deep: str = DEEP, deeper: str = DEEPER, mid: str = MID,
+             light: str = SPROUT, leaf: str = LEAF) -> str:
+    """The header band: a molecular network dissolving into flat colour.
 
-    The bottom edge is exactly DEEP so the image can butt straight up against
-    the solid-colour cell below it and read as one continuous header — a seam
-    there is the sort of thing that looks broken rather than deliberate.
+    The bottom edge is exactly ``deep`` so the image can butt straight up
+    against the solid-colour cell below it and read as one continuous header — a
+    seam there is the sort of thing that looks broken rather than deliberate,
+    which is why the dinner variant exists at all.
     """
     bonds = "\n".join(
         f'    <line x1="{NODES[a][0]}" y1="{NODES[a][1]}" '
@@ -92,7 +97,7 @@ def masthead() -> str:
     )
     nodes = "\n".join(
         f'    <circle cx="{x}" cy="{y}" r="{9 if k in BIG else 5.5}" '
-        f'fill="{SPROUT if k in BIG else LEAF}" opacity="{0.9 if k in BIG else 0.7}"/>'
+        f'fill="{light if k in BIG else leaf}" opacity="{0.9 if k in BIG else 0.7}"/>'
         for k, (x, y) in NODES.items()
     )
     rings = "\n".join(
@@ -103,13 +108,13 @@ def masthead() -> str:
      viewBox="0 0 1280 320" role="presentation">
   <defs>
     <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0"   stop-color="{DEEPER}"/>
-      <stop offset="0.5" stop-color="{MID}"/>
-      <stop offset="1"   stop-color="{DEEP}"/>
+      <stop offset="0"   stop-color="{deeper}"/>
+      <stop offset="0.5" stop-color="{mid}"/>
+      <stop offset="1"   stop-color="{deep}"/>
     </linearGradient>
     <radialGradient id="glow" cx="0.5" cy="0.1" r="0.8">
-      <stop offset="0" stop-color="{SPROUT}" stop-opacity="0.22"/>
-      <stop offset="1" stop-color="{SPROUT}" stop-opacity="0"/>
+      <stop offset="0" stop-color="{light}" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="{light}" stop-opacity="0"/>
     </radialGradient>
     <!-- The network is brightest at the top and gone by the bottom edge, so it
          hands over to the flat green underneath without a visible join. -->
@@ -128,17 +133,17 @@ def masthead() -> str:
 
   <g mask="url(#dissolve)">
     <!-- catalytic cycle: the arrow that makes it chemistry rather than dots -->
-    <g fill="none" stroke="{SPROUT}" stroke-opacity="0.30" stroke-width="3">
+    <g fill="none" stroke="{light}" stroke-opacity="0.30" stroke-width="3">
       <circle cx="640" cy="150" r="118" stroke-dasharray="26 18"/>
       <circle cx="640" cy="150" r="150" stroke-opacity="0.13" stroke-dasharray="4 20"/>
     </g>
-    <polygon points="758,150 742,138 742,162" fill="{SPROUT}" opacity="0.36"/>
-    <polygon points="522,150 538,162 538,138" fill="{SPROUT}" opacity="0.36"/>
+    <polygon points="758,150 742,138 742,162" fill="{light}" opacity="0.36"/>
+    <polygon points="522,150 538,162 538,138" fill="{light}" opacity="0.36"/>
 
-    <g stroke="{SPROUT}" stroke-opacity="0.42" stroke-width="2" stroke-linecap="round">
+    <g stroke="{light}" stroke-opacity="0.42" stroke-width="2" stroke-linecap="round">
 {bonds}
     </g>
-    <g fill="none" stroke="{SPROUT}" stroke-opacity="0.34" stroke-width="2.5">
+    <g fill="none" stroke="{light}" stroke-opacity="0.34" stroke-width="2.5">
 {rings}
     </g>
 {nodes}
@@ -209,6 +214,8 @@ def meal_badge(night: bool) -> str:
 ASSETS = {
     # name: (svg source, rendered PNG width)
     "icoc-masthead": (masthead, 1280),
+    "icoc-masthead-teal": (
+        lambda: masthead(TEAL, TEAL_DEEP, TEAL_MID, TEAL_LIGHT, "#4aa8b4"), 1280),
     "icoc-divider": (lambda: divider("#bcd6cb", LEAF), 1200),
     "icoc-divider-light": (lambda: divider("#4f8f7c", SPROUT), 1200),
     "icoc-badge-lunch": (lambda: meal_badge(False), 88),

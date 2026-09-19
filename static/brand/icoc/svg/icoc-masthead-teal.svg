@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="320"
+     viewBox="0 0 1280 320" role="presentation">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0"   stop-color="#155563"/>
+      <stop offset="0.5" stop-color="#22808f"/>
+      <stop offset="1"   stop-color="#1d6f7e"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.1" r="0.8">
+      <stop offset="0" stop-color="#7ed3dd" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#7ed3dd" stop-opacity="0"/>
+    </radialGradient>
+    <!-- The network is brightest at the top and gone by the bottom edge, so it
+         hands over to the flat green underneath without a visible join. -->
+    <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0"    stop-color="#ffffff" stop-opacity="1"/>
+      <stop offset="0.55" stop-color="#ffffff" stop-opacity="0.75"/>
+      <stop offset="1"    stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <mask id="dissolve">
+      <rect width="1280" height="320" fill="url(#fade)"/>
+    </mask>
+  </defs>
+
+  <rect width="1280" height="320" fill="url(#sky)"/>
+  <rect width="1280" height="320" fill="url(#glow)"/>
+
+  <g mask="url(#dissolve)">
+    <!-- catalytic cycle: the arrow that makes it chemistry rather than dots -->
+    <g fill="none" stroke="#7ed3dd" stroke-opacity="0.30" stroke-width="3">
+      <circle cx="640" cy="150" r="118" stroke-dasharray="26 18"/>
+      <circle cx="640" cy="150" r="150" stroke-opacity="0.13" stroke-dasharray="4 20"/>
+    </g>
+    <polygon points="758,150 742,138 742,162" fill="#7ed3dd" opacity="0.36"/>
+    <polygon points="522,150 538,162 538,138" fill="#7ed3dd" opacity="0.36"/>
+
+    <g stroke="#7ed3dd" stroke-opacity="0.42" stroke-width="2" stroke-linecap="round">
+    <line x1="70" y1="196" x2="152" y2="92"/>
+    <line x1="70" y1="196" x2="196" y2="232"/>
+    <line x1="152" y1="92" x2="268" y2="150"/>
+    <line x1="196" y1="232" x2="300" y2="268"/>
+    <line x1="268" y1="150" x2="300" y2="268"/>
+    <line x1="268" y1="150" x2="404" y2="84"/>
+    <line x1="300" y1="268" x2="392" y2="208"/>
+    <line x1="392" y1="208" x2="498" y2="146"/>
+    <line x1="404" y1="84" x2="498" y2="146"/>
+    <line x1="392" y1="208" x2="556" y2="252"/>
+    <line x1="498" y1="146" x2="620" y2="108"/>
+    <line x1="556" y1="252" x2="676" y2="208"/>
+    <line x1="620" y1="108" x2="676" y2="208"/>
+    <line x1="620" y1="108" x2="742" y2="74"/>
+    <line x1="676" y1="208" x2="790" y2="186"/>
+    <line x1="742" y1="74" x2="790" y2="186"/>
+    <line x1="790" y1="186" x2="858" y2="268"/>
+    <line x1="790" y1="186" x2="892" y2="128"/>
+    <line x1="858" y1="268" x2="968" y2="214"/>
+    <line x1="892" y1="128" x2="968" y2="214"/>
+    <line x1="892" y1="128" x2="1030" y2="96"/>
+    <line x1="968" y1="214" x2="1088" y2="236"/>
+    <line x1="1030" y1="96" x2="1150" y2="140"/>
+    <line x1="1088" y1="236" x2="1150" y2="140"/>
+    <line x1="1088" y1="236" x2="1224" y2="214"/>
+    <line x1="1150" y1="140" x2="1224" y2="214"/>
+    </g>
+    <g fill="none" stroke="#7ed3dd" stroke-opacity="0.34" stroke-width="2.5">
+    <polygon points="265.4,87.0 236.0,104.0 206.6,87.0 206.6,53.0 236.0,36.0 265.4,53.0"/>
+    <polygon points="632.5,257.0 610.0,270.0 587.5,257.0 587.5,231.0 610.0,218.0 632.5,231.0"/>
+    <polygon points="1152.0,77.0 1126.0,92.0 1100.0,77.0 1100.0,47.0 1126.0,32.0 1152.0,47.0"/>
+    </g>
+    <circle cx="70" cy="196" r="5.5" fill="#4aa8b4" opacity="0.7"/>
+    <circle cx="152" cy="92" r="5.5" fill="#4aa8b4" opacity="0.7"/>
+    <circle cx="196" cy="232" r="5.5" fill="#4aa8b4" opacity="0.7"/>
+    <circle cx="268" cy="150" r="9" fill="#7ed3dd" opacity="0.9"/>
+    <circle cx="300" cy="268" r="5.5" fill="#4aa8b4" opacity="0.7"/>
+    <circle cx="392" cy="208" r="5.5" fill="#4aa8b4" opacity="0.7"/>
+    <circle cx="404" cy="84" r="5.5" fill="#4aa8b4" opacity="0.7"/>
+    <circle cx="498" cy="146" r="9" fill="#7ed3dd" opacity="0.9"/>
+    <circle cx="556" cy="252" r="5.5" fill="#4aa8b4" opacity="0.7"/>
+    <circle cx="620" cy="108" r="5.5" fill="#4aa8b4" opacity="0.7"/>
+    <circle cx="676" cy="208" r="9" fill="#7ed3dd" opacity="0.9"/>
+    <circle cx="742" cy="74" r="5.5" fill="#4aa8b4" opacity="0.7"/>
+    <circle cx="790" cy="186" r="9" fill="#7ed3dd" opacity="0.9"/>
+    <circle cx="858" cy="268" r="5.5" fill="#4aa8b4" opacity="0.7"/>
+    <circle cx="892" cy="128" r="5.5" fill="#4aa8b4" opacity="0.7"/>
+    <circle cx="968" cy="214" r="9" fill="#7ed3dd" opacity="0.9"/>
+    <circle cx="1030" cy="96" r="5.5" fill="#4aa8b4" opacity="0.7"/>
+    <circle cx="1088" cy="236" r="5.5" fill="#4aa8b4" opacity="0.7"/>
+    <circle cx="1150" cy="140" r="9" fill="#7ed3dd" opacity="0.9"/>
+    <circle cx="1224" cy="214" r="5.5" fill="#4aa8b4" opacity="0.7"/>
+  </g>
+</svg>
