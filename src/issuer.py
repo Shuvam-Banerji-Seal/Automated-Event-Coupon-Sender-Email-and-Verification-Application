@@ -23,6 +23,7 @@ from src.encryption import EncryptionService
 from src.store import (
     Coupon,
     CouponStore,
+    MealSession,
     Recipient,
     normalise_food,
     qr_payload,
@@ -148,15 +149,25 @@ class CouponIssuer:
         recipients: Sequence[Recipient],
         event_name: str = "",
         skip_existing: bool = True,
+        sessions: Optional[Sequence[MealSession]] = None,
     ) -> Dict[str, Any]:
-        """Issue one coupon per recipient.
+        """Issue one coupon per recipient per sitting.
 
         Codes are reserved inside a single transaction so two concurrent batches
-        cannot hand out the same six digits. Recipients who already hold a coupon
-        are skipped by default — re-running a send must never mint a second
-        coupon for someone and silently invalidate the code already in their inbox.
+        cannot hand out the same six digits. A (person, sitting) pair that already
+        holds a coupon is skipped by default — re-running a send must never mint a
+        second coupon for someone and silently invalidate the code already in
+        their inbox.
+
+        With no sessions configured this issues exactly one coupon per recipient,
+        carrying the empty meal key, which is what every single-sitting event
+        before ICOC did.
         """
-        existing = self.store.existing_emails() if skip_existing else set()
+        if sessions is None:
+            sessions = self.store.issuing_sessions()
+        sessions = list(sessions) or [MealSession(key="", label="")]
+
+        existing = self.store.existing_meal_pairs() if skip_existing else set()
         issued: List[Coupon] = []
         skipped: List[str] = []
         errors: List[Dict[str, str]] = []
@@ -167,66 +178,80 @@ class CouponIssuer:
                 if not email:
                     errors.append({"email": "", "error": "empty email"})
                     continue
-                if email in existing:
-                    skipped.append(email)
-                    continue
-                try:
-                    code = self.store.reserve_code(conn, _rng)
-                    token = self.store.reserve_token(conn, _rng)
-                    coupon_id = str(uuid.uuid4())
-                    now = utcnow()
-                    payload = {
-                        "coupon_id": coupon_id,
-                        "email": email,
-                        "event_name": event_name,
-                        "verification_code": code,
-                        "created_at": now,
-                        "valid": True,
-                    }
-                    coupon = Coupon(
-                        coupon_id=coupon_id,
-                        email=email,
-                        name=recipient.name,
-                        verification_code=code,
-                        qr_token=token,
-                        food_preference=normalise_food(recipient.food_preference),
-                        include_qr=recipient.include_qr,
-                        status="generated",
-                        event_name=event_name,
-                        encrypted_data=self.encryption.encrypt_coupon_data(
-                            payload, email
-                        ),
-                        created_at=now,
-                        extra=dict(recipient.extra),
-                    )
-                    # Insert inside the same transaction that reserved the code,
-                    # so the uniqueness check above cannot be raced.
-                    conn.execute(
-                        "INSERT INTO coupons"
-                        "(coupon_id, email, name, verification_code, qr_token,"
-                        " food_preference, include_qr, status, event_name,"
-                        " encrypted_data, extra, created_at)"
-                        " VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
-                        (
-                            coupon.coupon_id,
-                            coupon.email,
-                            coupon.name,
-                            coupon.verification_code,
-                            coupon.qr_token,
-                            coupon.food_preference,
-                            1 if coupon.include_qr else 0,
-                            coupon.status,
-                            coupon.event_name,
-                            coupon.encrypted_data,
-                            json.dumps(coupon.extra, ensure_ascii=False),
-                            coupon.created_at,
-                        ),
-                    )
-                    issued.append(coupon)
-                    existing.add(email)
-                except Exception as exc:  # noqa: BLE001 - reported per recipient
-                    logger.exception("Could not issue coupon for %s", email)
-                    errors.append({"email": email, "error": str(exc)})
+                for order, session in enumerate(sessions):
+                    if (email, session.key) in existing:
+                        skipped.append(email)
+                        continue
+                    try:
+                        code = self.store.reserve_code(conn, _rng)
+                        token = self.store.reserve_token(conn, _rng)
+                        coupon_id = str(uuid.uuid4())
+                        now = utcnow()
+                        payload = {
+                            "coupon_id": coupon_id,
+                            "email": email,
+                            "event_name": event_name,
+                            "meal_key": session.key,
+                            "verification_code": code,
+                            "created_at": now,
+                            "valid": True,
+                        }
+                        coupon = Coupon(
+                            coupon_id=coupon_id,
+                            email=email,
+                            name=recipient.name,
+                            verification_code=code,
+                            qr_token=token,
+                            food_preference=normalise_food(recipient.food_preference),
+                            include_qr=recipient.include_qr,
+                            status="generated",
+                            event_name=event_name,
+                            encrypted_data=self.encryption.encrypt_coupon_data(
+                                payload, email
+                            ),
+                            created_at=now,
+                            meal_key=session.key,
+                            meal_label=session.label,
+                            meal_order=order,
+                            extra=dict(recipient.extra),
+                        )
+                        # Insert inside the same transaction that reserved the
+                        # code, so the uniqueness check above cannot be raced.
+                        conn.execute(
+                            "INSERT INTO coupons"
+                            "(coupon_id, email, name, verification_code, qr_token,"
+                            " food_preference, include_qr, status, event_name,"
+                            " encrypted_data, extra, meal_key, meal_label,"
+                            " meal_order, created_at)"
+                            " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                            (
+                                coupon.coupon_id,
+                                coupon.email,
+                                coupon.name,
+                                coupon.verification_code,
+                                coupon.qr_token,
+                                coupon.food_preference,
+                                1 if coupon.include_qr else 0,
+                                coupon.status,
+                                coupon.event_name,
+                                coupon.encrypted_data,
+                                json.dumps(coupon.extra, ensure_ascii=False),
+                                coupon.meal_key,
+                                coupon.meal_label,
+                                coupon.meal_order,
+                                coupon.created_at,
+                            ),
+                        )
+                        issued.append(coupon)
+                        existing.add((email, session.key))
+                    except Exception as exc:  # reported per pair, not raised
+                        logger.exception(
+                            "Could not issue %s coupon for %s",
+                            session.key or "event", email,
+                        )
+                        errors.append({
+                            "email": email, "meal": session.key, "error": str(exc),
+                        })
 
         return {
             "issued": issued,
@@ -235,6 +260,7 @@ class CouponIssuer:
             "skipped_count": len(skipped),
             "errors": errors,
             "error_count": len(errors),
+            "sessions": [s.to_dict() for s in sessions],
         }
 
     def issue_one(self, recipient: Recipient, event_name: str = "") -> Optional[Coupon]:

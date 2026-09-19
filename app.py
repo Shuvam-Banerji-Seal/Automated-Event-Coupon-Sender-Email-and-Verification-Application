@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import atexit
 import io
+import json
 import logging
 import os
 import re
@@ -48,7 +49,8 @@ from src.tunnel import (
     ZrokTunnel, find_free_port, is_public_host, port_is_free, port_owner,
 )
 from src.store import (
-    Coupon, CouponStore, Recipient, food_colour, normalise_food, parse_scan,
+    Coupon, CouponStore, MealSession, Recipient, food_colour, normalise_food,
+    parse_scan,
 )
 
 load_dotenv()
@@ -159,8 +161,12 @@ def client_ip() -> str:
 
 # Paths reachable through the public tunnel. Everything else is refused, so
 # opening a share exposes the scanner without exposing the console with it.
+# The scanner needs the sitting list to know which meal it is serving, and
+# it runs over the public share. The list is meal names and times, which are
+# already on the conference website; the PIN still gates it.
 PUBLIC_PREFIXES = (
-    "/scan", "/api/scan", "/static/", "/favicon.ico", "/api/health",
+    "/scan", "/api/scan", "/api/sessions", "/static/", "/favicon.ico",
+    "/api/health",
 )
 
 
@@ -394,7 +400,10 @@ def settings_page():
 @app.route("/scan")
 @scanner_access
 def scanner_page():
-    return render_template("scanner.html", settings=event_settings())
+    return render_template(
+        "scanner.html", settings=event_settings(),
+        sessions=[s.to_dict() for s in store.meal_sessions()],
+    )
 
 
 @app.route("/scan/unlock", methods=["GET", "POST"])
@@ -593,13 +602,15 @@ def api_clear_recipients():
 def api_coupons():
     status = request.args.get("status", "all")
     search = (request.args.get("search") or "").strip()
+    meal = request.args.get("meal", "all")
     limit = as_int(request.args.get("limit"), 200, low=1, high=1000)
     offset = as_int(request.args.get("offset"), 0, low=0)
     return jsonify({
         "success": True,
-        "coupons": store.list_coupons(status=status, search=search,
+        "coupons": store.list_coupons(status=status, search=search, meal=meal,
                                       limit=limit, offset=offset),
-        "total": store.count_coupons(status=status, search=search),
+        "total": store.count_coupons(status=status, search=search, meal=meal),
+        "sessions": [s.to_dict() for s in store.meal_sessions()],
     })
 
 
@@ -718,33 +729,8 @@ def api_template_preview():
     food = normalise_food(body.get("food_preference", "Vegetarian"))
     target = as_text(body.get("email"), 320).lower()
 
-    settings = event_settings()
-    context = None
-    if target:
-        for row in store.recipients_with_status():
-            if row["email"] == target:
-                context = templating.build_context(
-                    name=row["name"], email=row["email"],
-                    food_preference=row["food_preference"],
-                    include_qr=row["include_qr"],
-                    verification_code=row["verification_code"] or "000000",
-                    coupon_id=row["coupon_id"] or "preview",
-                    extra=row["extra"], settings=settings,
-                )
-                break
-    if context is None:
-        context = templating.sample_context(
-            settings=settings, extra_columns=store.recipient_columns(),
-            food_preference=food,
-        )
-
-    # Preview needs a real image, not a cid: reference the browser cannot resolve.
-    preview_qr = qr_data_uri(make_qr_png("EC1:PREVIEW00000", box_size=8))
-    context["qr_code_src"] = preview_qr
-
     try:
-        rendered = templating.render(html, context)
-        rendered_subject = templating.render_subject(subject, context)
+        rendered, rendered_subject, context = _render_preview(html, subject, target, food)
     except templating.TemplateError as exc:
         return jsonify({"success": False, "error": str(exc)}), 400
 
@@ -755,6 +741,108 @@ def api_template_preview():
         "validation": templating.validate(html, known),
         "context_keys": sorted(known),
     })
+
+
+def _render_preview(html: str, subject: str, target: str = "",
+                    food: str = "Vegetarian"):
+    """Render a template the way a send would, with viewable images.
+
+    A real send attaches each QR as a MIME part and points the HTML at
+    ``cid:...``; a browser cannot resolve that, so every pass gets a data: URI
+    of its own real QR here. Different passes get visibly different codes, which
+    is the only way to notice a template that renders the same QR four times.
+    """
+    settings = event_settings()
+    sessions = store.meal_sessions()
+    context = None
+
+    if target:
+        coupons = store.coupons_for_email(target)
+        if coupons:
+            by_key = {s.key: s for s in sessions}
+            lead = coupons[0]
+            entries = [
+                templating.coupon_context(
+                    c, by_key.get(c.meal_key),
+                    qr_data_uri(coupon_qr_png(c, box_size=8)),
+                )
+                for c in coupons
+            ]
+            context = templating.build_context(
+                name=lead.name, email=lead.email,
+                food_preference=lead.food_preference,
+                include_qr=lead.include_qr,
+                verification_code=lead.verification_code,
+                coupon_id=lead.coupon_id,
+                qr_code_src=entries[0]["qr_code_src"],
+                coupons=entries, extra=lead.extra, settings=settings,
+            )
+        else:
+            for row in store.recipients_with_status():
+                if row["email"] == target:
+                    context = templating.sample_context(
+                        settings=settings,
+                        extra_columns=store.recipient_columns(),
+                        food_preference=row["food_preference"],
+                        sessions=sessions,
+                    )
+                    context["name"] = row["name"]
+                    context["email"] = row["email"]
+                    context["first_name"] = (row["name"] or row["email"]).split()[0]
+                    break
+
+    if context is None:
+        context = templating.sample_context(
+            settings=settings, extra_columns=store.recipient_columns(),
+            food_preference=food, sessions=sessions,
+        )
+
+    # Placeholder passes get a distinct stand-in each, so a template that renders
+    # the same QR four times is visible here rather than at a counter. The
+    # payload is padded to exactly 16 characters — the length a real coupon
+    # carries — because that is what keeps the preview at QR version 1 and makes
+    # it look as dense as the thing that actually ships.
+    placeholder = qr_data_uri(make_qr_png("EC1:PREVIEW00000", box_size=8))
+    for index, entry in enumerate(context.get("coupons") or []):
+        if entry.get("qr_code_src") in ("", "{{QR_PREVIEW}}"):
+            entry["qr_code_src"] = qr_data_uri(
+                make_qr_png(f"EC1:PREVIEW{index:05d}", box_size=8)
+            )
+    if context.get("qr_code_src") in ("", "{{QR_PREVIEW}}"):
+        first = (context.get("coupons") or [{}])[0].get("qr_code_src")
+        context["qr_code_src"] = first or placeholder
+
+    return (
+        templating.render(html, context),
+        templating.render_subject(subject, context),
+        context,
+    )
+
+
+@app.get("/preview/<name>")
+@admin_only
+def preview_template_page(name: str):
+    """The saved template rendered full-page, exactly as an attendee sees it.
+
+    The editor's side-by-side pane is cramped for a design with four passes in
+    it; this is the same render at full width, reloadable while editing, and
+    it takes ``?email=`` to check one real attendee's actual codes.
+    """
+    template = store.get_template(name)
+    if template is None:
+        return render_template("error.html", code=404,
+                               message=f"No template named {name!r}."), 404
+    target = as_text(request.args.get("email"), 320).lower()
+    food = normalise_food(request.args.get("food") or "Vegetarian")
+    try:
+        rendered, subject, _ = _render_preview(
+            template["html"], template["subject"], target, food
+        )
+    except templating.TemplateError as exc:
+        return render_template("error.html", code=400,
+                               message=f"{name}: {exc}"), 400
+    return render_template("preview.html", name=name, subject=subject,
+                           body=rendered, email=target)
 
 
 # ---------------------------------------------------------------- send jobs
@@ -801,33 +889,56 @@ _jobs: Dict[str, SendJob] = {}
 _jobs_lock = threading.Lock()
 
 
-def _build_message(coupon: Coupon, template: Dict[str, Any],
-                   settings: Dict[str, str], attachments: List[str]) -> Message:
+def _build_message(coupons: List[Coupon], template: Dict[str, Any],
+                   settings: Dict[str, str], attachments: List[str],
+                   sessions: Optional[Dict[str, MealSession]] = None) -> Message:
+    """One email carrying every pass a person holds.
+
+    A two-day conference issues four coupons per attendee. Sending one message
+    per coupon would put four near-identical emails in each inbox and make the
+    QR someone needs at dinner the hardest one to find; instead the passes go in
+    a single message as ``coupons``, each with its own inline QR.
+    """
+    lead = coupons[0]
+    sessions = sessions if sessions is not None else store.session_map()
+    entries = [
+        templating.coupon_context(c, sessions.get(c.meal_key)) for c in coupons
+    ]
     context = templating.build_context(
-        name=coupon.name, email=coupon.email,
-        food_preference=coupon.food_preference, include_qr=coupon.include_qr,
-        verification_code=coupon.verification_code, coupon_id=coupon.coupon_id,
-        qr_code_src="cid:qrcode", extra=coupon.extra, settings=settings,
+        name=lead.name, email=lead.email,
+        food_preference=lead.food_preference, include_qr=lead.include_qr,
+        verification_code=lead.verification_code, coupon_id=lead.coupon_id,
+        qr_code_src=f"cid:{templating.qr_cid(lead.meal_key)}",
+        coupons=entries, extra=lead.extra, settings=settings,
     )
     html = templating.render(template["html"], context)
     subject = templating.render_subject(template["subject"], context)
 
-    # Check the rendered HTML, not the source: templates reference the image as
-    # {{ qr_code_src }}, which only becomes "cid:qrcode" after rendering.
+    # Attach only the QRs the rendered HTML actually references. Checking the
+    # rendered output rather than the source matters because templates name the
+    # image as {{ qr_code_src }}, which is only a cid: after rendering — and a
+    # template that shows two of four passes must not carry four images.
     inline: Dict[str, bytes] = {}
-    if coupon.include_qr and "cid:qrcode" in html:
-        inline["qrcode"] = coupon_qr_png(coupon)
+    for coupon in coupons:
+        if not coupon.include_qr:
+            continue
+        name = templating.qr_cid(coupon.meal_key)
+        if f"cid:{name}" in html:
+            inline[name] = coupon_qr_png(coupon)
 
     return Message(
-        to_email=coupon.email, to_name=coupon.name, subject=subject, html=html,
+        to_email=lead.email, to_name=lead.name, subject=subject, html=html,
         inline_images=inline, attachments=attachments,
-        meta={"coupon_id": coupon.coupon_id},
+        meta={"coupon_id": lead.coupon_id,
+              "coupon_ids": [c.coupon_id for c in coupons]},
     )
 
 
-def _run_send(job: SendJob, coupons: List[Coupon], template: Dict[str, Any],
+def _run_send(job: SendJob, people: List[List[Coupon]], template: Dict[str, Any],
               settings: Dict[str, str], attachments: List[str], throttle: float):
+    """Send one message per person. ``people`` is their coupons, in serving order."""
     delivered: List[str] = []
+    sessions = store.session_map()
     try:
         with mailer.campaign(throttle=throttle) as campaign:
             if not campaign.accounts:
@@ -838,27 +949,32 @@ def _run_send(job: SendJob, coupons: List[Coupon], template: Dict[str, Any],
                     job.finished = time.time()
                 return
 
-            for coupon in coupons:
+            for coupons in people:
                 if job.cancelled:
                     break
+                lead = coupons[0]
                 with job.lock:
-                    job.current = coupon.email
+                    job.current = lead.email
                 try:
-                    message = _build_message(coupon, template, settings, attachments)
+                    message = _build_message(coupons, template, settings,
+                                             attachments, sessions)
                 except (templating.TemplateError, QRSizeError) as exc:
                     with job.lock:
                         job.failed += 1
-                        job.failures.append({"email": coupon.email, "error": str(exc)})
-                    store.log_send(coupon.email, coupon.coupon_id, job.template,
+                        job.failures.append({"email": lead.email, "error": str(exc)})
+                    store.log_send(lead.email, lead.coupon_id, job.template,
                                    template["subject"], False, str(exc))
                     continue
 
                 result = campaign.send(message)
                 if result["success"]:
-                    delivered.append(coupon.coupon_id)
+                    # Every pass in the message went out, so every one of them
+                    # is 'sent' — marking only the first would leave the rest
+                    # looking unsent and invite a duplicate mailing.
+                    delivered.extend(c.coupon_id for c in coupons)
                     with job.lock:
                         job.sent += 1
-                    store.log_send(coupon.email, coupon.coupon_id, job.template,
+                    store.log_send(lead.email, lead.coupon_id, job.template,
                                    message.subject, True, account=result["account"])
                     # Flush in batches so a crash mid-run cannot lose the record
                     # of what already went out.
@@ -868,9 +984,9 @@ def _run_send(job: SendJob, coupons: List[Coupon], template: Dict[str, Any],
                 else:
                     with job.lock:
                         job.failed += 1
-                        job.failures.append({"email": coupon.email,
+                        job.failures.append({"email": lead.email,
                                              "error": result.get("error", "")})
-                    store.log_send(coupon.email, coupon.coupon_id, job.template,
+                    store.log_send(lead.email, lead.coupon_id, job.template,
                                    message.subject, False, result.get("error", ""),
                                    result.get("account", ""))
                     if not campaign.available:
@@ -951,45 +1067,43 @@ def api_send_start():
     else:
         chosen = store.recipients_without_coupons()
 
-    coupons: List[Coupon] = []
+    # Issue whatever is still missing, then mail people rather than coupons: a
+    # multi-meal event gives each attendee several passes, and they belong in
+    # one message. The issuer skips (person, sitting) pairs that already exist,
+    # so re-running a send never invalidates a code already in an inbox.
     if audience == "resend":
-        wanted = set(selected)
-        for row in store.list_coupons(limit=10000):
-            if wanted and row["email"] not in wanted:
-                continue
-            found = store.find_by_id(row["coupon_id"])
-            if found is not None:
-                coupons.append(found)
+        wanted = selected or None
     else:
-        pending = [r for r in chosen if r.email not in store.existing_emails()]
-        result = issuer.issue_batch(pending, event_name=event_name)
-        coupons = result["issued"]
-        # Anyone selected who already had a coupon keeps it and still gets mail.
-        if audience == "selected":
-            for recipient in chosen:
-                if recipient.email in store.existing_emails():
-                    existing = store.find_by_email(recipient.email)
-                    if existing and existing.coupon_id not in {c.coupon_id for c in coupons}:
-                        coupons.append(existing)
+        issuer.issue_batch(chosen, event_name=event_name)
+        wanted = [r.email for r in chosen]
 
-    if not coupons:
+    people = [list(v) for v in store.coupons_by_email(wanted).values() if v]
+
+    if not people:
         return jsonify({
             "success": False,
-            "error": "Nobody to send to — every selected recipient already has a coupon.",
+            "error": (
+                "Nobody to send to — every recipient already holds all their "
+                "passes. Use 'Re-send' to mail them again."
+                if audience == "pending" else
+                "Nobody to send to — no coupons exist for the selected recipients."
+            ),
         }), 400
 
-    job = SendJob(uuid.uuid4().hex[:12], len(coupons), template_name)
+    job = SendJob(uuid.uuid4().hex[:12], len(people), template_name)
     with _jobs_lock:
         _jobs[job.id] = job
     threading.Thread(
         target=_run_send,
-        args=(job, coupons, template, settings, attachments, throttle),
+        args=(job, people, template, settings, attachments, throttle),
         daemon=True, name=f"send-{job.id}",
     ).start()
 
-    logger.info("Send job %s started: %d recipients, template %s",
-                job.id, len(coupons), template_name)
-    return jsonify({"success": True, "job_id": job.id, "total": len(coupons)})
+    total_passes = sum(len(p) for p in people)
+    logger.info("Send job %s started: %d recipients, %d passes, template %s",
+                job.id, len(people), total_passes, template_name)
+    return jsonify({"success": True, "job_id": job.id, "total": len(people),
+                    "passes": total_passes})
 
 
 @app.get("/api/send/status/<job_id>")
@@ -1071,6 +1185,10 @@ def api_scan():
     body = request.get_json(silent=True) or {}
     raw = as_text(body.get("payload") or body.get("code"), 4096)
     scanner_name = as_text(body.get("scanner"), 40)
+    # Which sitting this device is serving. Absent (or "any") accepts every
+    # pass, which is what a single-sitting event wants.
+    serving = body.get("meal")
+    expect_meal = None if serving in (None, "any") else as_text(serving, 40)
 
     # Each phone names itself, so a single misbehaving device is isolated
     # rather than the whole door being throttled with it.
@@ -1099,6 +1217,7 @@ def api_scan():
     result = store.redeem(
         verification_code=parsed["code"], qr_token=parsed["token"],
         email=parsed["email"], scanner=scanner_name, client_ip=ip,
+        expect_meal=expect_meal,
     )
 
     # Only a lookup that matched nothing looks like guessing. An already-used
@@ -1119,13 +1238,30 @@ def api_scan():
             "email": coupon.email,
             "food_preference": coupon.food_preference,
             "food_colour": food_colour(coupon.food_preference),
+            "meal_key": coupon.meal_key,
+            "meal_label": coupon.meal_label,
             "used_at": result.get("used_at") or coupon.used_at,
         })
     if result["valid"]:
-        stats = store.stats()
-        payload["progress"] = {"used": stats["used"], "total": stats["total"]}
+        payload["progress"] = _serving_progress(expect_meal)
         _queue_thank_you(coupon)
     return jsonify(payload)
+
+
+def _serving_progress(expect_meal: Optional[str]) -> Dict[str, int]:
+    """Counts for the sitting in front of the volunteer, not the whole event.
+
+    "412 of 1,648 served" is useless at a door where only one of four meals is
+    being handed out. When a sitting is selected the numbers describe that
+    sitting; otherwise they describe the event, as before.
+    """
+    stats = store.stats()
+    if expect_meal is not None:
+        for row in stats.get("sessions", []):
+            if row["key"] == expect_meal:
+                return {"used": row["used"], "total": row["issued"],
+                        "meal": row["label"]}
+    return {"used": stats["used"], "total": stats["total"]}
 
 
 def _queue_thank_you(coupon: Coupon):
@@ -1163,9 +1299,15 @@ def _queue_thank_you(coupon: Coupon):
         subject = templating.render_subject(
             template["subject"] or "Thank you for coming", context
         )
+        # Thank people once, not once per pass. On a four-meal conference the
+        # per-coupon key would put four identical thank-yous in an inbox over
+        # two days; keying on the attendee means the first meal they collect
+        # triggers it and the rest are no-ops.
+        multi = bool(store.meal_sessions())
         queued = store.enqueue_email(
             to_email=coupon.email, to_name=coupon.name, subject=subject,
             html=html, kind="thank_you", coupon_id=coupon.coupon_id,
+            dedupe_key=coupon.email.lower() if multi else coupon.coupon_id,
         )
         if queued is not None:
             outbox.nudge()
@@ -1208,8 +1350,66 @@ def api_scan_lookup():
 @admin_only
 def api_settings_get():
     return jsonify({"success": True, "settings": event_settings(),
+                    "sessions": [s.to_dict() for s in store.meal_sessions()],
                     "smtp": mailer.status(), "server_ip": SERVER_IP,
                     "scanner_locked": bool(SCANNER_PIN)})
+
+
+@app.get("/api/sessions")
+@scanner_access
+def api_sessions_get():
+    """The configured sittings. Readable by the scanner, which picks one."""
+    return jsonify({"success": True,
+                    "sessions": [s.to_dict() for s in store.meal_sessions()],
+                    "stats": store.meal_stats()})
+
+
+@app.post("/api/sessions")
+@admin_only
+def api_sessions_save():
+    """Replace the sitting list.
+
+    Editing sittings after passes have been issued does not reissue anything:
+    coupons carry their own label, so a pass already in somebody's inbox keeps
+    describing itself. Removing a sitting leaves its coupons valid but
+    unselectable at a door, which is reported on the dashboard rather than
+    hidden.
+    """
+    body = request.get_json(silent=True) or {}
+    raw = body.get("sessions")
+    if not isinstance(raw, list):
+        return jsonify({"success": False,
+                        "error": "Expected a list of sittings."}), 400
+    if len(raw) > 40:
+        return jsonify({"success": False,
+                        "error": "That is more sittings than any event has."}), 400
+
+    sessions: List[MealSession] = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            return jsonify({"success": False,
+                            "error": "Each sitting must be an object."}), 400
+        session_obj = MealSession(
+            key=as_text(entry.get("key"), 40),
+            label=as_text(entry.get("label"), 80),
+            day=as_text(entry.get("day"), 40),
+            meal=as_text(entry.get("meal"), 40),
+            date=as_text(entry.get("date"), 80),
+            time=as_text(entry.get("time"), 60),
+            venue=as_text(entry.get("venue"), 120),
+        )
+        if not session_obj.key:
+            return jsonify({
+                "success": False,
+                "error": "Every sitting needs a key — a short id like d1-lunch.",
+            }), 400
+        sessions.append(session_obj)
+
+    saved = store.set_meal_sessions(sessions)
+    logger.info("Meal sittings set to: %s",
+                ", ".join(s.key for s in saved) or "(none)")
+    return jsonify({"success": True,
+                    "sessions": [s.to_dict() for s in saved]})
 
 
 @app.post("/api/settings")
@@ -1485,27 +1685,53 @@ def server_error(error):
 
 
 def _seed_templates():
-    """Install the starter templates the first time the app runs."""
-    if store.list_templates():
-        return
+    """Install starter templates that this database has never been offered.
+
+    Bailing out whenever *any* template existed meant a starter added in a later
+    release never reached a database created before it — the ICOC design would
+    have been invisible on every existing install. Tracking which names have
+    been seeded gives both properties at once: a new starter appears, and one
+    the operator deliberately deleted stays deleted.
+    """
     seed_dir = os.path.join(os.path.dirname(__file__), "templates", "seed")
     if not os.path.isdir(seed_dir):
         return
+    try:
+        already = set(json.loads(store.get_setting("seeded_templates", "[]")))
+    except ValueError:
+        already = set()
+    if not already and store.list_templates():
+        # A database from before this bookkeeping existed. Whatever it already
+        # has was seeded; only genuinely new starters should arrive.
+        already = {t["name"] for t in store.list_templates()}
+
+    existing = {t["name"] for t in store.list_templates()}
+    installed = []
     for filename in sorted(os.listdir(seed_dir)):
         if not filename.endswith(".html"):
             continue
         name = filename[:-5]
+        if name in already or name in existing:
+            continue
         with open(os.path.join(seed_dir, filename), encoding="utf-8") as handle:
             content = handle.read()
         subject = "You're invited to {{ event_name }}"
+        description = "Starter template"
         if content.startswith("{#"):
             header, _, content = content.partition("#}")
             for line in header.splitlines():
                 if line.strip().lower().startswith("subject:"):
                     subject = line.split(":", 1)[1].strip()
-        store.save_template(name, subject, content.strip(),
-                            description="Starter template")
-    logger.info("Seeded %d starter templates", len(store.list_templates()))
+        store.save_template(name, subject, content.strip(), description=description)
+        installed.append(name)
+
+    if installed or not already:
+        store.set_setting(
+            "seeded_templates",
+            json.dumps(sorted(already | set(installed) | existing)),
+        )
+    if installed:
+        logger.info("Seeded starter template(s): %s", ", ".join(installed))
 
 
 _seed_templates()

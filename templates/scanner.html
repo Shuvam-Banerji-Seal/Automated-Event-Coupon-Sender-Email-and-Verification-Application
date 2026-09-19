@@ -76,6 +76,33 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
 .icon-btn.on { background: var(--warn); color: #1a1206; }
 .icon-btn svg { width: 19px; height: 19px; }
 
+/* ------------------------------------------------------- sitting selector */
+
+/* A volunteer at the Day 2 lunch counter must be able to see, without
+   thinking, which meal this phone is admitting people to — and change it in
+   one tap when they move to the dinner queue. */
+.serving {
+  display: flex; align-items: center; gap: 10px; flex: none;
+  padding: 9px 14px; background: var(--panel-2);
+  border-bottom: 1px solid var(--line);
+}
+.serving label {
+  font-size: .68rem; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--text-2); flex: none;
+}
+.serving select {
+  flex: 1; min-width: 0; min-height: 44px;
+  font: 600 .88rem/1.2 inherit; color: var(--text);
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 10px; padding: 0 10px; appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-2) 50%),
+                    linear-gradient(135deg, var(--text-2) 50%, transparent 50%);
+  background-position: calc(100% - 17px) center, calc(100% - 12px) center;
+  background-size: 5px 5px, 5px 5px; background-repeat: no-repeat;
+  padding-right: 32px;
+}
+.serving select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
 /* ------------------------------------------------------------------ camera */
 
 .stage {
@@ -320,6 +347,18 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
   </button>
 </header>
 
+{% if sessions %}
+<div class="serving" id="serving-bar">
+  <label for="serving">Serving</label>
+  <select id="serving" aria-label="Which sitting this scanner is serving">
+    {% for s in sessions %}
+    <option value="{{ s.key }}">{{ s.label }}{% if s.time %} — {{ s.time }}{% endif %}</option>
+    {% endfor %}
+    <option value="any">Any sitting (accept every pass)</option>
+  </select>
+</div>
+{% endif %}
+
 <div class="stage">
   <video id="video" playsinline muted autoplay></video>
   <canvas id="canvas" hidden></canvas>
@@ -419,6 +458,41 @@ let lastCoupon = null;
 let detector = null;
 let wakeLock = null;
 let rafId = null;
+
+/* ------------------------------------------------------- sitting selector */
+
+/* Which meal this phone is admitting people to. Remembered per device, because
+   a volunteer is handed a phone once and works one counter all afternoon — and
+   because a page reload mid-queue must not silently start accepting Day 1's
+   dinner passes at Day 2's lunch. */
+const SERVING_KEY = 'scanner-serving';
+const servingSelect = document.getElementById('serving');
+
+function servingMeal() {
+  if (!servingSelect) return null;            // no sittings configured
+  return servingSelect.value === 'any' ? 'any' : servingSelect.value;
+}
+
+function servingLabel() {
+  if (!servingSelect) return '';
+  const opt = servingSelect.selectedOptions[0];
+  return opt ? opt.textContent.trim() : '';
+}
+
+if (servingSelect) {
+  let saved = null;
+  try { saved = localStorage.getItem(SERVING_KEY); } catch {}
+  if (saved && [...servingSelect.options].some((o) => o.value === saved)) {
+    servingSelect.value = saved;
+  }
+  servingSelect.addEventListener('change', () => {
+    try { localStorage.setItem(SERVING_KEY, servingSelect.value); } catch {}
+    mini(servingSelect.value === 'any'
+      ? 'Now accepting every sitting'
+      : `Now serving ${servingLabel()}`);
+    refreshCount();
+  });
+}
 
 const scannerName = (() => {
   // Names each phone so the scan log shows which gate admitted whom.
@@ -1024,7 +1098,7 @@ async function submit(payload) {
         // would be HTML and the scan would look like a network failure.
         'skip_zrok_interstitial': 'true',
       },
-      body: JSON.stringify({ payload, scanner: scannerName }),
+      body: JSON.stringify({ payload, scanner: scannerName, meal: servingMeal() }),
     });
     if (response.status === 401) { location.href = '/scan/unlock'; return; }
     const type = response.headers.get('content-type') || '';
@@ -1057,6 +1131,7 @@ function show(data) {
     RATE_LIMITED: ['Slow down', 'Too many scans in a moment — try again'],
     OFFLINE:      ['No connection', 'Cannot reach the server'],
     INTERSTITIAL: ['Reload needed', 'Open the link again and tap "Visit Share"'],
+    WRONG_MEAL:   ['Wrong sitting', data.error || 'This pass is for another meal'],
   };
   const [title, sub] = ok
     ? ['Welcome in', 'Checked in just now']
@@ -1082,6 +1157,12 @@ function show(data) {
   // scan invites a volunteer to serve someone who has already eaten.
   if (ok && data.food_preference) {
     parts.push(`<div class="meal ${veg ? 'veg' : 'nonveg'}">${esc(data.food_preference)}</div>`);
+  }
+
+  // Which sitting the pass is for. On a refusal this is the whole explanation —
+  // the volunteer needs to see "Day 1 · Dinner" to tell the guest why.
+  if (data.meal_label) {
+    parts.push(`<div class="guest"><div class="result-sub">${esc(data.meal_label)}</div></div>`);
   }
 
   if (!ok && data.used_at) {
@@ -1197,7 +1278,16 @@ async function refreshCount() {
     const d = await fetch('/api/scan/recent', {
       headers: { 'skip_zrok_interstitial': 'true' },
     }).then((r) => r.json());
-    if (d.success) document.getElementById('count-used').textContent = d.stats.used;
+    if (!d.success) return;
+    // Per-sitting when one is selected: "412 checked in" is meaningless at a
+    // counter handing out one of four meals.
+    const meal = servingMeal();
+    let used = d.stats.used;
+    if (meal && meal !== 'any') {
+      const row = (d.stats.sessions || []).find((x) => x.key === meal);
+      if (row) used = row.used;
+    }
+    document.getElementById('count-used').textContent = used;
   } catch {}
 }
 

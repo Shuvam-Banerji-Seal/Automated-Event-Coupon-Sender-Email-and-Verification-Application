@@ -52,6 +52,16 @@ SYSTEM_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "coupon_id", "desc": "Internal unique id", "sample": "3f2a…"},
         {"name": "qr_code_src", "desc": "Image source for the QR — use inside <img src=\"…\">", "sample": "cid:qrcode"},
     ],
+    "Meal passes": [
+        {"name": "coupons", "desc": "Every pass this person holds — loop with {% for c in coupons %}", "sample": "4 passes"},
+        {"name": "coupon_count", "desc": "How many passes are in this email", "sample": "4"},
+        {"name": "c.meal_label", "desc": "Inside the loop: the sitting's name", "sample": "Day 1 · Lunch"},
+        {"name": "c.date", "desc": "Inside the loop: the date it is served", "sample": "Tue, 22 Sep 2026"},
+        {"name": "c.time", "desc": "Inside the loop: serving window", "sample": "13:10 – 14:25"},
+        {"name": "c.venue", "desc": "Inside the loop: where it is served", "sample": "R.N. Tagore Auditorium"},
+        {"name": "c.verification_code", "desc": "Inside the loop: that pass's 6-digit code", "sample": "418206"},
+        {"name": "c.qr_code_src", "desc": "Inside the loop: that pass's QR image source", "sample": "cid:qr-d1-lunch"},
+    ],
     "Event": [
         {"name": "event_name", "desc": "Name of the event", "sample": "Farewell Party 2026"},
         {"name": "event_date", "desc": "Date as configured in settings", "sample": "15 May 2026"},
@@ -92,6 +102,16 @@ def variable_catalogue(
     return groups
 
 
+def qr_cid(meal_key: str) -> str:
+    """The Content-ID a pass's QR is attached under.
+
+    One name per sitting, because a four-meal email carries four distinct
+    images. Single-sitting events keep the historical ``qrcode``, so templates
+    written before meal passes go on working untouched.
+    """
+    return f"qr-{meal_key}" if meal_key else "qrcode"
+
+
 def build_context(
     *,
     name: str = "",
@@ -101,6 +121,7 @@ def build_context(
     verification_code: str = "",
     coupon_id: str = "",
     qr_code_src: str = "cid:qrcode",
+    coupons: Optional[Sequence[Dict[str, Any]]] = None,
     extra: Optional[Dict[str, Any]] = None,
     settings: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
@@ -109,8 +130,14 @@ def build_context(
     Extras go in first so a mapped field always wins over a stray CSV column of
     the same name — a sheet with its own "email" column must not be able to
     redirect where the invitation is addressed.
+
+    ``coupons`` is every pass the person holds, in serving order, so a
+    multi-meal conference is one email with a loop rather than one email per
+    meal. The flat ``verification_code``/``qr_code_src`` pair keeps describing
+    the first pass, which is what a single-sitting event has always meant.
     """
     food = normalise_food(food_preference)
+    passes = [dict(c) for c in (coupons or [])]
     context: Dict[str, Any] = dict(extra or {})
     context.update(
         {
@@ -124,6 +151,8 @@ def build_context(
             "verification_code": verification_code,
             "coupon_id": coupon_id,
             "qr_code_src": qr_code_src if include_qr else "",
+            "coupons": passes,
+            "coupon_count": len(passes),
             # Long-standing aliases from earlier templates, kept so existing
             # saved templates keep rendering after the upgrade.
             "attendee_name": name,
@@ -135,21 +164,93 @@ def build_context(
     return context
 
 
+def coupon_context(
+    coupon: Any, session: Any = None, qr_code_src: str = ""
+) -> Dict[str, Any]:
+    """One entry of the ``coupons`` list, as a template sees it.
+
+    Serving details come from the session settings when the sitting still
+    exists, and fall back to the label frozen onto the coupon row when it does
+    not — a pass already in somebody's inbox must keep describing itself even
+    after the organisers edit the schedule.
+    """
+    food = normalise_food(getattr(coupon, "food_preference", ""))
+    return {
+        "meal_key": coupon.meal_key,
+        "meal_label": (
+            getattr(session, "label", "") or coupon.meal_label or coupon.meal_key
+        ),
+        "day": getattr(session, "day", ""),
+        "meal": getattr(session, "meal", ""),
+        "date": getattr(session, "date", ""),
+        "time": getattr(session, "time", ""),
+        "venue": getattr(session, "venue", ""),
+        "verification_code": coupon.verification_code,
+        "coupon_id": coupon.coupon_id,
+        "qr_code_src": qr_code_src or f"cid:{qr_cid(coupon.meal_key)}",
+        "food_preference": food,
+        "food_colour": food_colour(food),
+        "status": getattr(coupon, "status", ""),
+    }
+
+
+# What the preview shows when no sittings are configured: one plain pass, so the
+# editor still exercises the {% for %} loop an ICOC-style template is built on.
+_SAMPLE_SESSIONS = [
+    {"meal_key": "", "meal_label": "Entry pass", "day": "", "meal": "",
+     "date": "", "time": "", "venue": ""},
+]
+
+
 def sample_context(
     settings: Optional[Dict[str, str]] = None,
     extra_columns: Sequence[str] = (),
     food_preference: str = "Vegetarian",
+    sessions: Optional[Sequence[Any]] = None,
 ) -> Dict[str, Any]:
     """A realistic context for previewing a template with no real recipient."""
     extra = {c: f"‹{c}›" for c in extra_columns}
+    food = normalise_food(food_preference)
+    entries = []
+    for index, session in enumerate(sessions or []):
+        entries.append(
+            {
+                "meal_key": session.key,
+                "meal_label": session.label,
+                "day": session.day,
+                "meal": session.meal,
+                "date": session.date,
+                "time": session.time,
+                "venue": session.venue,
+                "verification_code": f"{418206 + index * 1117:06d}",
+                "coupon_id": f"preview-{index:04d}",
+                "qr_code_src": "{{QR_PREVIEW}}",
+                "food_preference": food,
+                "food_colour": food_colour(food),
+                "status": "sent",
+            }
+        )
+    if not entries:
+        entries = [
+            {
+                **_SAMPLE_SESSIONS[0],
+                "verification_code": "418206",
+                "coupon_id": "preview-0000",
+                "qr_code_src": "{{QR_PREVIEW}}",
+                "food_preference": food,
+                "food_colour": food_colour(food),
+                "status": "sent",
+            }
+        ]
     return build_context(
         name="Ada Lovelace",
         email="ada.lovelace@iiserkol.ac.in",
         food_preference=food_preference,
         include_qr=True,
-        verification_code="418206",
-        coupon_id="preview-0000",
+        verification_code=entries[0]["verification_code"],
+        coupon_id=entries[0]["coupon_id"],
         qr_code_src="{{QR_PREVIEW}}",
+        coupons=entries,
         extra=extra,
         settings=settings,
     )

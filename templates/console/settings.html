@@ -51,6 +51,33 @@
     </div>
 
     <div class="card">
+      <div class="card-head">
+        <h2>Meal sittings</h2>
+        <span class="sub">One pass per person, per sitting</span>
+        <div class="spacer"></div>
+        <button class="btn sm" id="add-session"><svg><use href="#i-plus"/></svg> Add</button>
+      </div>
+      <div class="card-body">
+        <div class="notice info">
+          <svg><use href="#i-info"/></svg>
+          <div><strong>Leave this empty for a single-sitting event.</strong>
+            <span class="small">Each person then gets one pass, as before. Add
+            sittings for a conference that serves several meals: everyone gets a
+            pass for each, all of them in one email, and a pass only works at its
+            own counter.</span></div>
+        </div>
+        <div id="sessions" class="stack"></div>
+        <div class="hint" id="sessions-hint"></div>
+      </div>
+      <div class="card-foot">
+        <button class="btn primary" id="save-sessions">
+          <svg><use href="#i-check"/></svg> Save sittings
+        </button>
+        <button class="btn sm ghost" id="load-icoc">Fill in ICOC-Students 2026</button>
+      </div>
+    </div>
+
+    <div class="card">
       <div class="card-head"><h2>Access</h2></div>
       <div class="card-body stack">
         <div class="notice info">
@@ -289,6 +316,132 @@ document.getElementById('save-accounts').onclick = async (e) => {
   } catch (err) { toast(err.message, 'error'); }
   finally { setBusy(e.currentTarget, false); }
 };
+
+/* ------------------------------------------------------------- sittings */
+
+/* The schedule the organisers actually run on. Editing here does not reissue
+   anything: passes already in inboxes carry their own label, so renaming a
+   sitting cannot strand somebody at a counter. */
+
+const ICOC_2026 = [
+  { key: 'd1-lunch',  day: 'Day 1', meal: 'Lunch',
+    date: 'Tuesday, 22 September 2026',   time: '13:10 – 14:25',
+    venue: 'R.N. Tagore Auditorium' },
+  { key: 'd1-dinner', day: 'Day 1', meal: 'Dinner',
+    date: 'Tuesday, 22 September 2026',   time: '19:30 onwards',
+    venue: 'R.N. Tagore Auditorium' },
+  { key: 'd2-lunch',  day: 'Day 2', meal: 'Lunch',
+    date: 'Wednesday, 23 September 2026', time: '13:10 – 14:25',
+    venue: 'R.N. Tagore Auditorium' },
+  { key: 'd2-dinner', day: 'Day 2', meal: 'Conference Dinner',
+    date: 'Wednesday, 23 September 2026', time: '19:30 onwards',
+    venue: 'RISE Foundation' },
+];
+
+let sessions = [];
+
+function sessionRow(s, i) {
+  return `<div class="card" style="box-shadow:none" data-index="${i}">
+    <div class="card-body">
+      <div class="field-row">
+        <div class="field">
+          <label>Key <span class="muted small">used by the scanner</span></label>
+          <input type="text" class="mono" data-f="key" value="${escapeHtml(s.key || '')}"
+                 placeholder="d1-lunch">
+        </div>
+        <div class="field">
+          <label>Day</label>
+          <input type="text" data-f="day" value="${escapeHtml(s.day || '')}" placeholder="Day 1">
+        </div>
+        <div class="field">
+          <label>Meal</label>
+          <input type="text" data-f="meal" value="${escapeHtml(s.meal || '')}" placeholder="Lunch">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Date</label>
+          <input type="text" data-f="date" value="${escapeHtml(s.date || '')}"
+                 placeholder="Tuesday, 22 September 2026">
+        </div>
+        <div class="field">
+          <label>Served</label>
+          <input type="text" data-f="time" value="${escapeHtml(s.time || '')}"
+                 placeholder="13:10 – 14:25">
+        </div>
+      </div>
+      <div class="field">
+        <label>Venue</label>
+        <input type="text" data-f="venue" value="${escapeHtml(s.venue || '')}"
+               placeholder="R.N. Tagore Auditorium">
+      </div>
+    </div>
+    <div class="card-foot">
+      <span class="muted small">${escapeHtml(s.label || '')}</span>
+      <div class="spacer"></div>
+      <button class="btn sm danger ghost" data-remove="${i}">Remove</button>
+    </div>
+  </div>`;
+}
+
+function renderSessions() {
+  const host = document.getElementById('sessions');
+  host.innerHTML = sessions.length
+    ? sessions.map(sessionRow).join('')
+    : '<p class="muted small mb-0">No sittings — one pass per person.</p>';
+  host.querySelectorAll('[data-remove]').forEach((b) => {
+    b.onclick = () => { readSessions(); sessions.splice(+b.dataset.remove, 1); renderSessions(); };
+  });
+  document.getElementById('sessions-hint').textContent = sessions.length
+    ? `Each recipient will receive ${sessions.length} pass${sessions.length === 1 ? '' : 'es'} in one email.`
+    : '';
+}
+
+function readSessions() {
+  sessions = [...document.querySelectorAll('#sessions [data-index]')].map((row) => {
+    const out = {};
+    row.querySelectorAll('[data-f]').forEach((i) => { out[i.dataset.f] = i.value.trim(); });
+    return out;
+  });
+}
+
+async function loadSessions() {
+  try {
+    const d = await api('/api/sessions');
+    sessions = d.sessions || [];
+    renderSessions();
+  } catch { /* the card stays empty; the rest of the page still works */ }
+}
+
+document.getElementById('add-session').onclick = () => {
+  readSessions();
+  sessions.push({ key: '', day: '', meal: '', date: '', time: '', venue: '' });
+  renderSessions();
+};
+
+document.getElementById('load-icoc').onclick = () => {
+  sessions = ICOC_2026.map((s) => ({ ...s }));
+  renderSessions();
+  toast('Filled in — review, then save');
+};
+
+document.getElementById('save-sessions').onclick = async (e) => {
+  readSessions();
+  const blank = sessions.findIndex((s) => !s.key);
+  if (blank >= 0) { toast(`Sitting ${blank + 1} needs a key.`, 'error'); return; }
+  setBusy(e.currentTarget, true, 'Saving…');
+  try {
+    const d = await api('/api/sessions', { method: 'POST', body: { sessions } });
+    sessions = d.sessions || [];
+    renderSessions();
+    toast(sessions.length
+      ? `${sessions.length} sittings saved`
+      : 'Sittings cleared — one pass per person');
+  } catch (err) { toast(err.message, 'error'); }
+  finally { setBusy(e.currentTarget, false); }
+};
+
+loadSessions();
 
 document.getElementById('save-event').onclick = async (e) => {
   const body = {};

@@ -619,3 +619,9 @@ dialog .card-foot { justify-content: flex-end; }
     transition-duration: .01ms !important;
   }
 }
+
+/* Dashboard sittings: one block per meal, separated so the veg/non-veg line
+   below a meter cannot be read as a heading for the next sitting. */
+.sitting-row { padding-bottom: 12px; margin-bottom: 12px;
+               border-bottom: 1px solid var(--line); }
+.sitting-row:last-child { padding-bottom: 0; margin-bottom: 0; border-bottom: 0; }

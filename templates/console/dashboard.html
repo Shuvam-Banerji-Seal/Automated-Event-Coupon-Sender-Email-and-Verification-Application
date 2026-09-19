@@ -62,6 +62,13 @@
       </div>
     </div>
 
+    <div class="card" id="sittings-card" hidden>
+      <div class="card-head"><h2>Sittings</h2>
+        <span class="sub">Each meal, issued against actually served</span>
+      </div>
+      <div class="card-body" id="sittings"></div>
+    </div>
+
     <div class="card">
       <div class="card-head"><h2>Meal counts</h2>
         <span class="sub">For catering — issued against actually checked in</span>
@@ -204,6 +211,34 @@ function renderStats(d) {
   document.getElementById('s-capacity-meta').textContent = d.smtp.configured
     ? `${d.smtp.accounts.length} account${d.smtp.accounts.length === 1 ? '' : 's'} · resets at midnight`
     : 'no account configured';
+
+  // Per-sitting progress. On a multi-day conference the whole-event total is
+  // the number nobody needs: the kitchen preparing Day 2's lunch wants Day 2's
+  // lunch, split veg against non-veg.
+  const sittings = (s.sessions || []).filter((x) => x.key || x.issued);
+  const card = document.getElementById('sittings-card');
+  card.hidden = sittings.length < 2;
+  if (!card.hidden) {
+    document.getElementById('sittings').innerHTML = sittings.map((x) => {
+      const pc = x.issued ? (x.used / x.issued * 100) : 0;
+      const gone = !x.configured
+        ? ' <span class="badge warn" title="Not in the current sitting list — '
+          + 'these passes cannot be selected at a scanner">removed</span>'
+        : '';
+      return `<div class="sitting-row">
+        <div class="row between small mb-1">
+          <span><strong>${escapeHtml(x.label || x.key)}</strong>${gone}
+            ${x.time ? `<span class="muted"> · ${escapeHtml(x.time)}</span>` : ''}</span>
+          <span class="tnum muted">${fmtNumber(x.used)} of ${fmtNumber(x.issued)} served</span>
+        </div>
+        <div class="meter ok"><span style="width:${pc}%"></span></div>
+        <div class="small muted mt-1 tnum">
+          ${fmtNumber(x.veg_used)}/${fmtNumber(x.veg)} veg ·
+          ${fmtNumber(x.non_veg_used)}/${fmtNumber(x.non_veg)} non-veg
+        </div>
+      </div>`;
+    }).join('');
+  }
 
   // Meal counts matter to catering, so show issued and arrived side by side.
   const food = s.food || {}, used = s.food_used || {};

@@ -9,6 +9,9 @@ the real SMTP sender, and running the suite delivered mail.
 """
 
 import io
+import json
+import re
+import time
 
 import pytest
 
@@ -617,8 +620,6 @@ class TestQrPayload:
 
 
 def _wait_for_job(client, job_id, timeout=15):
-    import time
-
     deadline = time.time() + timeout
     while time.time() < deadline:
         job = client.get(f"/api/send/status/{job_id}").get_json()["job"]
@@ -633,3 +634,273 @@ def _codes(client):
         c["verification_code"]
         for c in client.get("/api/coupons").get_json()["coupons"]
     )
+
+
+ICOC_SITTINGS = [
+    {"key": "d1-lunch", "day": "Day 1", "meal": "Lunch",
+     "date": "Tuesday, 22 September 2026", "time": "13:10 – 14:25",
+     "venue": "R.N. Tagore Auditorium"},
+    {"key": "d1-dinner", "day": "Day 1", "meal": "Dinner",
+     "date": "Tuesday, 22 September 2026", "time": "19:30 onwards",
+     "venue": "R.N. Tagore Auditorium"},
+    {"key": "d2-lunch", "day": "Day 2", "meal": "Lunch",
+     "date": "Wednesday, 23 September 2026", "time": "13:10 – 14:25",
+     "venue": "R.N. Tagore Auditorium"},
+    {"key": "d2-dinner", "day": "Day 2", "meal": "Conference Dinner",
+     "date": "Wednesday, 23 September 2026", "time": "19:30 onwards",
+     "venue": "RISE Foundation"},
+]
+
+
+def wait_for_send(client, timeout=15):
+    """Block until no send job is still running.
+
+    The suite's _wait_for_job needs an id; these tests do not care which job,
+    only that the mailer has finished, so they wait on the runner directly.
+    """
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        jobs = list(client.app_module._jobs.values())
+        if jobs and all(j.snapshot()["done"] for j in jobs):
+            return
+        time.sleep(0.02)
+    raise AssertionError("a send job did not finish in time")
+
+
+def configure_sittings(client, sittings=None):
+    response = client.post("/api/sessions",
+                           json={"sessions": sittings or ICOC_SITTINGS})
+    assert response.status_code == 200, response.get_json()
+    return response.get_json()
+
+
+class TestSittingsApi:
+    def test_default_is_no_sittings(self, client):
+        assert client.get("/api/sessions").get_json()["sessions"] == []
+
+    def test_saving_and_reading_back(self, client):
+        saved = configure_sittings(client)["sessions"]
+        assert [s["key"] for s in saved] == [s["key"] for s in ICOC_SITTINGS]
+        assert saved[0]["label"] == "Day 1 · Lunch"
+
+    def test_a_sitting_without_a_key_is_refused(self, client):
+        response = client.post("/api/sessions", json={"sessions": [{"meal": "Lunch"}]})
+        assert response.status_code == 400
+        assert "key" in response.get_json()["error"].lower()
+
+    def test_a_non_list_is_refused(self, client):
+        assert client.post("/api/sessions", json={"sessions": "lunch"}).status_code == 400
+
+    def test_clearing_returns_to_one_pass_each(self, client):
+        configure_sittings(client)
+        assert client.post("/api/sessions", json={"sessions": []}).get_json()["sessions"] == []
+
+    def test_settings_page_reports_them(self, client):
+        configure_sittings(client)
+        assert len(client.get("/api/settings").get_json()["sessions"]) == 4
+
+
+class TestMultiMealSend:
+    def test_one_email_carries_every_pass(self, client):
+        """Four sittings must not mean four emails."""
+        load_recipients(client)
+        configure_sittings(client)
+        client.post("/api/send/start", json={"template": "invitation"})
+        wait_for_send(client)
+
+        assert len(client.sent) == 3, "one message per person, not per pass"
+        store = client.app_module.store
+        assert store.count_coupons() == 12
+
+    def test_every_pass_reaches_the_message_as_its_own_qr(self, client):
+        load_recipients(client)
+        configure_sittings(client)
+        # The starter invitation shows a single pass; the ICOC design loops.
+        client.put("/api/templates/icoc", json={
+            "subject": "Passes for {{ first_name }}",
+            "html": "{% for c in coupons %}"
+                    '<img src="{{ c.qr_code_src }}" alt="pass">{{ c.verification_code }}'
+                    "{% endfor %}",
+        })
+        client.post("/api/send/start", json={"template": "icoc"})
+        wait_for_send(client)
+
+        message = client.sent[0]
+        assert len(message.inline_images) == 4, message.inline_images.keys()
+        assert set(message.inline_images) == {
+            "qr-d1-lunch", "qr-d1-dinner", "qr-d2-lunch", "qr-d2-dinner"
+        }
+        for name in message.inline_images:
+            assert f"cid:{name}" in message.html
+
+    def test_a_template_showing_one_pass_attaches_one_image(self, client):
+        """Never attach a QR the message does not show — it is dead weight."""
+        load_recipients(client)
+        configure_sittings(client)
+        client.post("/api/send/start", json={"template": "invitation"})
+        wait_for_send(client)
+        assert len(client.sent[0].inline_images) == 1
+
+    def test_resending_does_not_mint_more_passes(self, client):
+        load_recipients(client)
+        configure_sittings(client)
+        client.post("/api/send/start", json={"template": "invitation"})
+        wait_for_send(client)
+        before = client.app_module.store.count_coupons()
+
+        client.post("/api/send/start",
+                    json={"template": "invitation", "audience": "resend",
+                          "resend_all": True})
+        wait_for_send(client)
+        assert client.app_module.store.count_coupons() == before
+
+    def test_a_successful_send_marks_every_pass_sent(self, client):
+        load_recipients(client)
+        configure_sittings(client)
+        client.post("/api/send/start", json={"template": "invitation"})
+        wait_for_send(client)
+        store = client.app_module.store
+        statuses = {c.status for c in store.coupons_for_email("ada@iiserkol.ac.in")}
+        assert statuses == {"sent"}, "only the first pass was marked sent"
+
+    def test_single_sitting_events_are_untouched(self, client):
+        load_recipients(client)
+        client.post("/api/send/start", json={"template": "invitation"})
+        wait_for_send(client)
+        assert len(client.sent) == 3
+        assert client.app_module.store.count_coupons() == 3
+        assert set(client.sent[0].inline_images) == {"qrcode"}
+
+
+class TestScanningASitting:
+    def _issue(self, client):
+        load_recipients(client)
+        configure_sittings(client)
+        client.post("/api/send/start", json={"template": "invitation"})
+        wait_for_send(client)
+        return client.app_module.store.coupons_for_email("ada@iiserkol.ac.in")
+
+    def test_a_pass_admits_at_its_own_counter(self, client):
+        passes = self._issue(client)
+        data = client.post("/api/scan", json={
+            "payload": passes[0].qr_payload, "meal": "d1-lunch",
+        }).get_json()
+        assert data["success"] is True
+        assert data["meal_label"] == "Day 1 · Lunch"
+
+    def test_a_pass_is_refused_at_the_wrong_counter(self, client):
+        passes = self._issue(client)
+        data = client.post("/api/scan", json={
+            "payload": passes[1].qr_payload, "meal": "d1-lunch",
+        }).get_json()
+        assert data["success"] is False
+        assert data["error_code"] == "WRONG_MEAL"
+        assert data["meal_label"] == "Day 1 · Dinner"
+
+    def test_being_refused_does_not_consume_the_pass(self, client):
+        passes = self._issue(client)
+        client.post("/api/scan", json={"payload": passes[1].qr_payload,
+                                       "meal": "d1-lunch"})
+        data = client.post("/api/scan", json={"payload": passes[1].qr_payload,
+                                              "meal": "d1-dinner"}).get_json()
+        assert data["success"] is True
+
+    def test_any_accepts_every_pass(self, client):
+        passes = self._issue(client)
+        data = client.post("/api/scan", json={"payload": passes[3].qr_payload,
+                                              "meal": "any"}).get_json()
+        assert data["success"] is True
+
+    def test_progress_counts_the_sitting_not_the_event(self, client):
+        passes = self._issue(client)
+        data = client.post("/api/scan", json={"payload": passes[0].qr_payload,
+                                              "meal": "d1-lunch"}).get_json()
+        assert data["progress"] == {"used": 1, "total": 3, "meal": "Day 1 · Lunch"}
+
+    def test_the_scanner_page_offers_the_sittings(self, client):
+        configure_sittings(client)
+        page = client.get("/scan").get_data(as_text=True)
+        assert 'id="serving"' in page
+        assert "Day 2 · Conference Dinner" in page
+
+    def test_a_single_sitting_event_has_no_selector(self, client):
+        assert 'id="serving"' not in client.get("/scan").get_data(as_text=True)
+
+
+class TestFullPagePreview:
+    def test_it_renders_the_saved_template(self, client):
+        configure_sittings(client)
+        page = client.get("/preview/invitation").get_data(as_text=True)
+        assert page.startswith("<!doctype html>")
+        assert "Preview — invitation" in page
+
+    def test_an_unknown_template_is_a_404(self, client):
+        assert client.get("/preview/nope").status_code == 404
+
+    @staticmethod
+    def _rendered_body(page):
+        """Pull the email out of the preview page.
+
+        The body is handed to the iframe as a JSON string literal, so it is not
+        searchable as plain text — "Day 1 · Lunch" is written \u00b7 in there.
+        """
+        match = re.search(r"const html = (\".*?\");\n", page, re.S)
+        assert match, "the preview page did not embed a rendered body"
+        return json.loads(match.group(1))
+
+    def test_the_preview_shows_one_card_per_sitting(self, client):
+        configure_sittings(client)
+        client.put("/api/templates/icoc", json={
+            "subject": "Passes",
+            "html": "{% for c in coupons %}<b>{{ c.meal_label }}</b>"
+                    '<img src="{{ c.qr_code_src }}">{% endfor %}',
+        })
+        body = self._rendered_body(client.get("/preview/icoc").get_data(as_text=True))
+        for label in ("Day 1 · Lunch", "Day 1 · Dinner",
+                      "Day 2 · Lunch", "Day 2 · Conference Dinner"):
+            assert label in body
+
+    def test_every_preview_qr_is_a_real_distinct_image(self, client):
+        """A template that renders one QR four times has to be visible here."""
+        configure_sittings(client)
+        client.put("/api/templates/icoc", json={
+            "subject": "Passes",
+            "html": '{% for c in coupons %}<img src="{{ c.qr_code_src }}">{% endfor %}',
+        })
+        body = client.post("/api/templates/preview", json={
+            "html": '{% for c in coupons %}<img src="{{ c.qr_code_src }}">{% endfor %}',
+            "subject": "Passes",
+        }).get_json()
+        sources = re.findall(r'src="(data:image/png;base64,[^"]+)"', body["html"])
+        assert len(sources) == 4
+        assert len(set(sources)) == 4, "the same QR was rendered for every sitting"
+
+    def test_it_can_render_a_real_attendee(self, client):
+        load_recipients(client)
+        configure_sittings(client)
+        client.post("/api/send/start", json={"template": "invitation"})
+        wait_for_send(client)
+        page = client.get("/preview/invitation?email=ada@iiserkol.ac.in")
+        assert page.status_code == 200
+        text = page.get_data(as_text=True)
+        assert "ada@iiserkol.ac.in" in text
+        # The real codes, not sample ones.
+        real = client.app_module.store.coupons_for_email("ada@iiserkol.ac.in")[0]
+        assert real.verification_code in self._rendered_body(text)
+
+
+class TestOneThankYouPerPerson:
+    def test_collecting_four_meals_sends_one_thank_you(self, client, monkeypatch):
+        monkeypatch.setattr(client.app_module, "THANK_YOU_TEMPLATE", "thank_you")
+        load_recipients(client)
+        configure_sittings(client)
+        client.post("/api/send/start", json={"template": "invitation"})
+        wait_for_send(client)
+
+        store = client.app_module.store
+        for pass_ in store.coupons_for_email("ada@iiserkol.ac.in"):
+            client.post("/api/scan", json={"payload": pass_.qr_payload,
+                                           "meal": pass_.meal_key})
+        queued = [r for r in store.recent_outbox(limit=50)
+                  if r["to_email"] == "ada@iiserkol.ac.in"]
+        assert len(queued) == 1
