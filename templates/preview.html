@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{{ name }} — email preview</title>
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:#eceff1; font:14px/1.5 -apple-system,BlinkMacSystemFont,
+           "Segoe UI",Roboto,Helvetica,Arial,sans-serif; color:#1f2933; }
+    .bar { position:sticky; top:0; z-index:5; background:#12161c; color:#e7ecf2;
+           padding:10px 16px; display:block; }
+    .bar .row { max-width:1100px; margin:0 auto; }
+    .bar b { font-size:13px; letter-spacing:.02em; }
+    .bar .sub { color:#9aa7b6; font-size:12px; margin-top:3px; word-break:break-word; }
+    .bar a { color:#8fd0ff; text-decoration:none; margin-right:14px; font-size:12px; }
+    .bar a:hover { text-decoration:underline; }
+    .controls { margin-top:9px; }
+    .controls input, .controls select {
+      font:12px/1 inherit; padding:6px 8px; border-radius:6px; border:1px solid #39414d;
+      background:#1b2129; color:#e7ecf2; margin-right:6px; }
+    .controls button { font:600 12px/1 inherit; padding:7px 12px; border-radius:6px;
+      border:0; background:#2f6feb; color:#fff; cursor:pointer; }
+    .stage { max-width:1100px; margin:0 auto; padding:18px 12px 60px; }
+    .subject { background:#fff; border:1px solid #d7dde3; border-radius:10px;
+               padding:12px 16px; margin-bottom:14px; }
+    .subject span { display:block; font-size:11px; letter-spacing:.14em;
+                    text-transform:uppercase; color:#8b959c; margin-bottom:4px; }
+    .subject strong { font-size:15px; }
+    .widths { margin-bottom:12px; }
+    .widths button { font:600 12px/1 inherit; padding:7px 12px; margin-right:6px;
+      border-radius:999px; border:1px solid #c7ced6; background:#fff; cursor:pointer; }
+    .widths button[aria-pressed="true"] { background:#12161c; color:#fff; border-color:#12161c; }
+    .frame { background:#fff; border:1px solid #d7dde3; border-radius:10px;
+             overflow:hidden; margin:0 auto; transition:max-width .18s ease; }
+    iframe { display:block; width:100%; border:0; height:80vh; background:#fff; }
+    .note { max-width:1100px; margin:14px auto 0; padding:0 12px; color:#6b7280;
+            font-size:12px; line-height:1.7; }
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <div class="row">
+      <b>Preview — {{ name }}</b>
+      <div class="sub">
+        {% if email %}Rendered for {{ email }}{% else %}Rendered with sample data{% endif %}
+      </div>
+      <div class="controls">
+        <a href="/compose">&larr; Editor</a>
+        <a href="{{ request.full_path }}" onclick="location.reload();return false">Reload</a>
+        <form method="get" style="display:inline">
+          <input type="email" name="email" placeholder="attendee@example.com"
+                 value="{{ email }}" size="26">
+          <button type="submit">Render for them</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="subject"><span>Subject</span><strong>{{ subject }}</strong></div>
+    <div class="widths">
+      <button type="button" data-w="100%" aria-pressed="true">Desktop</button>
+      <button type="button" data-w="480px" aria-pressed="false">Tablet</button>
+      <button type="button" data-w="390px" aria-pressed="false">Phone</button>
+    </div>
+    <div class="frame" id="frame" style="max-width:100%">
+      <iframe id="mail" title="Rendered email"></iframe>
+    </div>
+  </div>
+
+  <div class="note">
+    Real sends attach each QR as an inline image part; here they are data URIs so the
+    browser can show them. Everything else — layout, fonts, colours, the remotely
+    hosted logos — is exactly what the recipient gets.
+  </div>
+
+  <script>
+    // Written into the iframe rather than rendered inline: the email carries its
+    // own <table> layout and colours, and letting it inherit this page's styles
+    // would make the preview a lie.
+    //
+    // tojson, not a <script type=text/html> block: script content is raw text, so
+    // Jinja's HTML escaping would survive into textContent and the preview would
+    // show &lt;table&gt; as words. tojson escapes for a JS string literal instead.
+    const html = {{ body|tojson }};
+    const frame = document.getElementById('mail');
+    frame.srcdoc = '<!doctype html><html><head><meta charset="utf-8">'
+      + '<meta name="viewport" content="width=device-width,initial-scale=1">'
+      + '<style>body{margin:0;background:#eef2f0}</style></head><body>'
+      + html + '</body></html>';
+
+    frame.addEventListener('load', () => {
+      try {
+        const doc = frame.contentDocument;
+        const fit = () => {
+          const h = Math.max(doc.body.scrollHeight, doc.documentElement.scrollHeight);
+          if (h > 60) frame.style.height = (h + 24) + 'px';
+        };
+        fit();
+        // Remote logos arrive after load and change the height.
+        doc.querySelectorAll('img').forEach(i => i.addEventListener('load', fit));
+        setTimeout(fit, 1200);
+      } catch (e) { /* height stays at the 80vh default */ }
+    });
+
+    document.querySelectorAll('.widths button').forEach(b => {
+      b.addEventListener('click', () => {
+        document.querySelectorAll('.widths button')
+          .forEach(o => o.setAttribute('aria-pressed', String(o === b)));
+        document.getElementById('frame').style.maxWidth = b.dataset.w;
+      });
+    });
+  </script>
+</body>
+</html>

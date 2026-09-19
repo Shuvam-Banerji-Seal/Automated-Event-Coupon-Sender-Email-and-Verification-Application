@@ -1,0 +1,340 @@
+{#
+Subject: {{ first_name }}, your meal passes for ICOC-Students 2026
+
+ICOC-Students 2026 meal passes — one email, every sitting.
+
+Written the way email has to be written: tables for layout, inline styles, no
+flexbox, no grid, no inline SVG, no external stylesheet, nothing that Gmail,
+Outlook or Apple Mail refuses.
+
+Two things are deliberate and worth keeping:
+
+* Logos load from raw.githubusercontent.com. Attaching them would add a few
+  hundred KB to every message, and Gmail clips anything past ~102 KB. If the
+  reader blocks remote images the layout still reads — every logo has real alt
+  text and nothing load-bearing is an image.
+* QR codes are the exception: they are attached inline as cid: parts, because
+  they are the functional part of the message and must render even with remote
+  images blocked. The six-digit code is printed under every one as the fallback
+  a volunteer can type.
+#}
+<table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"
+       style="background:#eef2f0;margin:0;padding:24px 10px">
+  <tr>
+    <td align="center">
+
+      <!-- Preheader: what the inbox list shows before the message is opened. -->
+      <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">
+        {{ coupon_count }} meal pass{{ '' if coupon_count == 1 else 'es' }} for
+        22–23 September at IISER Kolkata. Show each QR at the counter.
+      </div>
+
+      <table width="640" cellpadding="0" cellspacing="0" border="0" role="presentation"
+             style="max-width:640px;width:100%;background:#ffffff;border-radius:14px;
+                    overflow:hidden;border:1px solid #d9e2dd">
+
+        <!-- ───────────────────────────── Masthead ───────────────────────────── -->
+        <tr>
+          <td style="background:#0f5a49;padding:30px 28px 26px;text-align:center">
+            <img src="https://raw.githubusercontent.com/Shuvam-Banerji-Seal/Automated-Event-Coupon-Sender-Email-and-Verification-Application/main/static/brand/icoc/icoc-emblem.png"
+                 width="132" height="134" alt="ICOC-Students 2026"
+                 style="width:132px;max-width:132px;height:auto;display:block;
+                        margin:0 auto 18px;border-radius:50%;background:#ffffff">
+            <div style="font:700 21px/1.3 Georgia,'Times New Roman',serif;color:#ffffff">
+              International Conference on<br>Organometallics and Catalysis
+            </div>
+            <div style="font:700 13px/1.5 Arial,Helvetica,sans-serif;color:#9fd6c3;
+                        padding-top:8px;letter-spacing:.16em;text-transform:uppercase">
+              Students Edition &nbsp;·&nbsp; 2026
+            </div>
+            <div style="font:400 14px/1.6 Arial,Helvetica,sans-serif;color:#d6ece3;
+                        padding-top:14px">
+              22–23 September 2026 &nbsp;·&nbsp; IISER Kolkata
+            </div>
+          </td>
+        </tr>
+
+        <!-- ───────────────────────────── Greeting ───────────────────────────── -->
+        <tr>
+          <td style="padding:30px 28px 4px">
+            <div style="font:400 17px/1.6 Arial,Helvetica,sans-serif;color:#1f2933">
+              Dear {{ first_name }},
+            </div>
+            <div style="font:400 15px/1.75 Arial,Helvetica,sans-serif;color:#414b56;
+                        padding-top:12px">
+              Welcome to <strong>ICOC-Students 2026</strong>, the students-led
+              International Conference on Organometallics and Catalysis, hosted by the
+              Department of Chemical Sciences at IISER Kolkata on
+              <strong>22 and 23 September</strong>.
+            </div>
+            <div style="font:400 15px/1.75 Arial,Helvetica,sans-serif;color:#414b56;
+                        padding-top:12px">
+              {% if coupon_count > 1 -%}
+              Below are your <strong>{{ coupon_count }} meal passes</strong> — one for each
+              sitting. Each is valid once, for that sitting only.
+              {%- else -%}
+              Below is your <strong>meal pass</strong>. It is valid once.
+              {%- endif %}
+              Show the QR code at the counter and a volunteer will scan it from your
+              phone. There is nothing to print.
+            </div>
+          </td>
+        </tr>
+
+        <!-- ──────────────────────────── Meal passes ─────────────────────────── -->
+        <tr>
+          <td style="padding:26px 28px 0">
+            <div style="font:700 12px/1.4 Arial,Helvetica,sans-serif;color:#0f5a49;
+                        letter-spacing:.18em;text-transform:uppercase;
+                        border-bottom:2px solid #dcebe4;padding-bottom:9px">
+              {% if coupon_count > 1 %}Your meal passes{% else %}Your meal pass{% endif %}
+            </div>
+          </td>
+        </tr>
+
+        {% for c in coupons %}
+        {%- set is_dinner = 'dinner' in (c.meal ~ ' ' ~ c.meal_label)|lower -%}
+        {%- set accent = '#1d6f7e' if is_dinner else '#0f5a49' -%}
+        <tr>
+          <td style="padding:18px 28px 0">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"
+                   style="border:1px solid #d9e2dd;border-radius:12px;overflow:hidden">
+
+              <!-- Which sitting -->
+              <tr>
+                <td style="background:{{ accent }};padding:13px 18px">
+                  <div style="font:700 15px/1.35 Arial,Helvetica,sans-serif;color:#ffffff">
+                    {{ c.meal_label }}
+                  </div>
+                  {% if c.date %}
+                  <div style="font:400 12px/1.5 Arial,Helvetica,sans-serif;color:#cfe6de;
+                              padding-top:3px">{{ c.date }}</div>
+                  {% endif %}
+                </td>
+              </tr>
+
+              <!-- The code itself -->
+              <tr>
+                <td align="center" style="padding:22px 18px 6px;background:#ffffff">
+                  <img src="{{ c.qr_code_src }}" width="220" height="220"
+                       alt="Meal pass QR code for {{ c.meal_label }} — code {{ c.verification_code }}"
+                       style="width:220px;max-width:220px;height:auto;display:block;
+                              margin:0 auto;border:1px solid #e6ece9;border-radius:8px">
+                  <div style="font:400 11px/1.5 Arial,Helvetica,sans-serif;color:#8b959c;
+                              padding-top:12px;letter-spacing:.12em;text-transform:uppercase">
+                    or read out this code
+                  </div>
+                  <div style="font:700 26px/1.2 'Courier New',Courier,monospace;
+                              color:#1f2933;letter-spacing:.14em;padding-top:4px">
+                    {{ c.verification_code }}
+                  </div>
+                </td>
+              </tr>
+
+              <!-- When and where -->
+              <tr>
+                <td style="padding:16px 18px 18px;background:#ffffff">
+                  <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                         role="presentation"
+                         style="border-top:1px solid #eef2f0;padding-top:12px">
+                    {% if c.time %}
+                    <tr>
+                      <td style="font:400 13px/1.7 Arial,Helvetica,sans-serif;color:#6b7280;
+                                 padding:10px 0 0;width:74px">Served</td>
+                      <td style="font:700 13px/1.7 Arial,Helvetica,sans-serif;color:#1f2933;
+                                 padding:10px 0 0">{{ c.time }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if c.venue %}
+                    <tr>
+                      <td style="font:400 13px/1.7 Arial,Helvetica,sans-serif;color:#6b7280;
+                                 padding:2px 0 0">Venue</td>
+                      <td style="font:700 13px/1.7 Arial,Helvetica,sans-serif;color:#1f2933;
+                                 padding:2px 0 0">{{ c.venue }}</td>
+                    </tr>
+                    {% endif %}
+                    <tr>
+                      <td style="font:400 13px/1.7 Arial,Helvetica,sans-serif;color:#6b7280;
+                                 padding:2px 0 0">Meal</td>
+                      <td style="padding:6px 0 0">
+                        <span style="display:inline-block;background:{{ c.food_colour }};
+                                     color:#ffffff;font:700 11px/1 Arial,Helvetica,sans-serif;
+                                     letter-spacing:.1em;text-transform:uppercase;
+                                     padding:6px 11px;border-radius:20px">
+                          {{ c.food_preference }}
+                        </span>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        {% endfor %}
+
+        <!-- ───────────────────────────── How it works ───────────────────────── -->
+        <tr>
+          <td style="padding:24px 28px 0">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"
+                   style="background:#f4f8f6;border-left:3px solid #0f5a49;border-radius:6px">
+              <tr>
+                <td style="padding:16px 18px">
+                  <div style="font:700 13px/1.5 Arial,Helvetica,sans-serif;color:#0f5a49;
+                              padding-bottom:8px">Before you get to the counter</div>
+                  <div style="font:400 13px/1.85 Arial,Helvetica,sans-serif;color:#414b56">
+                    &bull;&nbsp; Each pass works <strong>once</strong>, and only at its own
+                    sitting — the Day&nbsp;1 lunch code will not open Day&nbsp;2's.<br>
+                    &bull;&nbsp; Turn your screen brightness up. A dim or heavily cracked
+                    screen is the usual reason a scan takes a second try.<br>
+                    &bull;&nbsp; Signal at the venue can be patchy, so take a screenshot of
+                    this email before you arrive.<br>
+                    &bull;&nbsp; If the QR will not read, the volunteer can type the
+                    six-digit code instead.<br>
+                    &bull;&nbsp; Please do not forward this email. Anyone holding these
+                    codes can claim your meals.
+                  </div>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- ────────────────────────────── Schedule ──────────────────────────── -->
+        <tr>
+          <td style="padding:30px 28px 0">
+            <div style="font:700 12px/1.4 Arial,Helvetica,sans-serif;color:#0f5a49;
+                        letter-spacing:.18em;text-transform:uppercase;
+                        border-bottom:2px solid #dcebe4;padding-bottom:9px">
+              Programme at a glance
+            </div>
+          </td>
+        </tr>
+
+        <!-- Day 1 -->
+        <tr>
+          <td style="padding:20px 28px 0">
+            <div style="font:700 15px/1.4 Georgia,'Times New Roman',serif;color:#1f2933">
+              Day 1 &nbsp;·&nbsp; Tuesday, 22 September
+            </div>
+            <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"
+                   style="margin-top:10px">
+              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 10px 7px 0;width:104px;vertical-align:top;border-bottom:1px solid #eef2f0">08:30&#8239;–&#8239;09:00</td><td style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 0;border-bottom:1px solid #eef2f0">Registration <span style="color:#8b959c">· M.N. Saha Lecture Hall</span></td></tr>
+              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 10px 7px 0;vertical-align:top;border-bottom:1px solid #eef2f0">09:00&#8239;–&#8239;09:15</td><td style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 0;border-bottom:1px solid #eef2f0">Inaugural Session</td></tr>
+              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 10px 7px 0;vertical-align:top;border-bottom:1px solid #eef2f0">09:15&#8239;–&#8239;10:30</td><td style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 0;border-bottom:1px solid #eef2f0">Session 1 <span style="color:#8b959c">· Chair: Prof. Amitava Das</span></td></tr>
+              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 10px 7px 0;vertical-align:top;border-bottom:1px solid #eef2f0">10:30&#8239;–&#8239;11:00</td><td style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 0;border-bottom:1px solid #eef2f0">Tea Break</td></tr>
+              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 10px 7px 0;vertical-align:top;border-bottom:1px solid #eef2f0">11:00&#8239;–&#8239;11:45</td><td style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 0;border-bottom:1px solid #eef2f0">Session 2 <span style="color:#8b959c">· Chair: Prof. Abu Taleb Khan</span></td></tr>
+              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 10px 7px 0;vertical-align:top;border-bottom:1px solid #eef2f0">11:45&#8239;–&#8239;12:00</td><td style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 0;border-bottom:1px solid #eef2f0">Photo Session</td></tr>
+              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 10px 7px 0;vertical-align:top;border-bottom:1px solid #eef2f0">12:00&#8239;–&#8239;13:10</td><td style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 0;border-bottom:1px solid #eef2f0">Session 3 — Flash &amp; student talks <span style="color:#8b959c">· Chair: Prof. Manindranath Bera</span></td></tr>
+              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#0f5a49;padding:9px 10px 9px 0;vertical-align:top;background:#f4f8f6;border-bottom:1px solid #eef2f0">13:10&#8239;–&#8239;14:25</td><td style="font:700 13px/1.6 Arial,Helvetica,sans-serif;color:#0f5a49;padding:9px 0;background:#f4f8f6;border-bottom:1px solid #eef2f0">Lunch <span style="font-weight:400;color:#5f8d7f">· R.N. Tagore Auditorium</span></td></tr>
+              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 10px 7px 0;vertical-align:top;border-bottom:1px solid #eef2f0">14:25&#8239;–&#8239;15:55</td><td style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 0;border-bottom:1px solid #eef2f0">Session 4 <span style="color:#8b959c">· Chair: Dr. Michèle Soleilhavoup</span></td></tr>
+              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 10px 7px 0;vertical-align:top;border-bottom:1px solid #eef2f0">15:55&#8239;–&#8239;16:20</td><td style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 0;border-bottom:1px solid #eef2f0">Session 5 — Flash talks <span style="color:#8b959c">· Chair: Ms. Mandira Saha</span></td></tr>
+              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 10px 7px 0;vertical-align:top;border-bottom:1px solid #eef2f0">16:20&#8239;–&#8239;16:50</td><td style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 0;border-bottom:1px solid #eef2f0">Tea Break</td></tr>
+              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 10px 7px 0;vertical-align:top;border-bottom:1px solid #eef2f0">16:50&#8239;–&#8239;18:20</td><td style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 0;border-bottom:1px solid #eef2f0">Session 6 <span style="color:#8b959c">· Chair: Prof. Swati De</span></td></tr>
+              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#1d6f7e;padding:9px 10px 9px 0;vertical-align:top;background:#f2f8f9">19:30 onwards</td><td style="font:700 13px/1.6 Arial,Helvetica,sans-serif;color:#1d6f7e;padding:9px 0;background:#f2f8f9">Dinner <span style="font-weight:400;color:#5d8b95">· R.N. Tagore Auditorium</span></td></tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Day 2 -->
+        <tr>
+          <td style="padding:24px 28px 0">
+            <div style="font:700 15px/1.4 Georgia,'Times New Roman',serif;color:#1f2933">
+              Day 2 &nbsp;·&nbsp; Wednesday, 23 September
+            </div>
+            <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"
+                   style="margin-top:10px">
+              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 10px 7px 0;width:104px;vertical-align:top;border-bottom:1px solid #eef2f0">09:00&#8239;–&#8239;10:45</td><td style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 0;border-bottom:1px solid #eef2f0">Session 7 <span style="color:#8b959c">· Chair: Prof. Amit Basak</span></td></tr>
+              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 10px 7px 0;vertical-align:top;border-bottom:1px solid #eef2f0">10:45&#8239;–&#8239;11:15</td><td style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 0;border-bottom:1px solid #eef2f0">Tea Break</td></tr>
+              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 10px 7px 0;vertical-align:top;border-bottom:1px solid #eef2f0">11:15&#8239;–&#8239;11:40</td><td style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 0;border-bottom:1px solid #eef2f0">Session 8 — Flash talks <span style="color:#8b959c">· Chair: Mr. Biplab Gope</span></td></tr>
+              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 10px 7px 0;vertical-align:top;border-bottom:1px solid #eef2f0">11:40&#8239;–&#8239;13:10</td><td style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 0;border-bottom:1px solid #eef2f0">Session 9 <span style="color:#8b959c">· Chair: Prof. Arabinda Chaudhuri</span></td></tr>
+              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#0f5a49;padding:9px 10px 9px 0;vertical-align:top;background:#f4f8f6;border-bottom:1px solid #eef2f0">13:10&#8239;–&#8239;14:25</td><td style="font:700 13px/1.6 Arial,Helvetica,sans-serif;color:#0f5a49;padding:9px 0;background:#f4f8f6;border-bottom:1px solid #eef2f0">Lunch <span style="font-weight:400;color:#5f8d7f">· R.N. Tagore Auditorium</span></td></tr>
+              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 10px 7px 0;vertical-align:top;border-bottom:1px solid #eef2f0">14:25&#8239;–&#8239;15:25</td><td style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 0;border-bottom:1px solid #eef2f0">Session 10 <span style="color:#8b959c">· Chair: Prof. Sanjib Bagchi</span></td></tr>
+              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 10px 7px 0;vertical-align:top;border-bottom:1px solid #eef2f0">15:25&#8239;–&#8239;16:20</td><td style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 0;border-bottom:1px solid #eef2f0">Session 11 <span style="color:#8b959c">· Chair: Mr. Subham Sarkar</span></td></tr>
+              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 10px 7px 0;vertical-align:top;border-bottom:1px solid #eef2f0">16:20&#8239;–&#8239;17:50</td><td style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 0;border-bottom:1px solid #eef2f0">Tea Break &amp; Poster Session <span style="color:#8b959c">· R.N. Tagore Auditorium</span></td></tr>
+              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 10px 7px 0;vertical-align:top;border-bottom:1px solid #eef2f0">17:50&#8239;–&#8239;18:35</td><td style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 0;border-bottom:1px solid #eef2f0">Session 12 <span style="color:#8b959c">· Chair: Dr. Debabrata Mukherjee</span></td></tr>
+              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 10px 7px 0;vertical-align:top;border-bottom:1px solid #eef2f0">18:35&#8239;–&#8239;19:05</td><td style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#414b56;padding:7px 0;border-bottom:1px solid #eef2f0">Best Poster Awards, Vote of Thanks &amp; Valedictory</td></tr>
+              <tr><td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#1d6f7e;padding:9px 10px 9px 0;vertical-align:top;background:#f2f8f9">19:30 onwards</td><td style="font:700 13px/1.6 Arial,Helvetica,sans-serif;color:#1d6f7e;padding:9px 0;background:#f2f8f9">Conference Dinner <span style="font-weight:400;color:#5d8b95">· RISE Foundation</span></td></tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- ──────────────────────────── Invited talks ───────────────────────── -->
+        <tr>
+          <td style="padding:28px 28px 0">
+            <div style="font:700 12px/1.4 Arial,Helvetica,sans-serif;color:#0f5a49;
+                        letter-spacing:.18em;text-transform:uppercase;
+                        border-bottom:2px solid #dcebe4;padding-bottom:9px">
+              Invited lectures
+            </div>
+            <div style="font:400 13px/1.9 Arial,Helvetica,sans-serif;color:#414b56;
+                        padding-top:12px">
+              <strong>Prof. Biprajit Sarkar</strong> · Freie Universität Berlin<br>
+              <strong>Prof. Guy Bertrand</strong> · University of California, San Diego<br>
+              <strong>Prof. David Scheschkewitz</strong> · Universität des Saarlandes<br>
+              <strong>Prof. Matthias Driess</strong> · Technische Universität Berlin<br>
+              <strong>Prof. Viktoria H. Däschlein-Gessner</strong> · Ruhr-University Bochum<br>
+              <strong>Prof. David C. Powers</strong> · Texas A&amp;M University<br>
+              <strong>Prof. Christo S. Sevov</strong> · The Ohio State University
+            </div>
+            <div style="font:400 13px/1.7 Arial,Helvetica,sans-serif;color:#6b7280;
+                        padding-top:14px">
+              The full programme, with all 31 student talks and the flash-talk lineup, is on
+              <a href="https://icocstudents.wixsite.com/icocstudents2026"
+                 style="color:#0f5a49;font-weight:700;text-decoration:underline">the
+                conference website</a>.
+            </div>
+          </td>
+        </tr>
+
+        <!-- ───────────────────────────── Organisers ─────────────────────────── -->
+        <tr>
+          <td style="padding:30px 28px 0">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"
+                   style="border-top:1px solid #eef2f0">
+              <tr>
+                <td align="center" style="padding:22px 0 0">
+                  <img src="https://raw.githubusercontent.com/Shuvam-Banerji-Seal/Automated-Event-Coupon-Sender-Email-and-Verification-Application/main/static/brand/icoc/iiser-kolkata.png"
+                       width="108" height="114" alt="IISER Kolkata"
+                       style="width:108px;max-width:108px;height:auto;display:block;margin:0 auto">
+                  <div style="font:400 12px/1.7 Arial,Helvetica,sans-serif;color:#6b7280;
+                              padding-top:12px">
+                    Organised by the Department of Chemical Sciences<br>
+                    Indian Institute of Science Education and Research Kolkata
+                  </div>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- ───────────────────────────── Sponsors ───────────────────────────── -->
+        <tr>
+          <td align="center" style="padding:22px 28px 26px">
+            <div style="font:400 11px/1.4 Arial,Helvetica,sans-serif;color:#9aa4ab;
+                        letter-spacing:.16em;text-transform:uppercase;padding-bottom:14px">
+              With support from
+            </div>
+            <img src="https://raw.githubusercontent.com/Shuvam-Banerji-Seal/Automated-Event-Coupon-Sender-Email-and-Verification-Application/main/static/brand/icoc/icoc-sponsors.png"
+                 width="420" alt="IISER Kolkata · Wiley · Inkarp · Royal Society of Chemistry · OMSYS India · Mono Scientific"
+                 style="width:420px;max-width:100%;height:auto;display:block;margin:0 auto">
+          </td>
+        </tr>
+
+        <!-- ────────────────────────────── Footer ────────────────────────────── -->
+        <tr>
+          <td style="background:#0f5a49;padding:22px 28px;text-align:center">
+            <div style="font:400 12px/1.8 Arial,Helvetica,sans-serif;color:#b9dccf">
+              Sent to {{ email }} because you are registered for ICOC-Students 2026.<br>
+              These passes are yours alone — please do not forward them.
+            </div>
+            <div style="font:400 12px/1.8 Arial,Helvetica,sans-serif;padding-top:8px">
+              <a href="https://icocstudents.wixsite.com/icocstudents2026"
+                 style="color:#ffffff;text-decoration:underline">icocstudents2026</a>
+            </div>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>

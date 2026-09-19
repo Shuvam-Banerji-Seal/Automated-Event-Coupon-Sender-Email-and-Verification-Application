@@ -57,7 +57,11 @@
             <button class="btn sm" data-food="Non-Vegetarian">Non-veg</button>
           </div>
           <span class="spacer"></span>
-          <span id="preview-subject" class="small truncate" style="max-width:280px"></span>
+          <span id="preview-subject" class="small truncate" style="max-width:240px"></span>
+          <a class="btn sm ghost" id="full-preview" target="_blank" rel="noopener"
+             title="Open this template full width in a new tab">
+            <svg><use href="#i-external"/></svg> Full page
+          </a>
         </div>
         <div class="preview-shell" id="preview-shell" data-width="desktop">
           <iframe id="preview" class="preview-frame" title="Email preview"
@@ -68,6 +72,7 @@
       <div class="card-foot">
         <span id="lint" class="small"></span>
         <span class="spacer"></span>
+        <span class="muted small" id="pass-count"></span>
         <button class="btn sm" id="send-test"><svg><use href="#i-send"/></svg> Send a test</button>
       </div>
     </div>
@@ -201,6 +206,7 @@ async function loadTemplate(name) {
   subjectBox.value = d.template.subject;
   dirty = false;
   updateMeta();
+  syncFullPreview();
   refreshPreview();
 }
 
@@ -291,6 +297,13 @@ async function refreshPreview() {
     document.getElementById('preview').srcdoc = d.html;
     document.getElementById('preview-subject').textContent = d.subject || '(no subject)';
 
+    // How many passes the preview is actually rendering. A template that loops
+    // over {{ coupons }} but shows one card is the mistake this catches before
+    // a few hundred emails go out with three meals missing.
+    const shown = (d.html.match(/<img[^>]+alt="[^"]*pass QR/gi) || []).length;
+    document.getElementById('pass-count').textContent =
+      shown > 1 ? `${shown} passes in this email` : '';
+
     const issues = [...(d.lint || [])];
     (d.validation?.warnings || []).forEach((w) => issues.push({ level: 'warning', message: w }));
     document.getElementById('lint').innerHTML = issues.length
@@ -302,6 +315,19 @@ async function refreshPreview() {
       `<span class="badge danger">${escapeHtml(e.message)}</span>`;
   }
 }
+
+/* The editor pane is narrow; a four-pass design needs full width to judge. The
+   link follows whichever template is selected and opens the saved version, so
+   it also shows what an unsaved edit has not yet changed. */
+function syncFullPreview() {
+  const link = document.getElementById('full-preview');
+  const name = selector.value;
+  if (!name) { link.setAttribute('aria-disabled', 'true'); link.removeAttribute('href'); return; }
+  link.removeAttribute('aria-disabled');
+  link.href = `/preview/${encodeURIComponent(name)}`;
+}
+selector.addEventListener('change', syncFullPreview);
+syncFullPreview();
 
 document.querySelectorAll('[data-view]').forEach((b) => {
   b.onclick = () => {
