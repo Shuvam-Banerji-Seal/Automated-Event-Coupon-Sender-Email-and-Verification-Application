@@ -202,6 +202,16 @@ Two things the code has to handle, both learned the hard way:
 If the application is killed while a share is open, the next start closes the
 orphan automatically.
 
+Set `ZROK_AUTOSTART=true` to reopen the share whenever the application starts.
+It is off by default — publishing to the internet should be a deliberate click
+— but worth enabling for an event, because a reboot otherwise leaves every
+volunteer holding a dead link with nobody watching the console to notice. It
+refuses to publish unless `SCANNER_PIN` is set.
+
+`logs/server.log` and `logs/zrok.log` are appended across restarts; both are
+rotated once at startup past `LOG_MAX_BYTES` (8MB by default). A week of idle
+running produced 1.3MB and 10MB respectively.
+
 ### Running several scanners at once
 
 Measured with six scanners against 400 guests, with 12% of guests presented
@@ -272,7 +282,7 @@ templates/
   scanner.html            Check-in interface
   seed/                   Starter email templates
 static/                   Styles, scripts, icons, vendored jsQR
-tests/                    242 tests
+tests/                    343 tests
 archive/                  Past events and superseded code (gitignored)
 ```
 

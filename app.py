@@ -311,6 +311,23 @@ def as_int(value: Any, default: int, low: int = 0, high: int = 10 ** 9) -> int:
         return default
 
 
+def as_text(value: Any, limit: int = 4096) -> str:
+    """Coerce a JSON value to a trimmed string without assuming it is one.
+
+    A client can put anything in a JSON field. ``(body.get("x") or "").strip()``
+    reads as defensive but is not: a dict or a number reaches .strip() and the
+    endpoint answers 500. That happened on /api/scan, which is the one endpoint
+    that must never fall over — a volunteer at a door cannot debug a 500.
+    Non-strings are rejected rather than stringified, so a stray object does not
+    silently become the literal text "{'a': 1}".
+    """
+    if isinstance(value, str):
+        return value.strip()[:limit]
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return str(value).strip()[:limit]
+    return ""
+
+
 def as_float(value: Any, default: float, low: float = 0.0,
              high: float = 60.0) -> float:
     try:
@@ -500,7 +517,7 @@ def api_csv_inspect():
 def api_csv_commit():
     """Apply a confirmed mapping and store the recipients."""
     body = request.get_json(silent=True) or {}
-    upload_id = body.get("upload_id", "")
+    upload_id = as_text(body.get("upload_id"), 64)
     mapping = body.get("mapping") or {}
     mode = body.get("mode", "replace")
 
@@ -699,7 +716,7 @@ def api_template_preview():
     html = body.get("html", "")
     subject = body.get("subject", "")
     food = normalise_food(body.get("food_preference", "Vegetarian"))
-    target = (body.get("email") or "").strip().lower()
+    target = as_text(body.get("email"), 320).lower()
 
     settings = event_settings()
     context = None
@@ -881,10 +898,17 @@ def _run_send(job: SendJob, coupons: List[Coupon], template: Dict[str, Any],
 def api_send_start():
     """Issue coupons for the selected recipients and start emailing them."""
     body = request.get_json(silent=True) or {}
-    template_name = body.get("template", "")
-    audience = body.get("audience", "pending")
-    selected = [e.lower() for e in body.get("emails", [])]
-    attachments = [p for p in body.get("attachments", []) if p]
+    template_name = as_text(body.get("template"), 128)
+    audience = as_text(body.get("audience"), 32) or "pending"
+    # A client can send a bare string, or a list containing anything.
+    raw_emails = body.get("emails") or []
+    if isinstance(raw_emails, str):
+        raw_emails = [raw_emails]
+    selected = [as_text(e, 320).lower() for e in raw_emails if as_text(e, 320)]
+    raw_attachments = body.get("attachments") or []
+    if isinstance(raw_attachments, str):
+        raw_attachments = [raw_attachments]
+    attachments = [as_text(p, 4096) for p in raw_attachments if as_text(p, 4096)]
     throttle = as_float(body.get("throttle"), 0.8, low=0.0, high=30.0)
 
     template = store.get_template(template_name)
@@ -992,7 +1016,7 @@ def api_send_stop(job_id: str):
 def api_send_test():
     """Send one rendered message to a chosen address, issuing no coupon."""
     body = request.get_json(silent=True) or {}
-    address = (body.get("email") or "").strip()
+    address = as_text(body.get("email"), 320)
     if not address:
         return jsonify({"success": False, "error": "Enter an address to test with."}), 400
 
@@ -1045,8 +1069,8 @@ def api_scan():
     """Redeem a coupon. The one endpoint that must never be wrong."""
     ip = client_ip()
     body = request.get_json(silent=True) or {}
-    raw = (body.get("payload") or body.get("code") or "").strip()
-    scanner_name = (body.get("scanner") or "").strip()[:40]
+    raw = as_text(body.get("payload") or body.get("code"), 4096)
+    scanner_name = as_text(body.get("scanner"), 40)
 
     # Each phone names itself, so a single misbehaving device is isolated
     # rather than the whole door being throttled with it.
@@ -1153,7 +1177,7 @@ def _queue_thank_you(coupon: Coupon):
 @scanner_access
 def api_scan_undo():
     body = request.get_json(silent=True) or {}
-    coupon_id = body.get("coupon_id", "")
+    coupon_id = as_text(body.get("coupon_id"), 64)
     ok = store.undo_redeem(coupon_id, scanner=(body.get("scanner") or "")[:40])
     return jsonify({"success": ok,
                     "error": None if ok else "That coupon was not marked used."})
@@ -1193,8 +1217,15 @@ def api_settings_get():
 def api_settings_save():
     body = request.get_json(silent=True) or {}
     for key in DEFAULT_SETTINGS:
-        if key in body:
-            store.set_setting(key, str(body[key]))
+        if key not in body:
+            continue
+        value = as_text(body[key], 512)
+        if not value and body[key] not in ("", None):
+            # A dict or list here would otherwise be stored as its repr and
+            # then printed verbatim into every invitation.
+            return jsonify({"success": False,
+                            "error": f"{key} must be text."}), 400
+        store.set_setting(key, value)
     return jsonify({"success": True, "settings": event_settings()})
 
 
@@ -1214,22 +1245,31 @@ def api_smtp_save():
     just to toggle a daily limit.
     """
     body = request.get_json(silent=True) or {}
+    # A string here would iterate character by character, and a non-dict entry
+    # has no .get — both crashed the endpoint before this guard.
+    raw_accounts = body.get("accounts")
+    if not isinstance(raw_accounts, list):
+        return jsonify({"success": False,
+                        "error": "accounts must be a list."}), 400
+
     existing = {a.username: a.password for a in mailer.load_accounts()}
     accounts = []
-    for entry in body.get("accounts", []):
-        username = (entry.get("username") or "").strip()
+    for entry in raw_accounts:
+        if not isinstance(entry, dict):
+            continue
+        username = as_text(entry.get("username"), 320)
         if not username:
             continue
-        password = entry.get("password") or ""
+        password = as_text(entry.get("password"), 512)
         if not password or password == "********":
             password = existing.get(username, "")
         accounts.append(Account(
             username=username, password=password,
-            host=entry.get("host", "smtp.gmail.com"),
+            host=as_text(entry.get("host"), 255) or "smtp.gmail.com",
             port=as_int(entry.get("port"), 587, low=1, high=65535),
             use_tls=bool(entry.get("use_tls", True)),
-            sender_name=entry.get("sender_name", ""),
-            sender_email=entry.get("sender_email", "") or username,
+            sender_name=as_text(entry.get("sender_name"), 128),
+            sender_email=as_text(entry.get("sender_email"), 320) or username,
             daily_limit=as_int(entry.get("daily_limit"), 450, low=1, high=100000),
             enabled=bool(entry.get("enabled", True)),
         ))
@@ -1241,14 +1281,17 @@ def api_smtp_save():
 @admin_only
 def api_smtp_test():
     body = request.get_json(silent=True) or {}
-    username = (body.get("username") or "").strip()
+    username = as_text(body.get("username"), 320)
     stored = {a.username: a for a in mailer.load_accounts()}
-    password = body.get("password") or ""
+    password = as_text(body.get("password"), 512)
     if (not password or password == "********") and username in stored:
         password = stored[username].password
+    if not username:
+        return jsonify({"success": False,
+                        "error": "Enter the account address first."}), 400
     account = Account(
         username=username, password=password,
-        host=body.get("host", "smtp.gmail.com"),
+        host=as_text(body.get("host"), 255) or "smtp.gmail.com",
         port=as_int(body.get("port"), 587, low=1, high=65535),
         use_tls=bool(body.get("use_tls", True)),
     )
@@ -1310,7 +1353,7 @@ def api_tunnel_start():
 def api_tunnel_name():
     """Reserve a stable name for the public address."""
     body = request.get_json(silent=True) or {}
-    name = (body.get("name") or "").strip().lower()
+    name = as_text(body.get("name"), 64).lower()
     if not name:
         store.set_setting("zrok_name", "")
         return jsonify({"success": True, "reserved_name": ""})

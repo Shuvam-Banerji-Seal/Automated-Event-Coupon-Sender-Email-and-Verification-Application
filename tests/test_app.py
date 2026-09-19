@@ -401,6 +401,93 @@ class TestMalformedInput:
             ).status_code == 200
 
 
+class TestWrongTypedInput:
+    """A JSON field can hold anything. Assuming it holds a string is a 500.
+
+    `(body.get("x") or "").strip()` reads as defensive but is not: a dict or a
+    number reaches .strip() and the endpoint dies. Found on /api/scan, which is
+    the one endpoint that must never fall over — nobody debugs a 500 at a door.
+    """
+
+    @pytest.mark.parametrize("payload", [
+        {"nested": 1}, [1, 2], True, {"a": {"b": "c"}},
+    ])
+    def test_scan_survives_a_non_string_payload(self, client, payload):
+        response = client.post("/api/scan", json={"payload": payload})
+        assert response.status_code == 400, f"{payload!r} produced {response.status_code}"
+
+    def test_scan_accepts_a_numeric_code(self, client):
+        """A client sending the code unquoted is wrong but harmless."""
+        assert client.post("/api/scan", json={"payload": 123456}).status_code != 500
+
+    def test_scan_survives_a_non_string_scanner_name(self, client):
+        response = client.post("/api/scan",
+                               json={"payload": "123456", "scanner": {"x": 1}})
+        assert response.status_code != 500
+
+    @pytest.mark.parametrize("body", [
+        {"template": {"a": 1}},
+        {"template": "invitation", "audience": "selected", "emails": "a@b.com"},
+        {"template": "invitation", "audience": "selected", "emails": [None, 5]},
+        {"template": "invitation", "attachments": {"a": 1}},
+        {"template": "invitation", "audience": ["x"]},
+        {"template": "invitation", "throttle": "fast"},
+    ])
+    def test_send_survives_wrong_types(self, client, body):
+        assert client.post("/api/send/start", json=body).status_code != 500
+
+    @pytest.mark.parametrize("body", [
+        {"accounts": "notalist"},
+        {"accounts": [{"username": 123, "port": {"a": 1}}]},
+        {"accounts": ["a", 5, None]},
+        {},
+    ])
+    def test_smtp_save_survives_wrong_types(self, client, body):
+        assert client.post("/api/smtp", json=body).status_code != 500
+
+    def test_settings_rejects_non_text(self, client):
+        """A dict stored as its repr would be printed into every invitation."""
+        response = client.post("/api/settings", json={"event_name": {"a": 1}})
+        assert response.status_code == 400
+        assert client.get("/api/settings").get_json()["settings"]["event_name"] != "{'a': 1}"
+
+    @pytest.mark.parametrize("path,body", [
+        ("/api/scan/undo", {"coupon_id": [1]}),
+        ("/api/tunnel/name", {"name": 123}),
+        ("/api/smtp/test", {"username": {"a": 1}}),
+        ("/api/send/test", {"email": [1], "template": "invitation"}),
+        ("/api/csv/commit", {"upload_id": {"a": 1}, "mapping": {"email": "x"}}),
+        ("/api/csv/commit", {"upload_id": "x", "mapping": "notadict"}),
+        ("/api/event/reset", {"confirm": ["RESET"]}),
+    ])
+    def test_other_endpoints_survive_wrong_types(self, client, path, body):
+        assert client.post(path, json=body).status_code != 500
+
+
+class TestTemplateSandbox:
+    """Templates are authored in a browser, so the sandbox is load-bearing."""
+
+    @pytest.mark.parametrize("attack", [
+        "{{ ''.__class__.__mro__ }}",
+        "{{ ''.__class__.__base__.__subclasses__() }}",
+        "{{ self.__init__.__globals__ }}",
+        "{{ cycler.__init__.__globals__.os.popen('id').read() }}",
+        "{{ lipsum.__globals__.os.popen('id').read() }}",
+        "{{ request.application.__self__._get_data_for_json }}",
+    ])
+    def test_escapes_are_blocked(self, client, attack):
+        response = client.post("/api/templates/preview",
+                               json={"html": attack, "subject": ""})
+        if response.status_code == 200:
+            # Some expressions resolve to Undefined rather than raising; what
+            # matters is that nothing sensitive is rendered.
+            html = response.get_json()["html"]
+            assert "built-in" not in html and "os.popen" not in html
+            assert "uid=" not in html and "class '" not in html
+        else:
+            assert response.status_code == 400
+
+
 class TestPendingCount:
     """`pending` must mean "recipients without a coupon", not a subtraction.
 

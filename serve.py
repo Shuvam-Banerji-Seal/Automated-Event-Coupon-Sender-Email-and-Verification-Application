@@ -33,6 +33,8 @@ from __future__ import annotations
 import logging
 import os
 import sys
+import threading
+import time
 
 from dotenv import load_dotenv
 
@@ -42,13 +44,71 @@ logger = logging.getLogger("coupons.serve")
 
 THREADS = int(os.getenv("SERVER_THREADS", "16"))
 
+# Reopening the public share after a restart is opt-in. Publishing to the
+# internet should normally be a deliberate click, but a machine that reboots
+# mid-event would otherwise leave every volunteer holding a dead link with
+# nobody watching the console to notice.
+AUTOSTART_TUNNEL = os.getenv("ZROK_AUTOSTART", "false").lower() in ("1", "true", "yes")
+
+# Logs are appended to across restarts and nothing trims them. A week of idle
+# running produced 1.3MB of application log and 10MB from zrok. Rotating once
+# at startup bounds it without needing logrotate on a laptop.
+LOG_MAX_BYTES = int(os.getenv("LOG_MAX_BYTES", str(8 * 1024 * 1024)))
+
+
+def rotate_large_logs(directory: str = "logs") -> None:
+    for name in ("server.log", "zrok.log"):
+        path = os.path.join(directory, name)
+        try:
+            if os.path.getsize(path) > LOG_MAX_BYTES:
+                os.replace(path, path + ".1")
+                logger.info("Rotated %s (over %d bytes)", path, LOG_MAX_BYTES)
+        except OSError:
+            pass
+
+
+def open_tunnel_later(tunnel, port: int, name: str) -> None:
+    """Reopen the share once the server is actually accepting connections.
+
+    zrok refuses to start against a port nothing is listening on, and starting
+    takes some seconds, so this runs on a background thread rather than
+    delaying startup.
+    """
+    def run():
+        time.sleep(3)
+        serving_https = os.getenv("SSL_ENABLED", "false").lower() in ("1", "true", "yes") \
+            and os.path.exists("cert.pem")
+        result = tunnel.start(port, backend_https=serving_https,
+                              reserved_name=name or None)
+        if result.get("success"):
+            logger.info("Public share reopened at %s", result.get("url"))
+        else:
+            logger.error("Could not reopen the public share: %s",
+                         result.get("error"))
+
+    threading.Thread(target=run, name="tunnel-autostart", daemon=True).start()
+
 
 def main() -> int:
     # Force the reloader off before importing the app: with FLASK_DEBUG left on,
     # module-level start-up would run twice and start two outbox workers.
     os.environ["FLASK_DEBUG"] = "false"
 
-    from app import APP_PORT, SERVER_IP, SCANNER_PIN, app, outbox  # noqa: E402
+    rotate_large_logs()
+
+    from app import (  # noqa: E402
+        APP_PORT, SERVER_IP, SCANNER_PIN, app, event_settings, outbox, tunnel,
+    )
+
+    if AUTOSTART_TUNNEL:
+        if not SCANNER_PIN:
+            logger.error(
+                "ZROK_AUTOSTART is on but SCANNER_PIN is not set — refusing to "
+                "publish an unprotected scanner."
+            )
+        else:
+            open_tunnel_later(tunnel, APP_PORT,
+                              event_settings().get("zrok_name", ""))
 
     ssl_wanted = os.getenv("SSL_ENABLED", "false").lower() in ("1", "true", "yes")
     have_certs = os.path.exists("cert.pem") and os.path.exists("key.pem")
