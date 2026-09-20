@@ -1,29 +1,181 @@
 {#
-Subject: {{ first_name }}, your meal passes for ICOC-Students 2026
+Subject: {{ first_name }}, your ICOC-Students 2026 programme and meal passes
 
-ICOC-Students 2026 meal passes — one email, every sitting.
+ICOC-Students 2026 — the programme, with each meal pass set where it is served.
+
+The passes are not collected in a block at the top. They sit inside the
+chronological programme, at the moment each meal happens: scroll to where you
+are in the day and the QR you need is right there. Nobody at a counter has to
+work out which of four codes is the lunch one.
 
 Written the way email has to be written: tables for layout, inline styles, no
-flexbox, no grid, no inline SVG, no external stylesheet, nothing that Gmail,
-Outlook or Apple Mail refuses.
+flexbox, no grid, no inline SVG, no external stylesheet, nothing Gmail, Outlook
+or Apple Mail refuses.
 
 Three decisions worth keeping:
 
-* The artwork is authored as SVG (static/brand/icoc/svg/, rebuilt by
+* Artwork is authored as SVG (static/brand/icoc/svg/, rebuilt by
   scripts/build_icoc_art.py) and shipped as PNG. Every client strips inline
   <svg> and none will load an .svg from an <img src>.
 * Decoration loads from raw.githubusercontent.com. Attaching it would add a few
-  hundred KB to every message and Gmail clips past ~102 KB. Nothing load-bearing
-  is an image, and each has real alt text, so a reader who blocks remote images
-  still gets a complete, usable email.
+  hundred KB per message and Gmail clips past ~102 KB. Nothing load-bearing is
+  an image and every one has real alt text.
 * QR codes are the exception: attached inline as cid: parts, because they are
   the functional part and must render with remote images blocked. The six-digit
-  code is printed under every one and reaches the plain-text alternative too.
+  code is printed under each and reaches the plain-text alternative too.
 
-Passes are grouped by day. The running counter uses a namespace because Jinja's
-loop.index restarts inside each group, and "Pass 3 of 4" has to keep counting
-across the day boundary.
+meal_stop() looks its pass up by meal_key rather than being handed one, so a
+sitting somebody holds no pass for degrades to a plain programme entry instead
+of rendering an empty card.
 #}
+{#- ------------------------------------------------------------------ macros -#}
+
+{%- macro slot(time, what, where) -%}
+<tr>
+  <!-- No fixed width: nowrap already sizes this column to its longest time, and
+       pinning it at 104px stole room the description needs on a 360px phone. -->
+  <td style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:#6b7280;
+             padding:9px 10px 9px 0;vertical-align:top;border-bottom:1px solid #eef2f0;
+             white-space:nowrap">{{ time }}</td>
+  <td style="font:400 13px/1.6 Arial,Helvetica,sans-serif;color:#414b56;
+             padding:9px 0;border-bottom:1px solid #eef2f0">{{ what }}{% if where %}
+    <span style="color:#9aa4ab"> · {{ where }}</span>{% endif %}</td>
+</tr>
+{%- endmacro -%}
+
+{%- macro meal_stop(cs, total, key, time, label, venue, night) -%}
+{%- set found = cs | selectattr('meal_key', 'equalto', key) | list -%}
+{%- set c = found[0] if found else none -%}
+{%- set accent = '#1d6f7e' if night else '#0f5a49' -%}
+{%- set wash = '#f1f8f9' if night else '#f3f8f5' -%}
+<tr>
+  <td colspan="2" style="padding:18px 0 6px">
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"
+           style="border:1px solid #dde6e1;border-radius:14px;overflow:hidden">
+
+      <!-- Which sitting, and when -->
+      <tr>
+        <td style="background:{{ accent }};padding:14px 18px">
+          <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation">
+            <tr>
+              <td width="34" style="vertical-align:middle;padding-right:12px">
+                <img src="https://raw.githubusercontent.com/Shuvam-Banerji-Seal/Automated-Event-Coupon-Sender-Email-and-Verification-Application/main/static/brand/icoc/icoc-badge-{{ 'dinner' if night else 'lunch' }}.png"
+                     width="34" height="34" alt=""
+                     style="width:34px;max-width:34px;height:auto;display:block;border:0">
+              </td>
+              <td style="vertical-align:middle">
+                <div style="font:700 16px/1.3 Arial,Helvetica,sans-serif;color:#ffffff">
+                  {{ label }}
+                </div>
+                <div style="font:400 12px/1.5 Arial,Helvetica,sans-serif;color:#cfe8de;
+                            padding-top:2px">{{ time }}</div>
+              </td>
+              {% if c and total > 1 %}
+              <td align="right" style="vertical-align:middle;white-space:nowrap">
+                <span style="display:inline-block;background:rgba(255,255,255,.18);
+                             border:1px solid rgba(255,255,255,.35);border-radius:20px;
+                             padding:5px 11px;color:#ffffff;
+                             font:700 10px/1.2 Arial,Helvetica,sans-serif;
+                             letter-spacing:.12em;text-transform:uppercase">
+                  Pass {{ cs.index(c) + 1 }} of {{ total }}
+                </span>
+              </td>
+              {% endif %}
+            </tr>
+          </table>
+        </td>
+      </tr>
+
+      {% if c %}
+      <!-- The pass, at the point in the day it is needed -->
+      <tr>
+        <td align="center" style="padding:24px 18px 4px;background:#ffffff">
+          <!-- Full-width panel with a bounded image, not an auto-width panel
+               around a fixed one: a 208px image plus padding gave every row in
+               the email a 274px floor, so a 320px screen scrolled sideways.
+               This shrinks instead, and the code still decodes well below the
+               size it can reach here. -->
+          <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"
+                 style="background:{{ wash }};border-radius:14px">
+            <tr>
+              <td align="center" style="padding:16px 12px">
+                <img src="{{ c.qr_code_src }}" width="208" height="208"
+                     alt="Meal pass QR code for {{ c.meal_label }} — code {{ c.verification_code }}"
+                     style="width:100%;max-width:208px;height:auto;display:block;
+                            margin:0 auto;border-radius:8px;background:#ffffff">
+              </td>
+            </tr>
+          </table>
+          <div style="font:400 10px/1.5 Arial,Helvetica,sans-serif;color:#9aa4ab;
+                      padding-top:16px;letter-spacing:.18em;text-transform:uppercase">
+            or read out this code
+          </div>
+          <div style="font:700 27px/1.2 'Courier New',Courier,monospace;
+                      color:#12312a;letter-spacing:.2em;padding-top:5px">
+            {{ c.verification_code }}
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:18px 18px 0;background:#ffffff">
+          <div style="border-top:2px dashed #e3ebe7;font-size:0;line-height:0">&nbsp;</div>
+        </td>
+      </tr>
+      {% endif %}
+
+      <!-- Where, and what you are served -->
+      <tr>
+        <td style="padding:{{ '6px' if c else '16px' }} 18px 18px;background:#ffffff">
+          <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation">
+            {% if venue %}
+            <tr>
+              <td width="72" style="font:400 12px/1.7 Arial,Helvetica,sans-serif;
+                         color:#8b959c;padding:8px 0 0">Venue</td>
+              <td style="font:700 13px/1.7 Arial,Helvetica,sans-serif;color:#12312a;
+                         padding:8px 0 0">{{ venue }}</td>
+            </tr>
+            {% endif %}
+            {% if c %}
+            <tr>
+              <td style="font:400 12px/1.7 Arial,Helvetica,sans-serif;color:#8b959c;
+                         padding:9px 0 0">Meal</td>
+              <td style="padding:9px 0 0">
+                <span style="display:inline-block;background:{{ c.food_colour }};
+                             color:#ffffff;font:700 10px/1 Arial,Helvetica,sans-serif;
+                             letter-spacing:.12em;text-transform:uppercase;
+                             padding:7px 12px;border-radius:20px">
+                  {{ c.food_preference }}
+                </span>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="2" style="font:400 13px/1.7 Arial,Helvetica,sans-serif;
+                         color:#8b959c;padding:8px 0 0">
+                You do not hold a pass for this sitting.
+              </td>
+            </tr>
+            {% endif %}
+          </table>
+        </td>
+      </tr>
+    </table>
+  </td>
+</tr>
+{%- endmacro -%}
+
+{%- macro day_end(label) -%}
+<tr>
+  <td colspan="2" align="center" style="padding:16px 0 4px">
+    <span style="display:inline-block;background:#f3f8f5;border:1px solid #e3ebe7;
+                 border-radius:20px;padding:6px 16px;color:#8b959c;
+                 font:700 10px/1.2 Arial,Helvetica,sans-serif;letter-spacing:.18em;
+                 text-transform:uppercase">{{ label }}</span>
+  </td>
+</tr>
+{%- endmacro -%}
+
+{#- ------------------------------------------------------------------- email -#}
 <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"
        style="background:#eef2f0;margin:0;padding:24px 10px">
   <tr>
@@ -31,8 +183,9 @@ across the day boundary.
 
       <!-- Preheader: what the inbox list shows before the message is opened. -->
       <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">
-        {{ coupon_count }} meal pass{{ '' if coupon_count == 1 else 'es' }} for
-        22–23 September at IISER Kolkata. Show each QR at the counter.
+        The full programme for 22–23 September, with your
+        {{ coupon_count }} meal pass{{ '' if coupon_count == 1 else 'es' }} set in at the
+        moment each one is served.
       </div>
 
       <table width="640" cellpadding="0" cellspacing="0" border="0" role="presentation"
@@ -49,9 +202,6 @@ across the day boundary.
         </tr>
         <tr>
           <td style="background:#0f5a49;padding:0 28px 30px;text-align:center">
-            <!-- Pulled up into the artwork so the emblem sits over the network
-                 rather than below it. Negative margin is safe here: Outlook
-                 ignores it and simply stacks the two, which still looks right. -->
             <div style="margin-top:-72px">
               <img src="https://raw.githubusercontent.com/Shuvam-Banerji-Seal/Automated-Event-Coupon-Sender-Email-and-Verification-Application/main/static/brand/icoc/icoc-emblem.png"
                    width="124" height="126" alt="ICOC-Students 2026"
@@ -64,7 +214,7 @@ across the day boundary.
             </div>
             <div style="font:700 12px/1.5 Arial,Helvetica,sans-serif;color:#9fd6c3;
                         padding-top:10px;letter-spacing:.2em;text-transform:uppercase">
-              Students Edition &nbsp;·&nbsp; 2026
+              Students Edition  ·  2026
             </div>
             <table cellpadding="0" cellspacing="0" border="0" role="presentation"
                    align="center" style="margin:20px auto 0">
@@ -72,7 +222,7 @@ across the day boundary.
                 <td style="background:rgba(255,255,255,.12);border:1px solid #3d7c6b;
                            border-radius:22px;padding:9px 20px;
                            font:600 13px/1.4 Arial,Helvetica,sans-serif;color:#eaf6f1">
-                  22–23 September 2026 &nbsp;·&nbsp; IISER Kolkata
+                  22–23 September 2026  ·  IISER Kolkata
                 </td>
               </tr>
             </table>
@@ -95,177 +245,27 @@ across the day boundary.
             <div style="font:400 15px/1.8 Arial,Helvetica,sans-serif;color:#414b56;
                         padding-top:12px">
               {% if coupon_count > 1 -%}
-              Below are your <strong>{{ coupon_count }} meal passes</strong> — one for each
-              sitting, each valid once and only at its own counter.
+              The whole programme is below, and your <strong>{{ coupon_count }} meal
+              passes</strong> are set into it — each one appears at the point in the day
+              it is served. Scroll to where you are and the code you need is right there.
               {%- else -%}
-              Below is your <strong>meal pass</strong>. It is valid once.
+              The whole programme is below, with your <strong>meal pass</strong> set in at
+              the point it is served.
               {%- endif %}
-              Show the QR code and a volunteer will scan it straight off your phone.
-              There is nothing to print.
             </div>
           </td>
         </tr>
 
-        <tr><td style="padding:26px 30px 0;line-height:0;font-size:0">
-          <img src="https://raw.githubusercontent.com/Shuvam-Banerji-Seal/Automated-Event-Coupon-Sender-Email-and-Verification-Application/main/static/brand/icoc/icoc-divider.png"
-               width="580" height="24" alt=""
-               style="width:100%;max-width:580px;height:auto;display:block;border:0">
-        </td></tr>
-
-        <!-- ═════════════════════════ Meal passes ══════════════════════════ -->
+        <!-- ════════════════════════ Before you go ═════════════════════════ -->
         <tr>
-          <td style="padding:22px 30px 0;text-align:center">
-            <div style="font:700 12px/1.4 Arial,Helvetica,sans-serif;color:#0f5a49;
-                        letter-spacing:.22em;text-transform:uppercase">
-              {% if coupon_count > 1 %}Your meal passes{% else %}Your meal pass{% endif %}
-            </div>
-          </td>
-        </tr>
-
-        {% set ns = namespace(n = 0) %}
-        {% for day, group in coupons | groupby('day') %}
-
-        {% if day %}
-        <tr>
-          <td style="padding:24px 30px 0">
-            <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation">
-              <tr>
-                <td style="font:700 15px/1.4 Georgia,'Times New Roman',serif;color:#12312a;
-                           white-space:nowrap;padding-right:14px">{{ day }}</td>
-                <td width="100%" style="border-top:1px solid #e3ebe7;font-size:0;line-height:0">&nbsp;</td>
-                <td style="font:400 12px/1.4 Arial,Helvetica,sans-serif;color:#8b959c;
-                           white-space:nowrap;padding-left:14px">
-                  {{ group[0].date }}
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-        {% endif %}
-
-        {% for c in group %}
-        {%- set ns.n = ns.n + 1 -%}
-        {%- set is_dinner = 'dinner' in (c.meal ~ ' ' ~ c.meal_label)|lower -%}
-        {%- set accent = '#1d6f7e' if is_dinner else '#0f5a49' -%}
-        {%- set wash = '#f1f8f9' if is_dinner else '#f3f8f5' -%}
-        <tr>
-          <td style="padding:14px 30px 0">
-            <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"
-                   style="border:1px solid #dde6e1;border-radius:14px;overflow:hidden">
-
-              <!-- Which sitting -->
-              <tr>
-                <td style="background:{{ accent }};padding:14px 18px">
-                  <table width="100%" cellpadding="0" cellspacing="0" border="0"
-                         role="presentation">
-                    <tr>
-                      <td width="34" style="vertical-align:middle;padding-right:12px">
-                        <img src="https://raw.githubusercontent.com/Shuvam-Banerji-Seal/Automated-Event-Coupon-Sender-Email-and-Verification-Application/main/static/brand/icoc/icoc-badge-{{ 'dinner' if is_dinner else 'lunch' }}.png"
-                             width="34" height="34" alt=""
-                             style="width:34px;max-width:34px;height:auto;display:block;border:0">
-                      </td>
-                      <td style="vertical-align:middle;
-                                 font:700 16px/1.3 Arial,Helvetica,sans-serif;color:#ffffff">
-                        {{ c.meal or c.meal_label }}
-                      </td>
-                      {% if coupon_count > 1 %}
-                      <td align="right" style="vertical-align:middle;white-space:nowrap">
-                        <span style="display:inline-block;background:rgba(255,255,255,.18);
-                                     border:1px solid rgba(255,255,255,.35);border-radius:20px;
-                                     padding:4px 11px;color:#ffffff;
-                                     font:700 10px/1.2 Arial,Helvetica,sans-serif;
-                                     letter-spacing:.12em;text-transform:uppercase">
-                          Pass {{ ns.n }} of {{ coupon_count }}
-                        </span>
-                      </td>
-                      {% endif %}
-                    </tr>
-                  </table>
-                </td>
-              </tr>
-
-              <!-- The code itself -->
-              <tr>
-                <td align="center" style="padding:24px 18px 4px;background:#ffffff">
-                  <table cellpadding="0" cellspacing="0" border="0" role="presentation"
-                         align="center" style="background:{{ wash }};border-radius:14px">
-                    <tr>
-                      <td style="padding:14px">
-                        <img src="{{ c.qr_code_src }}" width="212" height="212"
-                             alt="Meal pass QR code for {{ c.meal_label }} — code {{ c.verification_code }}"
-                             style="width:212px;max-width:212px;height:auto;display:block;
-                                    border-radius:8px;background:#ffffff">
-                      </td>
-                    </tr>
-                  </table>
-                  <div style="font:400 10px/1.5 Arial,Helvetica,sans-serif;color:#9aa4ab;
-                              padding-top:16px;letter-spacing:.18em;text-transform:uppercase">
-                    or read out this code
-                  </div>
-                  <div style="font:700 27px/1.2 'Courier New',Courier,monospace;
-                              color:#12312a;letter-spacing:.2em;padding-top:5px">
-                    {{ c.verification_code }}
-                  </div>
-                </td>
-              </tr>
-
-              <!-- Perforation, then when and where -->
-              <tr>
-                <td style="padding:18px 18px 0;background:#ffffff">
-                  <div style="border-top:2px dashed #e3ebe7;font-size:0;line-height:0">&nbsp;</div>
-                </td>
-              </tr>
-              <tr>
-                <td style="padding:6px 18px 18px;background:#ffffff">
-                  <table width="100%" cellpadding="0" cellspacing="0" border="0"
-                         role="presentation">
-                    {% if c.time %}
-                    <tr>
-                      <td width="72" style="font:400 12px/1.7 Arial,Helvetica,sans-serif;
-                                 color:#8b959c;padding:8px 0 0;letter-spacing:.04em">Served</td>
-                      <td style="font:700 13px/1.7 Arial,Helvetica,sans-serif;color:#12312a;
-                                 padding:8px 0 0">{{ c.time }}</td>
-                    </tr>
-                    {% endif %}
-                    {% if c.venue %}
-                    <tr>
-                      <td style="font:400 12px/1.7 Arial,Helvetica,sans-serif;color:#8b959c;
-                                 padding:3px 0 0">Venue</td>
-                      <td style="font:700 13px/1.7 Arial,Helvetica,sans-serif;color:#12312a;
-                                 padding:3px 0 0">{{ c.venue }}</td>
-                    </tr>
-                    {% endif %}
-                    <tr>
-                      <td style="font:400 12px/1.7 Arial,Helvetica,sans-serif;color:#8b959c;
-                                 padding:9px 0 0">Meal</td>
-                      <td style="padding:9px 0 0">
-                        <span style="display:inline-block;background:{{ c.food_colour }};
-                                     color:#ffffff;font:700 10px/1 Arial,Helvetica,sans-serif;
-                                     letter-spacing:.12em;text-transform:uppercase;
-                                     padding:7px 12px;border-radius:20px">
-                          {{ c.food_preference }}
-                        </span>
-                      </td>
-                    </tr>
-                  </table>
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-        {% endfor %}
-        {% endfor %}
-
-        <!-- ═════════════════════════ How it works ═════════════════════════ -->
-        <tr>
-          <td style="padding:26px 30px 0">
+          <td style="padding:22px 30px 0">
             <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"
                    style="background:#f3f8f5;border:1px solid #dfeae4;border-radius:12px">
               <tr>
                 <td style="padding:18px 20px">
                   <div style="font:700 13px/1.5 Arial,Helvetica,sans-serif;color:#0f5a49;
                               letter-spacing:.06em;padding-bottom:10px">
-                    Before you get to the counter
+                    Before you get to a counter
                   </div>
                   <table width="100%" cellpadding="0" cellspacing="0" border="0"
                          role="presentation"
@@ -300,85 +300,96 @@ across the day boundary.
                style="width:100%;max-width:580px;height:auto;display:block;border:0">
         </td></tr>
 
-        <!-- ══════════════════════════ Programme ═══════════════════════════ -->
-        <tr>
-          <td style="padding:22px 30px 0;text-align:center">
-            <div style="font:700 12px/1.4 Arial,Helvetica,sans-serif;color:#0f5a49;
-                        letter-spacing:.22em;text-transform:uppercase">
-              Programme at a glance
-            </div>
-          </td>
-        </tr>
-
-        {% macro slot(time, what, where, kind) -%}
-        {%- set bg = '#f3f8f5' if kind == 'lunch' else ('#f1f8f9' if kind == 'dinner' else '') -%}
-        {%- set ink = '#0f5a49' if kind == 'lunch' else ('#1d6f7e' if kind == 'dinner' else '#414b56') -%}
-        {%- set weight = 700 if kind else 400 -%}
-        <tr>
-          <td width="104" style="font:700 12px/1.6 Arial,Helvetica,sans-serif;color:{{ ink }};
-                     padding:8px 10px 8px 12px;vertical-align:top;
-                     border-bottom:1px solid #eef2f0;{% if bg %}background:{{ bg }};{% endif %}
-                     {% if kind %}border-left:3px solid {{ ink }};{% else %}border-left:3px solid transparent;{% endif %}">{{ time }}</td>
-          <td style="font:{{ weight }} 13px/1.6 Arial,Helvetica,sans-serif;color:{{ ink }};
-                     padding:8px 12px 8px 0;border-bottom:1px solid #eef2f0;
-                     {% if bg %}background:{{ bg }};{% endif %}">{{ what }}{% if where %}
-            <span style="font-weight:400;color:{{ '#5f8d7f' if kind else '#8b959c' }}"> · {{ where }}</span>{% endif %}</td>
-        </tr>
-        {%- endmacro %}
-
-        <tr>
-          <td style="padding:20px 30px 0">
-            <div style="font:700 15px/1.4 Georgia,'Times New Roman',serif;color:#12312a;
-                        padding-bottom:4px">
-              Day 1 <span style="color:#8b959c;font:400 13px/1.4 Arial,Helvetica,sans-serif">
-                &nbsp;·&nbsp; Tuesday, 22 September</span>
-            </div>
-            <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"
-                   style="margin-top:8px">
-              {{ slot('08:30 – 09:00', 'Registration', 'M.N. Saha Lecture Hall', '') }}
-              {{ slot('09:00 – 09:15', 'Inaugural Session', '', '') }}
-              {{ slot('09:15 – 10:30', 'Session 1', 'Chair: Prof. Amitava Das', '') }}
-              {{ slot('10:30 – 11:00', 'Tea Break', '', '') }}
-              {{ slot('11:00 – 11:45', 'Session 2', 'Chair: Prof. Abu Taleb Khan', '') }}
-              {{ slot('11:45 – 12:00', 'Photo Session', '', '') }}
-              {{ slot('12:00 – 13:10', 'Session 3 — flash & student talks', 'Chair: Prof. Manindranath Bera', '') }}
-              {{ slot('13:10 – 14:25', 'Lunch', 'R.N. Tagore Auditorium', 'lunch') }}
-              {{ slot('14:25 – 15:55', 'Session 4', 'Chair: Dr. Michèle Soleilhavoup', '') }}
-              {{ slot('15:55 – 16:20', 'Session 5 — flash talks', 'Chair: Ms. Mandira Saha', '') }}
-              {{ slot('16:20 – 16:50', 'Tea Break', '', '') }}
-              {{ slot('16:50 – 18:20', 'Session 6', 'Chair: Prof. Swati De', '') }}
-              {{ slot('19:30 onwards', 'Dinner', 'R.N. Tagore Auditorium', 'dinner') }}
-            </table>
-          </td>
-        </tr>
-
+        <!-- ═══════════════════════════ DAY ONE ════════════════════════════ -->
         <tr>
           <td style="padding:24px 30px 0">
-            <div style="font:700 15px/1.4 Georgia,'Times New Roman',serif;color:#12312a;
-                        padding-bottom:4px">
-              Day 2 <span style="color:#8b959c;font:400 13px/1.4 Arial,Helvetica,sans-serif">
-                &nbsp;·&nbsp; Wednesday, 23 September</span>
+            <div style="font:700 12px/1.4 Arial,Helvetica,sans-serif;color:#0f5a49;
+                        letter-spacing:.22em;text-transform:uppercase;text-align:center;
+                        padding-bottom:14px">
+              Day one
             </div>
-            <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"
-                   style="margin-top:8px">
-              {{ slot('09:00 – 10:45', 'Session 7', 'Chair: Prof. Amit Basak', '') }}
-              {{ slot('10:45 – 11:15', 'Tea Break', '', '') }}
-              {{ slot('11:15 – 11:40', 'Session 8 — flash talks', 'Chair: Mr. Biplab Gope', '') }}
-              {{ slot('11:40 – 13:10', 'Session 9', 'Chair: Prof. Arabinda Chaudhuri', '') }}
-              {{ slot('13:10 – 14:25', 'Lunch', 'R.N. Tagore Auditorium', 'lunch') }}
-              {{ slot('14:25 – 15:25', 'Session 10', 'Chair: Prof. Sanjib Bagchi', '') }}
-              {{ slot('15:25 – 16:20', 'Session 11', 'Chair: Mr. Subham Sarkar', '') }}
-              {{ slot('16:20 – 17:50', 'Tea Break & Poster Session', 'R.N. Tagore Auditorium', '') }}
-              {{ slot('17:50 – 18:35', 'Session 12', 'Chair: Dr. Debabrata Mukherjee', '') }}
-              {{ slot('18:35 – 19:05', 'Best Poster Awards, Vote of Thanks & Valedictory', '', '') }}
-              {{ slot('19:30 onwards', 'Conference Dinner', 'RISE Foundation', 'dinner') }}
+            <div style="font:700 20px/1.35 Georgia,'Times New Roman',serif;color:#12312a;
+                        text-align:center">
+              Tuesday, 22 September
+            </div>
+            <div style="font:400 12px/1.6 Arial,Helvetica,sans-serif;color:#8b959c;
+                        text-align:center;padding-top:5px">
+              Registration opens 08:30 · M.N. Saha Lecture Hall
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:18px 30px 0">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation">
+              {{ slot('08:30 – 09:00', 'Registration', 'M.N. Saha Lecture Hall') }}
+              {{ slot('09:00 – 09:15', 'Inaugural Session', '') }}
+              {{ slot('09:15 – 10:30', 'Session 1', 'Chair: Prof. Amitava Das') }}
+              {{ slot('10:30 – 11:00', 'Tea Break', '') }}
+              {{ slot('11:00 – 11:45', 'Session 2', 'Chair: Prof. Abu Taleb Khan') }}
+              {{ slot('11:45 – 12:00', 'Photo Session', '') }}
+              {{ slot('12:00 – 13:10', 'Session 3 — flash & student talks', 'Chair: Prof. Manindranath Bera') }}
+              {{ meal_stop(coupons, coupon_count, 'd1-lunch', '13:10 – 14:25', 'Lunch',
+                           'R.N. Tagore Auditorium', false) }}
+              {{ slot('14:25 – 15:55', 'Session 4', 'Chair: Dr. Michèle Soleilhavoup') }}
+              {{ slot('15:55 – 16:20', 'Session 5 — flash talks', 'Chair: Ms. Mandira Saha') }}
+              {{ slot('16:20 – 16:50', 'Tea Break', '') }}
+              {{ slot('16:50 – 18:20', 'Session 6', 'Chair: Prof. Swati De') }}
+              {{ meal_stop(coupons, coupon_count, 'd1-dinner', '19:30 onwards', 'Dinner',
+                           'R.N. Tagore Auditorium', true) }}
+              {{ day_end('End of day one') }}
             </table>
           </td>
         </tr>
+
+        <!-- ═══════════════════════════ DAY TWO ════════════════════════════ -->
+        <tr>
+          <td style="padding:30px 30px 0">
+            <div style="font:700 12px/1.4 Arial,Helvetica,sans-serif;color:#0f5a49;
+                        letter-spacing:.22em;text-transform:uppercase;text-align:center;
+                        padding-bottom:14px">
+              Day two
+            </div>
+            <div style="font:700 20px/1.35 Georgia,'Times New Roman',serif;color:#12312a;
+                        text-align:center">
+              Wednesday, 23 September
+            </div>
+            <div style="font:400 12px/1.6 Arial,Helvetica,sans-serif;color:#8b959c;
+                        text-align:center;padding-top:5px">
+              First session 09:00
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:18px 30px 0">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation">
+              {{ slot('09:00 – 10:45', 'Session 7', 'Chair: Prof. Amit Basak') }}
+              {{ slot('10:45 – 11:15', 'Tea Break', '') }}
+              {{ slot('11:15 – 11:40', 'Session 8 — flash talks', 'Chair: Mr. Biplab Gope') }}
+              {{ slot('11:40 – 13:10', 'Session 9', 'Chair: Prof. Arabinda Chaudhuri') }}
+              {{ meal_stop(coupons, coupon_count, 'd2-lunch', '13:10 – 14:25', 'Lunch',
+                           'R.N. Tagore Auditorium', false) }}
+              {{ slot('14:25 – 15:25', 'Session 10', 'Chair: Prof. Sanjib Bagchi') }}
+              {{ slot('15:25 – 16:20', 'Session 11', 'Chair: Mr. Subham Sarkar') }}
+              {{ slot('16:20 – 17:50', 'Tea Break & Poster Session', 'R.N. Tagore Auditorium') }}
+              {{ slot('17:50 – 18:35', 'Session 12', 'Chair: Dr. Debabrata Mukherjee') }}
+              {{ slot('18:35 – 18:50', 'Best Poster Awards', '') }}
+              {{ slot('18:50 – 19:05', 'Vote of Thanks & Valedictory', '') }}
+              {{ meal_stop(coupons, coupon_count, 'd2-dinner', '19:30 onwards',
+                           'Conference Dinner', 'RISE Foundation', true) }}
+              {{ day_end('End of day two') }}
+            </table>
+          </td>
+        </tr>
+
+        <tr><td style="padding:26px 30px 0;line-height:0;font-size:0">
+          <img src="https://raw.githubusercontent.com/Shuvam-Banerji-Seal/Automated-Event-Coupon-Sender-Email-and-Verification-Application/main/static/brand/icoc/icoc-divider.png"
+               width="580" height="24" alt=""
+               style="width:100%;max-width:580px;height:auto;display:block;border:0">
+        </td></tr>
 
         <!-- ═══════════════════════ Invited lectures ═══════════════════════ -->
         <tr>
-          <td style="padding:32px 30px 0;text-align:center">
+          <td style="padding:22px 30px 0;text-align:center">
             <div style="font:700 12px/1.4 Arial,Helvetica,sans-serif;color:#0f5a49;
                         letter-spacing:.22em;text-transform:uppercase">
               Invited lectures
@@ -432,7 +443,7 @@ across the day boundary.
         </tr>
 
         <tr>
-          <td align="center" style="padding:26px 30px 6px">
+          <td align="center" style="padding:26px 30px 26px">
             <div style="font:400 10px/1.4 Arial,Helvetica,sans-serif;color:#9aa4ab;
                         letter-spacing:.2em;text-transform:uppercase;padding-bottom:16px">
               With support from

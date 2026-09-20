@@ -912,6 +912,64 @@ class TestFullPagePreview:
         assert real.verification_code in self._rendered_body(text)
 
 
+class TestPassesSitInTheProgramme:
+    """Each QR belongs at the moment in the day it is needed, not in a block.
+
+    A block of four codes at the top makes somebody at a counter work out which
+    one is lunch. These tests pin the interleaving so a later edit to the
+    programme cannot quietly move a pass away from its meal.
+    """
+
+    def _delivered(self, client):
+        load_recipients(client)
+        configure_sittings(client)
+        client.post("/api/send/start", json={"template": "icoc_invitation"})
+        wait_for_send(client)
+        return next(m for m in client.sent if m.to_email == "ada@iiserkol.ac.in")
+
+    def test_every_pass_is_attached(self, client):
+        message = self._delivered(client)
+        assert set(message.inline_images) == {
+            "qr-d1-lunch", "qr-d1-dinner", "qr-d2-lunch", "qr-d2-dinner"}
+
+    def test_each_pass_falls_between_the_right_sessions(self, client):
+        html = self._delivered(client).html
+        at = {k: html.index(f"cid:qr-{k}")
+              for k in ("d1-lunch", "d1-dinner", "d2-lunch", "d2-dinner")}
+        # Day 1: lunch after session 3, before session 4; dinner after session 6.
+        assert html.index("Session 3") < at["d1-lunch"] < html.index("Session 4")
+        assert html.index("Session 6") < at["d1-dinner"] < html.index("End of day one")
+        # Day 2: lunch after session 9, before session 10.
+        assert html.index("Session 9") < at["d2-lunch"] < html.index("Session 10")
+        assert html.index("Session 12") < at["d2-dinner"]
+
+    def test_the_passes_run_in_chronological_order(self, client):
+        html = self._delivered(client).html
+        order = ["d1-lunch", "d1-dinner", "d2-lunch", "d2-dinner"]
+        positions = [html.index(f"cid:qr-{k}") for k in order]
+        assert positions == sorted(positions), "a pass is out of order in the timeline"
+
+    def test_the_running_counter_crosses_the_day_boundary(self, client):
+        html = self._delivered(client).html
+        assert re.findall(r"Pass (\d) of 4", html) == ["1", "2", "3", "4"]
+
+    def test_a_sitting_without_a_pass_degrades_to_a_programme_entry(self, client):
+        """Somebody registered for one day only must not get an empty card."""
+        load_recipients(client)
+        configure_sittings(client)
+        store = client.app_module.store
+        client.post("/api/send/start", json={"template": "icoc_invitation"})
+        wait_for_send(client)
+        # Revoke and delete day 2, then re-render for that person.
+        with store.write() as conn:
+            conn.execute("DELETE FROM coupons WHERE meal_key LIKE 'd2-%'")
+        body = client.get("/preview/icoc_invitation?email=ada@iiserkol.ac.in")
+        html = body.get_data(as_text=True)
+        assert body.status_code == 200
+        assert "You do not hold a pass for this sitting." in \
+            TestFullPagePreview._rendered_body(html)
+
+
 class TestThankYouPerSitting:
     """One thank-you per sitting, each about the meal just collected.
 
