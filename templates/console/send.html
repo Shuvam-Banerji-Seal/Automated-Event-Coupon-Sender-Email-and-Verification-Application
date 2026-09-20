@@ -44,8 +44,11 @@
 
       <div class="field hidden" id="selected-field">
         <label for="selected-emails">Addresses</label>
+        <!-- An instruction, not example addresses. Grey placeholder text in an
+             empty address box reads as a list of people about to be mailed —
+             and the addresses that used to sit here were on a live domain. -->
         <textarea id="selected-emails" rows="5"
-                  placeholder="ada@iiserkol.ac.in&#10;grace@iiserkol.ac.in"></textarea>
+                  placeholder="One address per line"></textarea>
         <div class="hint" id="selected-count"></div>
         <label class="check mt-1 hidden" id="resend-all-wrap">
           <input type="checkbox" id="resend-all">

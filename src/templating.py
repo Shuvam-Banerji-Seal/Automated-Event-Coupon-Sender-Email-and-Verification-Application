@@ -40,9 +40,9 @@ class TemplateError(Exception):
 # Variables the system always provides, grouped for presentation in the editor.
 SYSTEM_VARIABLES: Dict[str, List[Dict[str, str]]] = {
     "Attendee": [
-        {"name": "name", "desc": "Full name as it appeared in the CSV", "sample": "Ada Lovelace"},
-        {"name": "first_name", "desc": "First word of the name — for greetings", "sample": "Ada"},
-        {"name": "email", "desc": "Their email address", "sample": "ada@iiserkol.ac.in"},
+        {"name": "name", "desc": "Full name as it appeared in the CSV", "sample": "Sample Attendee"},
+        {"name": "first_name", "desc": "First word of the name — for greetings", "sample": "Sample"},
+        {"name": "email", "desc": "Their email address", "sample": "attendee@example.com"},
         {"name": "food_preference", "desc": "Vegetarian or Non-Vegetarian", "sample": "Vegetarian"},
         {"name": "food_colour", "desc": "Badge colour matching the preference", "sample": "#1f8a4c"},
         {"name": "include_qr", "desc": "True if this person gets an entry pass", "sample": "True"},
@@ -264,8 +264,8 @@ def sample_context(
             }
         ]
     return build_context(
-        name="Ada Lovelace",
-        email="ada.lovelace@iiserkol.ac.in",
+        name="Sample Attendee",
+        email="attendee@example.com",
         food_preference=food_preference,
         include_qr=True,
         verification_code=entries[0]["verification_code"],

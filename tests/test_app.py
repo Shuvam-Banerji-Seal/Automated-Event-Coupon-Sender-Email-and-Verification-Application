@@ -18,9 +18,9 @@ import pytest
 
 SHEET = (
     b"Timestamp,Email Address,Your Name,Veg / Non-Veg?,Roll No\n"
-    b"2026-01-01,ada@iiserkol.ac.in,Ada Lovelace,Veg,21MS001\n"
-    b"2026-01-01,grace@iiserkol.ac.in,Grace Hopper,Non-Veg,21MS002\n"
-    b"2026-01-01,alan@iiserkol.ac.in,Alan Turing,Veg,21MS003\n"
+    b"2026-01-01,ada@example.com,Ada Lovelace,Veg,21MS001\n"
+    b"2026-01-01,grace@example.com,Grace Hopper,Non-Veg,21MS002\n"
+    b"2026-01-01,alan@example.com,Alan Turing,Veg,21MS003\n"
 )
 
 
@@ -98,8 +98,8 @@ class TestCsvUpload:
         load_recipients(client)
         rows = client.get("/api/recipients").get_json()["recipients"]
         by_email = {r["email"]: r for r in rows}
-        assert by_email["grace@iiserkol.ac.in"]["food_preference"] == "Non-Vegetarian"
-        assert by_email["ada@iiserkol.ac.in"]["food_preference"] == "Vegetarian"
+        assert by_email["grace@example.com"]["food_preference"] == "Non-Vegetarian"
+        assert by_email["ada@example.com"]["food_preference"] == "Vegetarian"
 
 
 class TestTemplates:
@@ -112,8 +112,8 @@ class TestTemplates:
             "html": "<p>Hi {{ first_name }}</p>", "subject": "Hello {{ first_name }}",
         })
         data = response.get_json()
-        assert "Ada" in data["html"]
-        assert data["subject"] == "Hello Ada"
+        assert "Sample" in data["html"]
+        assert data["subject"] == "Hello Sample"
 
     def test_preview_reports_template_errors(self, client):
         response = client.post("/api/templates/preview",
@@ -201,7 +201,7 @@ class TestScanning:
 
     def test_redeem_by_qr_token(self, client):
         store = self._issue(client)
-        coupon = store.find_by_email("ada@iiserkol.ac.in")
+        coupon = store.find_by_email("ada@example.com")
         data = client.post("/api/scan", json={
             "payload": coupon.qr_payload, "scanner": "gate-1"}).get_json()
         assert data["success"] is True
@@ -210,7 +210,7 @@ class TestScanning:
 
     def test_redeem_by_typed_code(self, client):
         store = self._issue(client)
-        coupon = store.find_by_email("grace@iiserkol.ac.in")
+        coupon = store.find_by_email("grace@example.com")
         data = client.post("/api/scan",
                            json={"payload": coupon.verification_code}).get_json()
         assert data["success"] is True
@@ -218,7 +218,7 @@ class TestScanning:
 
     def test_second_scan_is_refused(self, client):
         store = self._issue(client)
-        coupon = store.find_by_email("ada@iiserkol.ac.in")
+        coupon = store.find_by_email("ada@example.com")
         client.post("/api/scan", json={"payload": coupon.qr_payload})
         second = client.post("/api/scan", json={"payload": coupon.qr_payload}).get_json()
         assert second["success"] is False
@@ -236,7 +236,7 @@ class TestScanning:
 
     def test_undo_restores_the_coupon(self, client):
         store = self._issue(client)
-        coupon = store.find_by_email("ada@iiserkol.ac.in")
+        coupon = store.find_by_email("ada@example.com")
         scan = client.post("/api/scan", json={"payload": coupon.qr_payload}).get_json()
         undo = client.post("/api/scan/undo",
                            json={"coupon_id": scan["coupon_id"]}).get_json()
@@ -246,7 +246,7 @@ class TestScanning:
 
     def test_scan_log_records_every_attempt(self, client):
         store = self._issue(client)
-        coupon = store.find_by_email("ada@iiserkol.ac.in")
+        coupon = store.find_by_email("ada@example.com")
         client.post("/api/scan", json={"payload": coupon.qr_payload})
         client.post("/api/scan", json={"payload": coupon.qr_payload})
         client.post("/api/scan", json={"payload": "999999"})
@@ -255,7 +255,7 @@ class TestScanning:
 
     def test_lookup_does_not_redeem(self, client):
         store = self._issue(client)
-        coupon = store.find_by_email("ada@iiserkol.ac.in")
+        coupon = store.find_by_email("ada@example.com")
         client.get(f"/api/scan/lookup?q={coupon.verification_code}")
         assert store.find_by_id(coupon.coupon_id).status != "used"
 
@@ -291,7 +291,7 @@ class TestScanRateLimiting:
         for n in range(40):
             client.post("/api/scan",
                         json={"payload": f"{900000 + n:06d}", "scanner": "guesser"})
-        coupon = store.find_by_email("ada@iiserkol.ac.in")
+        coupon = store.find_by_email("ada@example.com")
         good = client.post("/api/scan",
                            json={"payload": coupon.qr_payload, "scanner": "gate-1"})
         assert good.status_code == 200
@@ -300,7 +300,7 @@ class TestScanRateLimiting:
     def test_valid_scans_do_not_count_toward_the_limit(self, client):
         """A volunteer admitting a long queue must never be throttled."""
         store = self._issue(client)
-        coupon = store.find_by_email("ada@iiserkol.ac.in")
+        coupon = store.find_by_email("ada@example.com")
         for _ in range(60):
             # Same coupon repeatedly: 'already used' is a real coupon, not a guess.
             r = client.post("/api/scan",
@@ -319,14 +319,14 @@ class TestThankYouMail:
     def test_checking_in_queues_a_thank_you(self, client):
         store = self._issue(client)
         before = store.outbox_stats()["total"]
-        coupon = store.find_by_email("ada@iiserkol.ac.in")
+        coupon = store.find_by_email("ada@example.com")
         client.post("/api/scan", json={"payload": coupon.qr_payload})
         assert store.outbox_stats()["total"] == before + 1
 
     def test_only_one_thank_you_per_guest(self, client):
         """Six scanners racing the same coupon must not queue six emails."""
         store = self._issue(client)
-        coupon = store.find_by_email("ada@iiserkol.ac.in")
+        coupon = store.find_by_email("ada@example.com")
         for _ in range(5):
             client.post("/api/scan", json={"payload": coupon.qr_payload})
         rows = [r for r in store.recent_outbox(50)
@@ -343,14 +343,14 @@ class TestThankYouMail:
         """Delivery happens on the worker; the request only writes a row."""
         import time
         store = self._issue(client)
-        coupon = store.find_by_email("ada@iiserkol.ac.in")
+        coupon = store.find_by_email("ada@example.com")
         started = time.perf_counter()
         client.post("/api/scan", json={"payload": coupon.qr_payload})
         assert time.perf_counter() - started < 1.0
 
     def test_outbox_endpoint_reports_the_queue(self, client):
         store = self._issue(client)
-        coupon = store.find_by_email("ada@iiserkol.ac.in")
+        coupon = store.find_by_email("ada@example.com")
         client.post("/api/scan", json={"payload": coupon.qr_payload})
         data = client.get("/api/outbox").get_json()
         assert data["success"] is True
@@ -397,7 +397,7 @@ class TestMalformedInput:
         job = client.post("/api/send/start", json={
             "template": "invitation", "audience": "pending", "throttle": 0}).get_json()
         _wait_for_job(client, job["job_id"])
-        coupon = store.find_by_email("ada@iiserkol.ac.in")
+        coupon = store.find_by_email("ada@example.com")
         for size in ("abc", "-1", "99999"):
             assert client.get(
                 f"/api/coupons/{coupon.coupon_id}/qr.png?size={size}"
@@ -507,7 +507,7 @@ class TestPendingCount:
         assert client.get("/api/overview").get_json()["stats"]["pending"] == 0
 
         # Replace three known recipients with one brand-new person.
-        newcomer = b"Email Address,Your Name\nzara@iiserkol.ac.in,Zara\n"
+        newcomer = b"Email Address,Your Name\nzara@example.com,Zara\n"
         inspection = upload(client, newcomer).get_json()
         client.post("/api/csv/commit", json={
             "upload_id": inspection["upload_id"],
@@ -555,7 +555,7 @@ class TestResendGuard:
         self._issue(client)
         response = client.post("/api/send/start", json={
             "template": "invitation", "audience": "resend",
-            "emails": ["ada@iiserkol.ac.in"], "throttle": 0})
+            "emails": ["ada@example.com"], "throttle": 0})
         assert response.get_json()["total"] == 1
 
 
@@ -572,7 +572,7 @@ class TestThankYouTemplateMissing:
         """A template mistake must never stop somebody getting through a door."""
         store = self._issue(client)
         client.delete("/api/templates/thank_you")
-        coupon = store.find_by_email("ada@iiserkol.ac.in")
+        coupon = store.find_by_email("ada@example.com")
         assert client.post("/api/scan",
                            json={"payload": coupon.qr_payload}).get_json()["success"]
 
@@ -760,7 +760,7 @@ class TestMultiMealSend:
         client.post("/api/send/start", json={"template": "invitation"})
         wait_for_send(client)
         store = client.app_module.store
-        statuses = {c.status for c in store.coupons_for_email("ada@iiserkol.ac.in")}
+        statuses = {c.status for c in store.coupons_for_email("ada@example.com")}
         assert statuses == {"sent"}, "only the first pass was marked sent"
 
     def test_single_sitting_events_are_untouched(self, client):
@@ -778,7 +778,7 @@ class TestScanningASitting:
         configure_sittings(client)
         client.post("/api/send/start", json={"template": "invitation"})
         wait_for_send(client)
-        return client.app_module.store.coupons_for_email("ada@iiserkol.ac.in")
+        return client.app_module.store.coupons_for_email("ada@example.com")
 
     def test_a_pass_admits_at_its_own_counter(self, client):
         passes = self._issue(client)
@@ -876,26 +876,26 @@ class TestFullPagePreview:
         assert len(set(sources)) == 4, "the same QR was rendered for every sitting"
 
     def test_it_defaults_to_a_real_recipient_not_an_invented_one(self, client):
-        """Showing "Ada Lovelace" to an operator whose sheet holds real names
-        reads as though the wrong people are about to be mailed."""
+        """An invented stand-in shown to an operator whose sheet holds real
+        names reads as though the wrong people are about to be mailed."""
         load_recipients(client)
         page = client.get("/preview/invitation").get_data(as_text=True)
         body = self._rendered_body(page)
-        assert "ada@iiserkol.ac.in" in body, "did not fall through to the first recipient"
-        assert "ada.lovelace@" not in body, "still previewing the invented placeholder"
+        assert "ada@example.com" in body, "did not fall through to the first recipient"
+        assert "attendee@example.com" not in body, "still previewing the stand-in"
         assert "first recipient on your list" in page
 
     def test_it_falls_back_to_a_sample_when_nobody_is_loaded(self, client):
         page = client.get("/preview/invitation").get_data(as_text=True)
         assert "no recipients loaded yet" in page
-        assert "ada.lovelace@iiserkol.ac.in" in self._rendered_body(page)
+        assert "attendee@example.com" in self._rendered_body(page)
 
     def test_a_real_recipient_keeps_their_own_sheet_columns(self, client):
         load_recipients(client)
         body = self._rendered_body(
-            client.get("/preview/invitation?email=ada@iiserkol.ac.in").get_data(as_text=True))
-        assert "ada@iiserkol.ac.in" in body       # from the sheet, not the sample
-        assert "ada.lovelace@" not in body, "the invented address leaked through"
+            client.get("/preview/invitation?email=ada@example.com").get_data(as_text=True))
+        assert "ada@example.com" in body       # from the sheet, not the sample
+        assert "attendee@example.com" not in body, "the stand-in address leaked through"
         assert "‹" not in body, "placeholder markers leaked into a real preview"
 
     def test_it_can_render_a_real_attendee(self, client):
@@ -903,12 +903,12 @@ class TestFullPagePreview:
         configure_sittings(client)
         client.post("/api/send/start", json={"template": "invitation"})
         wait_for_send(client)
-        page = client.get("/preview/invitation?email=ada@iiserkol.ac.in")
+        page = client.get("/preview/invitation?email=ada@example.com")
         assert page.status_code == 200
         text = page.get_data(as_text=True)
-        assert "ada@iiserkol.ac.in" in text
+        assert "ada@example.com" in text
         # The real codes, not sample ones.
-        real = client.app_module.store.coupons_for_email("ada@iiserkol.ac.in")[0]
+        real = client.app_module.store.coupons_for_email("ada@example.com")[0]
         assert real.verification_code in self._rendered_body(text)
 
 
@@ -925,7 +925,7 @@ class TestPassesSitInTheProgramme:
         configure_sittings(client)
         client.post("/api/send/start", json={"template": "icoc_invitation"})
         wait_for_send(client)
-        return next(m for m in client.sent if m.to_email == "ada@iiserkol.ac.in")
+        return next(m for m in client.sent if m.to_email == "ada@example.com")
 
     def test_every_pass_is_attached(self, client):
         message = self._delivered(client)
@@ -963,7 +963,7 @@ class TestPassesSitInTheProgramme:
         # Revoke and delete day 2, then re-render for that person.
         with store.write() as conn:
             conn.execute("DELETE FROM coupons WHERE meal_key LIKE 'd2-%'")
-        body = client.get("/preview/icoc_invitation?email=ada@iiserkol.ac.in")
+        body = client.get("/preview/icoc_invitation?email=ada@example.com")
         html = body.get_data(as_text=True)
         assert body.status_code == 200
         assert "You do not hold a pass for this sitting." in \
@@ -985,14 +985,14 @@ class TestThankYouPerSitting:
         client.post("/api/send/start", json={"template": "invitation"})
         wait_for_send(client)
         store = client.app_module.store
-        passes = store.coupons_for_email("ada@iiserkol.ac.in")
+        passes = store.coupons_for_email("ada@example.com")
         for p in passes:
             client.post("/api/scan", json={"payload": p.qr_payload, "meal": p.meal_key})
         rows = store.conn.execute(
             "SELECT o.subject, o.html, c.meal_key FROM outbox o"
             " JOIN coupons c ON c.coupon_id = o.coupon_id"
             " WHERE o.to_email = ? ORDER BY c.meal_order",
-            ("ada@iiserkol.ac.in",),
+            ("ada@example.com",),
         ).fetchall()
         return passes, rows
 
@@ -1043,6 +1043,6 @@ class TestThankYouPerSitting:
         client.post("/api/send/start", json={"template": "invitation"})
         wait_for_send(client)
         store = client.app_module.store
-        coupon = store.find_by_email("ada@iiserkol.ac.in")
+        coupon = store.find_by_email("ada@example.com")
         client.post("/api/scan", json={"payload": coupon.qr_payload})
         assert store.outbox_stats()["total"] == 1

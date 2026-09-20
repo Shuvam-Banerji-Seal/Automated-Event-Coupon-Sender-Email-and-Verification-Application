@@ -5,9 +5,9 @@ from src import csv_mapper
 
 
 GOOGLE_FORM = b"""Timestamp,Email Address,Your Name ,Veg / Non-Veg?,Roll Number
-2026-01-01 10:00,ada@iiserkol.ac.in,Ada Lovelace,Veg,21MS001
-2026-01-01 10:01,grace@iiserkol.ac.in,Grace Hopper,Non-Veg,21MS002
-2026-01-01 10:02,alan@iiserkol.ac.in,Alan Turing,veg,21MS003
+2026-01-01 10:00,ada@example.com,Ada Lovelace,Veg,21MS001
+2026-01-01 10:01,grace@example.com,Grace Hopper,Non-Veg,21MS002
+2026-01-01 10:02,alan@example.com,Alan Turing,veg,21MS003
 """
 
 
@@ -137,7 +137,7 @@ class TestBuildRecipients:
         accepted, rejected = csv_mapper.build_recipients(rows, mapping)
         assert len(accepted) == 3
         assert not rejected
-        assert accepted[0]["email"] == "ada@iiserkol.ac.in"
+        assert accepted[0]["email"] == "ada@example.com"
         assert accepted[0]["name"] == "Ada Lovelace"
         assert accepted[1]["food_preference"] == "Non-Vegetarian"
 

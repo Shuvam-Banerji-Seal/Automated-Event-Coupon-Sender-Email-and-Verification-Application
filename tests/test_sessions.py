@@ -29,9 +29,9 @@ ICOC = [
 ]
 
 PEOPLE = [
-    Recipient(email="ada@iiserkol.ac.in", name="Ada Lovelace",
+    Recipient(email="ada@example.com", name="Ada Lovelace",
               food_preference="Veg"),
-    Recipient(email="alan@iiserkol.ac.in", name="Alan Turing",
+    Recipient(email="alan@example.com", name="Alan Turing",
               food_preference="Non-Veg"),
 ]
 
@@ -84,20 +84,20 @@ class TestSessionModel:
 
 class TestIssuing:
     def test_one_pass_per_person_per_sitting(self, conference):
-        assert len(conference.coupons_for_email("ada@iiserkol.ac.in")) == 4
+        assert len(conference.coupons_for_email("ada@example.com")) == 4
         assert conference.count_coupons() == 8
 
     def test_passes_come_back_in_serving_order(self, conference):
-        keys = [c.meal_key for c in conference.coupons_for_email("ada@iiserkol.ac.in")]
+        keys = [c.meal_key for c in conference.coupons_for_email("ada@example.com")]
         assert keys == ["d1-lunch", "d1-dinner", "d2-lunch", "d2-dinner"]
 
     def test_every_pass_has_its_own_code_and_token(self, conference):
-        coupons = conference.coupons_for_email("ada@iiserkol.ac.in")
+        coupons = conference.coupons_for_email("ada@example.com")
         assert len({c.verification_code for c in coupons}) == 4
         assert len({c.qr_token for c in coupons}) == 4
 
     def test_the_label_is_frozen_onto_the_pass(self, conference):
-        first = conference.coupons_for_email("ada@iiserkol.ac.in")[0]
+        first = conference.coupons_for_email("ada@example.com")[0]
         assert first.meal_label == "Day 1 · Lunch"
 
     def test_reissuing_mints_nothing_new(self, conference):
@@ -111,11 +111,11 @@ class TestIssuing:
         conference.set_meal_sessions([*ICOC, MealSession(key="d3-lunch", meal="Lunch")])
         result = CouponIssuer(conference, "0" * 64).issue_batch(PEOPLE)
         assert result["issued_count"] == 2
-        assert len(conference.coupons_for_email("ada@iiserkol.ac.in")) == 5
+        assert len(conference.coupons_for_email("ada@example.com")) == 5
 
     def test_the_database_refuses_a_duplicate_pass(self, conference):
         """Two operators clicking Send at once must not double-issue."""
-        existing = conference.coupons_for_email("ada@iiserkol.ac.in")[0]
+        existing = conference.coupons_for_email("ada@example.com")[0]
         with pytest.raises(sqlite3.IntegrityError), conference.write() as conn:
             conn.execute(
                 "INSERT INTO coupons(coupon_id, email, verification_code,"
@@ -136,41 +136,41 @@ class TestIssuing:
 
 class TestRedeeming:
     def test_a_pass_works_at_its_own_sitting(self, conference):
-        pass_ = conference.coupons_for_email("ada@iiserkol.ac.in")[0]
+        pass_ = conference.coupons_for_email("ada@example.com")[0]
         result = conference.redeem(qr_token=pass_.qr_token, expect_meal="d1-lunch")
         assert result["valid"] is True
 
     def test_a_pass_is_refused_at_another_sitting(self, conference):
         """The whole point: dinner's pass must not be burnt at lunch."""
-        dinner = conference.coupons_for_email("ada@iiserkol.ac.in")[1]
+        dinner = conference.coupons_for_email("ada@example.com")[1]
         result = conference.redeem(qr_token=dinner.qr_token, expect_meal="d1-lunch")
         assert result["valid"] is False
         assert result["error_code"] == "WRONG_MEAL"
         assert "Day 1 · Dinner" in result["error"]
 
     def test_a_refused_pass_is_still_good_for_its_own_sitting(self, conference):
-        dinner = conference.coupons_for_email("ada@iiserkol.ac.in")[1]
+        dinner = conference.coupons_for_email("ada@example.com")[1]
         conference.redeem(qr_token=dinner.qr_token, expect_meal="d1-lunch")
         again = conference.redeem(qr_token=dinner.qr_token, expect_meal="d1-dinner")
         assert again["valid"] is True, "a wrong-counter scan consumed the pass"
 
     def test_the_wrong_sitting_is_recorded(self, conference):
-        dinner = conference.coupons_for_email("ada@iiserkol.ac.in")[1]
+        dinner = conference.coupons_for_email("ada@example.com")[1]
         conference.redeem(qr_token=dinner.qr_token, expect_meal="d1-lunch")
         assert conference.recent_scans(limit=1)[0]["result"] == "wrong_meal"
 
     def test_no_sitting_selected_accepts_anything(self, conference):
-        dinner = conference.coupons_for_email("ada@iiserkol.ac.in")[1]
+        dinner = conference.coupons_for_email("ada@example.com")[1]
         assert conference.redeem(qr_token=dinner.qr_token)["valid"] is True
 
     def test_each_pass_is_still_single_use(self, conference):
-        lunch = conference.coupons_for_email("ada@iiserkol.ac.in")[0]
+        lunch = conference.coupons_for_email("ada@example.com")[0]
         assert conference.redeem(qr_token=lunch.qr_token, expect_meal="d1-lunch")["valid"]
         second = conference.redeem(qr_token=lunch.qr_token, expect_meal="d1-lunch")
         assert second["error_code"] == "ALREADY_USED"
 
     def test_using_lunch_leaves_dinner_alone(self, conference):
-        coupons = conference.coupons_for_email("ada@iiserkol.ac.in")
+        coupons = conference.coupons_for_email("ada@example.com")
         conference.redeem(qr_token=coupons[0].qr_token, expect_meal="d1-lunch")
         for later in coupons[1:]:
             assert conference.find_by_id(later.coupon_id).status != "used"
@@ -185,7 +185,7 @@ class TestCounts:
         assert rows["d1-lunch"]["used"] == 0
 
     def test_serving_moves_only_that_sitting(self, conference):
-        lunch = conference.coupons_for_email("ada@iiserkol.ac.in")[0]
+        lunch = conference.coupons_for_email("ada@example.com")[0]
         conference.redeem(qr_token=lunch.qr_token, expect_meal="d1-lunch")
         rows = {r["key"]: r for r in conference.meal_stats()}
         assert rows["d1-lunch"]["used"] == 1
@@ -201,24 +201,24 @@ class TestCounts:
 
     def test_grouping_gives_one_entry_per_person(self, conference):
         grouped = conference.coupons_by_email()
-        assert set(grouped) == {"ada@iiserkol.ac.in", "alan@iiserkol.ac.in"}
+        assert set(grouped) == {"ada@example.com", "alan@example.com"}
         assert all(len(v) == 4 for v in grouped.values())
 
     def test_grouping_can_be_narrowed(self, conference):
-        grouped = conference.coupons_by_email(["ADA@iiserkol.ac.in"])
-        assert list(grouped) == ["ada@iiserkol.ac.in"]
+        grouped = conference.coupons_by_email(["ADA@example.com"])
+        assert list(grouped) == ["ada@example.com"]
 
     def test_recipient_rows_carry_every_pass(self, conference):
         conference.replace_recipients(PEOPLE)
         rows = {r["email"]: r for r in conference.recipients_with_status()}
         assert len(rows) == 2, "the coupon join fanned out into duplicate rows"
-        assert rows["ada@iiserkol.ac.in"]["coupon_count"] == 4
+        assert rows["ada@example.com"]["coupon_count"] == 4
 
 
 class TestThankYouIsSentOnce:
     def test_one_message_per_attendee_not_per_pass(self, conference):
         """Four meals over two days must not mean four thank-you emails."""
-        email = "ada@iiserkol.ac.in"
+        email = "ada@example.com"
         first = conference.enqueue_email(email, "Thanks", "<p>x</p>",
                                          coupon_id="c1", dedupe_key=email)
         second = conference.enqueue_email(email, "Thanks", "<p>x</p>",

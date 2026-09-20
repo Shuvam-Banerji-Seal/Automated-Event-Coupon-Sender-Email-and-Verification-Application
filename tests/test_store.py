@@ -194,9 +194,9 @@ class TestParseScan:
 
     def test_legacy_json_payload_still_parses(self):
         """Coupons issued by the previous version must keep working."""
-        parsed = parse_scan('{"v":"418206","e":"ada@iiserkol.ac.in"}')
+        parsed = parse_scan('{"v":"418206","e":"ada@example.com"}')
         assert parsed["code"] == "418206"
-        assert parsed["email"] == "ada@iiserkol.ac.in"
+        assert parsed["email"] == "ada@example.com"
 
     def test_malformed_legacy_json_falls_back_to_regex(self):
         assert parse_scan('{"v":"418206","e":}')["code"] == "418206"
