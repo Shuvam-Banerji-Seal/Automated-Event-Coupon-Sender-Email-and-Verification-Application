@@ -256,7 +256,8 @@ function renderSamples() {
     const pct = Math.round(score * 100);
     const conf = score >= 0.7 ? 'var(--ok)' : score >= 0.35 ? 'var(--warn)' : 'var(--text-3)';
     host.innerHTML =
-      (profile?.samples || []).map((s) => `<span>${escapeHtml(s)}</span>`).join('') +
+      (profile?.samples || []).map((s) =>
+        `<span title="${escapeHtml(s)}">${escapeHtml(s)}</span>`).join('') +
       `<span class="confidence" style="color:${conf}">
          <span class="bar"><span style="width:${pct}%;background:${conf}"></span></span>${pct}% match
        </span>`;

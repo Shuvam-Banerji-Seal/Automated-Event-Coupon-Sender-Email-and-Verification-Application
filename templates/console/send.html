@@ -251,15 +251,26 @@ document.getElementById('attachment').onchange = async (e) => {
 
 document.getElementById('start').onclick = async (e) => {
   const mode = audience();
+  // People, never passes. `stats.total` counts coupons, so on a four-sitting
+  // conference this dialog offered to "Send to 8 people" when two would be
+  // mailed — the one number an operator reads before committing to real email.
   const count = mode === 'pending' ? overview.stats.pending
-    : (mode === 'resend' && resendAll()) ? overview.stats.total
+    : (mode === 'resend' && resendAll()) ? overview.stats.people
     : parsedEmails().length;
   if (!count) { toast('Nobody to send to', 'warn'); return; }
+
+  const sittings = overview.stats.sittings || 1;
+  const passes = sittings > 1
+    ? `<p class="muted small">One email each, carrying
+       <strong>${sittings} meal passes</strong> —
+       ${fmtNumber(count * sittings)} passes in total.</p>`
+    : '';
 
   const ok = await confirmDialog({
     title: `Send to ${fmtNumber(count)} ${count === 1 ? 'person' : 'people'}?`,
     body: `<p>This sends real email using template
            <strong>${escapeHtml(document.getElementById('template').value)}</strong>.</p>
+           ${passes}
            <p class="muted small mb-0">You can stop the run at any point, but
            messages already delivered cannot be recalled.</p>`,
     confirmLabel: `Send to ${fmtNumber(count)}`,

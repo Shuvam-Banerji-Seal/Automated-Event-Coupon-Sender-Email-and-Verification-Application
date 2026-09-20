@@ -310,3 +310,35 @@ class TestMigrationFromV1:
             assert store.find_by_id("old-1").meal_key == ""
         finally:
             store.close()
+
+
+class TestPeopleVersusPasses:
+    """The two numbers differ by the number of sittings, and get confused.
+
+    The send confirmation read "Send to 8 people?" for two attendees on a
+    four-sitting conference, because it counted coupons. That is the one number
+    an operator reads before committing to real email.
+    """
+
+    def test_stats_separates_people_from_passes(self, conference):
+        stats = conference.stats()
+        assert stats["people"] == 2, "distinct attendees holding coupons"
+        assert stats["total"] == 8, "coupons in existence"
+        assert stats["sittings"] == 4
+
+    def test_people_counts_an_address_once_however_many_passes(self, conference):
+        held = conference.coupons_for_email("ada@example.com")
+        assert len(held) == 4
+        assert conference.stats()["people"] == 2
+
+    def test_case_differences_do_not_inflate_the_count(self, store):
+        store.set_meal_sessions(ICOC)
+        CouponIssuer(store, "0" * 64).issue_batch(
+            [Recipient(email="Mixed.Case@example.com", name="Mixed")])
+        assert store.stats()["people"] == 1
+
+    def test_a_single_sitting_event_has_them_equal(self, store):
+        CouponIssuer(store, "0" * 64).issue_batch(PEOPLE)
+        stats = store.stats()
+        assert stats["people"] == stats["total"] == 2
+        assert stats["sittings"] == 1

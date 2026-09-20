@@ -1140,8 +1140,18 @@ class CouponStore:
             (len(sessions),),
         ).fetchone()["c"]
 
+        # People, not passes. On a four-sitting conference these differ by a
+        # factor of four, and a confirmation dialog that says "Send to 8
+        # people?" when it means two is the kind of number an operator checks
+        # once and then trusts.
+        holders = self.conn.execute(
+            "SELECT COUNT(DISTINCT lower(email)) c FROM coupons"
+        ).fetchone()["c"]
+
         return {
             "total": total,
+            "people": holders,
+            "sittings": len(sessions),
             "generated": by_status.get(STATUS_GENERATED, 0),
             "sent": by_status.get(STATUS_SENT, 0),
             "used": by_status.get(STATUS_USED, 0),

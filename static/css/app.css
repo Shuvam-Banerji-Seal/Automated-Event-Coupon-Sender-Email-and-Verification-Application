@@ -458,7 +458,11 @@ table.data td.mono { font-family: var(--mono); font-size: .82rem; }
 }
 .map-samples span {
   background: var(--surface-3); padding: 1px 6px; border-radius: 4px;
-  max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  /* These chips exist so the operator can confirm the right column was
+     picked. Clipping at 190px hid the domain of every address — the half that
+     distinguishes gmail.com from a typo — which defeats the purpose. Wide
+     enough for a real address, and it wraps rather than ellipsising. */
+  max-width: 100%; overflow-wrap: anywhere; white-space: normal;
 }
 .confidence {
   display: inline-flex; align-items: center; gap: 5px;
