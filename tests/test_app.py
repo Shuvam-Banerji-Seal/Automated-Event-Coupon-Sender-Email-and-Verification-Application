@@ -388,7 +388,7 @@ class TestMalformedInput:
     ])
     def test_smtp_save_survives_bad_numbers(self, client, field, value):
         response = client.post("/api/smtp", json={
-            "accounts": [{"username": "a@b.com", field: value}]})
+            "accounts": [{"username": "a@b.com", "password": "secret", field: value}]})
         assert response.status_code == 200
 
     def test_qr_size_parameter_is_clamped(self, client):
@@ -910,6 +910,59 @@ class TestFullPagePreview:
         # The real codes, not sample ones.
         real = client.app_module.store.coupons_for_email("ada@example.com")[0]
         assert real.verification_code in self._rendered_body(text)
+
+
+class TestMailAccountValidation:
+    """A half-filled account is worse than no account at all.
+
+    smtp_configs.json takes precedence over the environment, so one row with a
+    username of "123" and an empty password silently shadowed a working
+    configuration. Every later send failed with "No SMTP account is configured",
+    which says nothing about the row that caused it — the operator would have
+    discovered it while trying to mail a conference.
+    """
+
+    def test_a_username_that_is_not_an_address_is_refused(self, client):
+        r = client.post("/api/smtp", json={"accounts": [
+            {"username": "123", "password": "secret"}]})
+        assert r.status_code == 400
+        assert "not an email address" in r.get_json()["error"]
+
+    def test_an_account_with_no_password_is_refused(self, client):
+        r = client.post("/api/smtp", json={"accounts": [
+            {"username": "sender@example.com", "password": ""}]})
+        assert r.status_code == 400
+        assert "no password" in r.get_json()["error"]
+
+    def test_a_rejected_save_changes_nothing(self, client):
+        client.post("/api/smtp", json={"accounts": [
+            {"username": "good@example.com", "password": "secret"}]})
+        pool = client.app_module.mailer
+        before = [(a.username, a.password) for a in pool.load_accounts()]
+        client.post("/api/smtp", json={"accounts": [
+            {"username": "123", "password": ""}]})
+        assert [(a.username, a.password) for a in pool.load_accounts()] == before
+
+    def test_a_blank_password_still_means_unchanged_on_an_existing_account(self, client):
+        """The UI sends ******** to avoid round-tripping a real password."""
+        client.post("/api/smtp", json={"accounts": [
+            {"username": "good@example.com", "password": "secret"}]})
+        r = client.post("/api/smtp", json={"accounts": [
+            {"username": "good@example.com", "password": "********",
+             "daily_limit": 300}]})
+        assert r.status_code == 200
+        stored = client.app_module.mailer.load_accounts()[0]
+        assert stored.password == "secret", "the stored password was wiped"
+        assert stored.daily_limit == 300
+
+    def test_a_good_account_saves(self, client):
+        r = client.post("/api/smtp", json={"accounts": [
+            {"username": "sender@example.com", "password": "secret",
+             "sender_name": "ICOC-Students 2026"}]})
+        assert r.status_code == 200
+        stored = client.app_module.mailer.load_accounts()
+        assert [a.username for a in stored] == ["sender@example.com"]
+        assert stored[0].sender_name == "ICOC-Students 2026"
 
 
 class TestPassesSitInTheProgramme:

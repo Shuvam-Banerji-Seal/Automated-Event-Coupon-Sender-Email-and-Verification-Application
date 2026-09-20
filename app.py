@@ -329,6 +329,11 @@ def _window_ok(key: str, limit: int, window: int, record: bool = True) -> bool:
         return True
 
 
+# Deliberately loose: the job is to catch "123" and an empty box, not to
+# adjudicate RFC 5321. A wrong-but-plausible address fails loudly at login.
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
 def as_int(value: Any, default: int, low: int = 0, high: int = 10 ** 9) -> int:
     """Parse a number from request data without letting it raise.
 
@@ -1531,7 +1536,7 @@ def api_smtp_save():
 
     existing = {a.username: a.password for a in mailer.load_accounts()}
     accounts = []
-    for entry in raw_accounts:
+    for position, entry in enumerate(raw_accounts, 1):
         if not isinstance(entry, dict):
             continue
         username = as_text(entry.get("username"), 320)
@@ -1540,6 +1545,27 @@ def api_smtp_save():
         password = as_text(entry.get("password"), 512)
         if not password or password == "********":
             password = existing.get(username, "")
+
+        # Refuse an account that cannot possibly send. Saving one is worse than
+        # saving nothing: the file takes precedence over the environment, so a
+        # half-filled row silently shadows a working configuration and every
+        # send afterwards fails with "No SMTP account is configured" — which
+        # says nothing about the row that caused it. This was found with a
+        # stored account whose username was "123" and whose password was empty.
+        if not EMAIL_RE.match(username):
+            return jsonify({
+                "success": False,
+                "error": f"Account {position}: {username!r} is not an email "
+                         f"address. Nothing was saved.",
+            }), 400
+        if not password:
+            return jsonify({
+                "success": False,
+                "error": f"Account {position} ({username}) has no password, so "
+                         f"it could never send. Add one, or remove the account. "
+                         f"Nothing was saved.",
+            }), 400
+
         accounts.append(Account(
             username=username, password=password,
             host=as_text(entry.get("host"), 255) or "smtp.gmail.com",
