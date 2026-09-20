@@ -4,13 +4,48 @@ The `client` fixture builds a fully isolated application: its own database, its
 own working directory, and a mailer that records instead of delivering. All
 three matter — the predecessor of this suite sent real email and wiped the
 production database when it ran.
+
+A fourth thing matters just as much, and was missing: importing the app starts a
+background sender thread, and the fixture has to stop it. It did not. Every test
+left one running, and at teardown monkeypatch handed those threads back the real
+mailer, the real working directory and the real .env credentials — so a
+thank-you queued by a scanner test was delivered for real, seconds after the
+test that queued it had passed. It stayed invisible only because the stored
+account happened to be unusable; the moment a working one was configured, the
+suite started sending.
+
+So isolation here is layered, and no single layer is trusted:
+
+  1. the worker is stopped and joined before the fixture returns
+  2. MAIL_DRY_RUN is on, so delivery is refused even with a live account
+  3. the SMTP credentials are blanked, so there is no account to send with
+  4. the socket itself is blocked, so an attempt raises instead of connecting
 """
 
 import importlib
 import os
 import sys
+import threading
 
 import pytest
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _no_sender_outlives_the_session():
+    """Fail the run if any background sender is still alive at the end.
+
+    The per-test stop is the real fix; this is the alarm that goes off if some
+    future change starts a sender the fixture does not know about. A leaked
+    thread is silent — it sends after the test that created it has already
+    reported success — so the suite has to check rather than assume.
+    """
+    yield
+    alive = [t.name for t in threading.enumerate()
+             if t.is_alive() and "outbox" in t.name.lower()]
+    assert not alive, (
+        "background sender(s) still running at the end of the session: "
+        f"{alive}. They hold the real mailer and will deliver for real."
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -54,6 +89,12 @@ def client(tmp_path, monkeypatch):
     # live deployment does, silently broke a test about a *missing* template.
     monkeypatch.setenv("THANK_YOU_TEMPLATE", "thank_you")
     monkeypatch.setenv("EVENT_TIMEZONE", "Asia/Kolkata")
+    # Layers 2 and 3. Scoped to this fixture rather than set globally: the
+    # mailer's own rotation tests need dry run off to exercise the real send
+    # path against a mocked socket.
+    monkeypatch.setenv("MAIL_DRY_RUN", "true")
+    monkeypatch.setenv("SMTP_USERNAME", "")
+    monkeypatch.setenv("SMTP_PASSWORD", "")
     monkeypatch.chdir(tmp_path)
 
     # Seed templates live next to the real app, not in the temp cwd.
@@ -92,11 +133,30 @@ def client(tmp_path, monkeypatch):
         lambda: {"accounts": [], "total_remaining": 500, "configured": True},
     )
 
-    with app_module.app.test_client() as test_client:
-        test_client.app_module = app_module
-        test_client.sent = sent
-        yield test_client
+    def _no_sockets(account):
+        raise AssertionError(
+            f"A test tried to open a real SMTP connection to {account.host}. "
+            "Nothing in this suite may reach a mail server."
+        )
 
-    sys.modules.pop("app", None)
+    # Layer 4. The pool is the only thing that opens a socket, and the outbox
+    # worker shares this instance, so this covers the background sender too.
+    monkeypatch.setattr(app_module.mailer, "_connect", _no_sockets)
+
+    try:
+        with app_module.app.test_client() as test_client:
+            test_client.app_module = app_module
+            test_client.sent = sent
+            yield test_client
+    finally:
+        # Layer 1, and the one that actually matters. Importing the app started
+        # this thread; monkeypatch is about to give it back the real mailer and
+        # the real working directory, so it has to be stopped first. Stop it
+        # before anything else unwinds.
+        app_module.outbox.stop(timeout=10)
+        assert not app_module.outbox.running, (
+            "the background sender outlived its test — it would send for real"
+        )
+        sys.modules.pop("app", None)
 
 
