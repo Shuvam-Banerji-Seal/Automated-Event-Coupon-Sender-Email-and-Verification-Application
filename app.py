@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import atexit
 import io
+import ipaddress
 import json
 import logging
 import os
@@ -160,9 +161,42 @@ def _lan_ip() -> str:
 
 SERVER_IP = _lan_ip()
 ADMIN_IPS = {"127.0.0.1", "::1", "localhost", SERVER_IP}
-ADMIN_IPS.update(
-    ip.strip() for ip in os.getenv("ADMIN_EXTRA_IPS", "").split(",") if ip.strip()
-)
+
+# ADMIN_EXTRA_IPS accepts addresses and CIDR ranges, mixed. Exact addresses were
+# enough while the console was only ever opened on the machine running it; an
+# organiser working from a second laptop needs the venue subnet, and listing
+# every DHCP lease by hand is not a plan. "10.20.82.0/24" or "10.20.0.0/16" here
+# lets any machine on that network in.
+#
+# This is network-position trust and nothing more: whoever can reach the subnet
+# can send mail and export the attendee list. Keep the range as tight as the
+# venue allows, and never put a range here while the public tunnel is the thing
+# serving — block_console_over_tunnel is what stops that, and it wins first.
+ADMIN_NETWORKS = []
+for entry in os.getenv("ADMIN_EXTRA_IPS", "").split(","):
+    entry = entry.strip()
+    if not entry:
+        continue
+    if "/" in entry:
+        try:
+            ADMIN_NETWORKS.append(ipaddress.ip_network(entry, strict=False))
+        except ValueError:
+            logger.error("ADMIN_EXTRA_IPS: %r is not a valid network; ignored.", entry)
+    else:
+        ADMIN_IPS.add(entry)
+
+
+def admin_address(ip: str) -> bool:
+    """Whether this client may reach the operator console."""
+    if ip in ADMIN_IPS:
+        return True
+    if not ADMIN_NETWORKS:
+        return False
+    try:
+        address = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    return any(address in network for network in ADMIN_NETWORKS)
 OPEN_ADMIN = os.getenv("DISABLE_ADMIN_CHECK", "false").lower() in ("1", "true", "yes")
 
 # The scanner is used by volunteers on their own phones, so it cannot be locked
@@ -231,7 +265,7 @@ def admin_only(view):
                 "success": False,
                 "error": "The console is not available on the public address.",
             }), 403
-        if OPEN_ADMIN or client_ip() in ADMIN_IPS:
+        if OPEN_ADMIN or admin_address(client_ip()):
             return view(*args, **kwargs)
         logger.warning("Console access denied for %s on %s", client_ip(), request.path)
         if request.path.startswith("/api/"):
@@ -281,7 +315,7 @@ def scanner_access(view):
 
         # On the local network, an unset PIN means open, and the host machine
         # and admin addresses skip it.
-        if not SCANNER_PIN or OPEN_ADMIN or client_ip() in ADMIN_IPS:
+        if not SCANNER_PIN or OPEN_ADMIN or admin_address(client_ip()):
             return view(*args, **kwargs)
         if request.path.startswith("/api/"):
             return jsonify({

@@ -1099,3 +1099,71 @@ class TestThankYouPerSitting:
         coupon = store.find_by_email("ada@example.com")
         client.post("/api/scan", json={"payload": coupon.qr_payload})
         assert store.outbox_stats()["total"] == 1
+
+
+class TestConsoleReachableOnTheIntranet:
+    """The console is gated on network position, so the gate must be exact.
+
+    Exact-address matching was enough while the console was only ever opened on
+    the machine running it. An organiser working from a second laptop needs the
+    venue subnet, and a range that is wrong in either direction is a real
+    problem: too narrow locks them out mid-event, too wide hands the Send button
+    and the attendee list to the whole wifi.
+    """
+
+    @staticmethod
+    def _reload(request, monkeypatch, extra):
+        """Re-import the app with a different allow-list.
+
+        Importing starts a background sender, so each reload is registered for
+        teardown. Without that the session-end guard fires — as it did while
+        this test was being written, which is the guard doing its job.
+        """
+        import importlib
+        import sys
+        monkeypatch.setenv("ADMIN_EXTRA_IPS", extra)
+        monkeypatch.setenv("DISABLE_ADMIN_CHECK", "false")
+        sys.modules.pop("app", None)
+        module = importlib.import_module("app")
+        request.addfinalizer(lambda: module.outbox.stop(timeout=10))
+        return module
+
+    def test_a_cidr_range_admits_every_address_in_it(self, client, request, monkeypatch):
+        app_module = self._reload(request, monkeypatch, "10.20.0.0/16")
+        for ip in ("10.20.82.147", "10.20.0.1", "10.20.255.254", "10.20.5.99"):
+            assert app_module.admin_address(ip) is True, ip
+
+    def test_an_address_outside_the_range_is_refused(self, client, request, monkeypatch):
+        app_module = self._reload(request, monkeypatch, "10.20.0.0/16")
+        for ip in ("10.21.0.1", "192.168.1.5", "8.8.8.8", "172.16.0.1"):
+            assert app_module.admin_address(ip) is False, ip
+
+    def test_localhost_always_works_with_no_ranges_configured(self, client, request, monkeypatch):
+        app_module = self._reload(request, monkeypatch, "")
+        assert app_module.admin_address("127.0.0.1") is True
+        assert app_module.admin_address("10.20.82.50") is False
+
+    def test_exact_addresses_and_ranges_can_be_mixed(self, client, request, monkeypatch):
+        app_module = self._reload(request, monkeypatch, "192.168.1.5, 10.20.0.0/16")
+        assert app_module.admin_address("192.168.1.5") is True
+        assert app_module.admin_address("10.20.9.9") is True
+        assert app_module.admin_address("192.168.1.6") is False
+
+    def test_a_malformed_range_is_ignored_not_fatal(self, client, request, monkeypatch):
+        """A typo in .env must not stop the server booting on event morning."""
+        app_module = self._reload(request, monkeypatch, "not-a-network/99, 10.20.0.0/16")
+        assert app_module.admin_address("10.20.1.1") is True
+        assert app_module.admin_address("8.8.8.8") is False
+
+    def test_a_non_address_client_is_refused(self, client, request, monkeypatch):
+        app_module = self._reload(request, monkeypatch, "10.20.0.0/16")
+        assert app_module.admin_address("unknown") is False
+
+    def test_the_tunnel_still_beats_the_allow_list(self, client, request, monkeypatch):
+        """A subnet grant must never leak the console onto the public address."""
+        app_module = self._reload(request, monkeypatch, "10.20.0.0/16")
+        app_module.app.config.update(TESTING=True)
+        with app_module.app.test_client() as c:
+            r = c.get("/api/overview", headers={"Host": "iiserkol-coupons.shares.zrok.io"})
+            assert r.status_code == 403
+            assert "public address" in r.get_json()["error"]
