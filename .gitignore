@@ -6,8 +6,10 @@
 !.env.example
 *.pem
 *.key
-smtp_config.json
-smtp_configs.json
+# Any variant: a .broken or .bak left beside one of these is still an
+# SMTP configuration, and a stray `git add .` must not pick it up.
+smtp_config*.json
+smtp_config*.json.*
 smtp_counters.json
 organizer_credentials.json
 client_secret*.json
