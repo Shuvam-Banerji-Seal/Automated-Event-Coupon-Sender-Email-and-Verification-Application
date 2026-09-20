@@ -97,4 +97,9 @@ old_code/
 wl-copy
 plans/
 *.log
-samples/
+# Contents, not the directory: git never descends into an excluded
+# directory, so `samples/` would make the negation below unreachable.
+samples/*
+# The blank sheets are the exception — invented names on example.com, no
+# attendee data, and the thing an organiser needs again next year.
+!samples/*-sample.csv

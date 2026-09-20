@@ -64,7 +64,8 @@ def test_nothing_names_an_address_at_the_institute():
     """One mistake on this domain reaches a real colleague."""
     offenders = [
         f"{path.relative_to(ROOT)}:{n}  {a}"
-        for path in _files(("templates", "src", "tests", "static", "scripts"))
+        for path in _files(("templates", "src", "tests", "static", "scripts",
+                            "samples"))
         for n, a in _addresses(path)
         if a.lower().endswith("@" + INSTITUTE)
     ]
