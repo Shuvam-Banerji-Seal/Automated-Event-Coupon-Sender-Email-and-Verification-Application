@@ -445,9 +445,18 @@ of rendering an empty card.
         <tr>
           <td align="center" style="padding:26px 30px 26px">
             <div style="font:400 10px/1.4 Arial,Helvetica,sans-serif;color:#9aa4ab;
-                        letter-spacing:.2em;text-transform:uppercase;padding-bottom:16px">
+                        letter-spacing:.2em;text-transform:uppercase;padding-bottom:18px">
               With support from
             </div>
+            <!-- On its own line above the grid: the sponsor strip is a single
+                 composite bitmap cropped from the conference banner, so a
+                 seventh mark cannot be slotted into it without rebuilding the
+                 whole image. A dedicated row reads as deliberate rather than
+                 as something bolted on. -->
+            <img src="https://raw.githubusercontent.com/Shuvam-Banerji-Seal/Automated-Event-Coupon-Sender-Email-and-Verification-Application/main/static/brand/icoc/acs.png"
+                 width="150" height="56" alt="American Chemical Society"
+                 style="width:150px;max-width:60%;height:auto;display:block;
+                        margin:0 auto 22px">
             <img src="https://raw.githubusercontent.com/Shuvam-Banerji-Seal/Automated-Event-Coupon-Sender-Email-and-Verification-Application/main/static/brand/icoc/icoc-sponsors.png"
                  width="420" alt="IISER Kolkata · Wiley · Inkarp · Royal Society of Chemistry · OMSYS India · Mono Scientific"
                  style="width:420px;max-width:100%;height:auto;display:block;margin:0 auto">
