@@ -1,6 +1,8 @@
 """Tests for CSV inspection and column-role detection."""
 
 
+import pytest
+
 from src import csv_mapper
 
 
@@ -182,3 +184,58 @@ class TestBuildRecipients:
         accepted, _ = csv_mapper.build_recipients(rows, {"email": "email"})
         assert accepted[0]["food_preference"] == "Vegetarian"
         assert accepted[0]["include_qr"] is True
+
+
+class TestEntryPassIsNotGuessed:
+    """A yes/no column must not be taken to mean "issue this person a pass".
+
+    Every other role is identifiable from its contents: an address looks like an
+    address, a name like a name. "Yes/No" looks like nothing in particular, and
+    values carry 65% of the score — so any boolean column won the entry-pass
+    role outright, whatever its header said.
+
+    On a conference with dinner as a meal *sitting*, a registration column
+    reading "Attending conference dinner?" was captured by it, and everyone who
+    answered No had the QR images stripped from their invitation while still
+    holding four valid codes. Nothing in the interface said so.
+    """
+
+    @pytest.mark.parametrize("header", [
+        "Attending Conference Dinner?",
+        "Need accommodation?",
+        "First time attendee?",
+        "Consent to photographs",
+        "Gala",
+        "Coupon",
+        "Dinner",
+    ])
+    def test_a_boolean_column_does_not_claim_the_role(self, header):
+        sheet = (f"Email Address,Full Name,{header}\n"
+                 f"a@example.com,A Person,Yes\n"
+                 f"b@example.com,B Person,No\n").encode()
+        mapping = csv_mapper.inspect(sheet)["suggested_mapping"]
+        assert mapping["include_qr"] is None, (
+            f"{header!r} was taken to control entry passes")
+
+    @pytest.mark.parametrize("header", ["Entry pass", "include_qr", "Show QR"])
+    def test_a_header_that_says_so_still_maps(self, header):
+        sheet = (f"Email Address,Full Name,{header}\n"
+                 f"a@example.com,A Person,TRUE\n"
+                 f"b@example.com,B Person,FALSE\n").encode()
+        mapping = csv_mapper.inspect(sheet)["suggested_mapping"]
+        assert mapping["include_qr"] == header
+
+    def test_the_other_roles_are_unaffected(self):
+        sheet = (b"Email Address,Full Name,Meal Preference,Attending dinner?\n"
+                 b"a@example.com,A Person,Veg,Yes\n")
+        mapping = csv_mapper.inspect(sheet)["suggested_mapping"]
+        assert mapping["email"] == "Email Address"
+        assert mapping["name"] == "Full Name"
+        assert mapping["food_preference"] == "Meal Preference"
+
+    def test_the_label_does_not_promise_to_withhold_a_coupon(self):
+        """It does not withhold one — the coupon is issued and admits them."""
+        role = csv_mapper.ROLES["include_qr"]
+        wording = (role["label"] + " " + role["help"]).lower()
+        assert "no scannable coupon" not in wording
+        assert "qr" in wording, "the label should say what it actually controls"

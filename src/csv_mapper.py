@@ -56,9 +56,17 @@ ROLES: Dict[str, Dict[str, Any]] = {
         "help": "Veg / non-veg. Drives the colour of the badge the scanner shows.",
     },
     "include_qr": {
-        "label": "Gets an entry pass",
+        "label": "Show the QR code in the email",
         "required": False,
-        "help": "If false, the person is invited but issued no scannable coupon.",
+        # The old label read "Gets an entry pass" and the help said the person
+        # was "issued no scannable coupon". Neither was true: the coupon is
+        # minted either way, it is valid, and its six-digit code admits them at
+        # a door. The flag only decides whether the QR picture is attached.
+        # Describing it as withholding a pass invited someone to rely on it for
+        # exactly the thing it does not do.
+        "help": "Leave this unmatched unless you have a reason. Everyone is "
+                "issued a working coupon regardless — this only decides whether "
+                "the QR picture is included in their email.",
     },
 }
 
@@ -78,9 +86,15 @@ HEADER_ALIASES: Dict[str, Sequence[str]] = {
         "dietary preference", "dietary", "meal", "meal preference",
         "preference", "food choice", "meal choice", "veg/nonveg",
     ),
+    # "dinner", "attending dinner" and "gala" used to live here, from an event
+    # where dinner was a single yes/no. On a conference with dinner as a meal
+    # *sitting*, a registration column like "Attending conference dinner?" was
+    # silently captured by this flag, and anyone who answered No lost the QR
+    # images from their invitation while still holding valid codes. A meal
+    # column must never land here by guesswork; it can still be chosen by hand.
     "include_qr": (
-        "include_qr", "include qr", "qr", "entry pass", "gets pass", "coupon",
-        "dinner", "include_dinner", "attending dinner", "gala",
+        "include_qr", "include qr", "entry pass", "gets pass", "show qr",
+        "qr in email",
     ),
 }
 
@@ -213,6 +227,20 @@ def profile_columns(headers: Sequence[str], rows: Sequence[Dict[str, str]]) -> L
                 continue
             head = _header_score(header, role)
             body = _value_score(non_empty, role)
+
+            # include_qr is the one role that may not be claimed on values
+            # alone. Every other role has contents that identify it — an
+            # address looks like an address, a name like a name. "Yes/No" looks
+            # like nothing in particular: it could be "Need accommodation?",
+            # "First time attendee?" or "Attending the conference dinner?".
+            # Boolean shape is no evidence about entry passes, and guessing
+            # from it silently stripped the QR images out of the invitations of
+            # everyone who answered No. The header has to say so; the values
+            # then confirm it.
+            if role == "include_qr" and head <= 0:
+                profile.scores[role] = 0.0
+                continue
+
             # Values dominate; the header breaks ties and rescues sparse columns.
             profile.scores[role] = round(0.35 * head + 0.65 * body, 4)
         profiles.append(profile)

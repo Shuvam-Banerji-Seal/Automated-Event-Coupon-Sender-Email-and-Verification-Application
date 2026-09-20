@@ -242,7 +242,15 @@ function renderSamples() {
   Object.entries(mapping).forEach(([role, column]) => {
     const host = document.querySelector(`[data-samples="${role}"]`);
     if (!host) return;
-    if (!column) { host.innerHTML = '<span class="muted">nothing selected</span>'; return; }
+    if (!column) {
+      // "nothing selected" reads like something is missing. For an optional
+      // role it is the normal, correct state, so say what will happen instead.
+      const fallback = { include_qr: 'not needed — everyone gets a QR code',
+                         name: 'greeting will fall back to the email address',
+                         food_preference: 'everyone treated as vegetarian' };
+      host.innerHTML = `<span class="muted">${fallback[role] || 'nothing selected'}</span>`;
+      return;
+    }
     const profile = columnByName(column);
     const score = profile?.scores[role] ?? 0;
     const pct = Math.round(score * 100);
